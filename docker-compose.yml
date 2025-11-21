@@ -4,5 +4,5 @@ services:
   bascula:
     build: .
     ports:
-      - "80:80"
+      - "${BASCULA_PORT:-8085}:80"
     restart: unless-stopped
