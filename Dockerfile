@@ -10,5 +10,10 @@ RUN npm run build
 
 # Serve stage
 FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-EXPOSE 80
+WORKDIR /usr/share/nginx/html
+
+# Custom nginx config to serve on port 3000 (Traefik expects 3000)
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/dist ./
+
+EXPOSE 3000
