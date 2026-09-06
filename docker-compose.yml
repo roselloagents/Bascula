@@ -1,17 +1,12 @@
-version: "3.8"
-
 services:
-  bascula:
-    build: .
-    ports:
-      - "${BASCULA_PORT:-8085}:3000"
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.bascula-web.rule=Host(`bascula.rsagents.cloud`)
-      - traefik.http.routers.bascula-web.entrypoints=web
-      - traefik.http.routers.bascula-web.middlewares=redirect-to-https@file
-      - traefik.http.routers.bascula-secure.rule=Host(`bascula.rsagents.cloud`)
-      - traefik.http.routers.bascula-secure.entrypoints=websecure
-      - traefik.http.routers.bascula-secure.tls.certresolver=letsencrypt
-      - traefik.http.services.bascula.loadbalancer.server.port=3000
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true
