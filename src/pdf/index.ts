@@ -1,15 +1,24 @@
-// STUB TEMPORAL — será sustituido por el documento real con @react-pdf/renderer (docs/SPEC-ux-comidas-pdf.md §4).
-// Mantener EXACTAMENTE esta firma exportada. La UI lo carga con `await import('../pdf')` para no cargar
-// la librería (≈1 MB) hasta que el usuario pulsa "Exportar PDF".
+// Exportador PDF (docs/SPEC-ux-comidas-pdf.md §4). Firmas fijadas en docs/CONTRATO.md.
+// La UI lo carga con `await import('../pdf')` para no arrastrar la librería hasta que se pulsa "Exportar PDF".
+import { createElement } from 'react'
+import { pdf } from '@react-pdf/renderer'
+import type { DocumentProps } from '@react-pdf/renderer'
+import type { ReactElement } from 'react'
 import type { DatosPdf } from '../engine/types'
+import { PlanDocument } from './PlanDocument'
+
+/** Elemento React del documento, compartido por el Blob del navegador y por `renderToFile` en los tests. */
+export function elementoPlan(datos: DatosPdf): ReactElement<DocumentProps> {
+  return createElement(PlanDocument, { datos }) as unknown as ReactElement<DocumentProps>
+}
 
 /** Genera el PDF del plan y lo devuelve como Blob listo para descargar. */
 export async function generarPdfBlob(datos: DatosPdf): Promise<Blob> {
-  const texto = `Báscula — plan de macros (stub)\nkcal ${datos.resultado.kcal_objetivo} · P ${datos.resultado.proteina_g} g · G ${datos.resultado.grasa_g} g · CH ${datos.resultado.carbohidratos_g} g`
-  return new Blob([texto], { type: 'text/plain' })
+  return await pdf(elementoPlan(datos)).toBlob()
 }
 
 /** Nombre de fichero sugerido para la descarga. */
 export function nombreFicheroPdf(datos: DatosPdf): string {
-  return `bascula-plan-${datos.fecha}.pdf`
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(datos.fecha ?? '') ? datos.fecha : 'sin-fecha'
+  return `bascula-plan-${fecha}.pdf`
 }
