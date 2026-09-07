@@ -27,10 +27,24 @@ import {
   textoMedida,
 } from './escalado'
 import { equivalencias } from './equivalencias'
-import { esVarianteSinLactosa, pasaPreferencia } from './filtros'
+import type { PerfilDietetico } from './filtros'
+import {
+  clavePerfil,
+  esVarianteSinLactosa,
+  pasaPerfil,
+  perfilDeInputs,
+  perfilDeResultado,
+  sustituirSinLactosa,
+} from './filtros'
 import type { FoodQuery, Plantilla, RolComida } from './plantillas'
 import { BANCOS, HC_LOW_CARB_ALTERNO, plantillasDe } from './plantillas'
-import { BANCOS_SENCILLOS, MAX_ALIMENTOS_SENCILLO, idsPermitidosSemana } from './bancoSencillo'
+import type { BancoSencillo } from './bancoSencillo'
+import {
+  BANCOS_SENCILLOS,
+  MAX_ALIMENTOS_SENCILLO,
+  bancoSencilloEfectivo,
+  idsPermitidosSemana,
+} from './bancoSencillo'
 import type { GramosAlimento } from './compra'
 import { listaCompraDeDias } from './compra'
 import {
@@ -68,7 +82,8 @@ const TOLERANCIA_MACRO_DIA = 0.2
 const TOLERANCIA_HC_DIABETES = 0.1
 
 interface Contexto {
-  preferencia: Preferencia
+  /** Base, restricciones y banco de plantillas del usuario (§3.2, filtro combinable de la v1.1). */
+  perfil: PerfilDietetico
   /** Desplazamiento determinista derivado de los inputs; da variedad entre usuarios. */
   offset: number
   /** Ids de proteína ya usados ese día: evita repetir la misma en todas las tomas. */
@@ -132,22 +147,25 @@ function pasaQuery(a: Alimento, q: FoodQuery): boolean {
  */
 function candidatos(
   q: FoodQuery,
-  preferencia: Preferencia,
+  perfil: PerfilDietetico,
   permitidos: ReadonlySet<string> | null = null,
 ): { preferidos: Alimento[]; reserva: Alimento[] } {
-  // Las variantes «sin lactosa» solo entran en la rotación de quien las necesita; para el resto
-  // de preferencias quedan como reserva (§3.2): son el mismo alimento, más caro y sin motivo.
+  // Filtro de §3.2: la CONJUNCIÓN de la base y de todas las restricciones, antes que ningún otro
+  // criterio. Las variantes «sin lactosa» solo entran en la rotación de quien las necesita; para
+  // el resto de perfiles quedan como reserva (§3.2): son el mismo alimento, más caro y sin motivo.
+  const sinLactosa = perfil.restricciones.includes('sin_lactosa')
   const validos = ALIMENTOS.filter(
     (a) =>
-      pasaPreferencia(a, preferencia) &&
+      pasaPerfil(a, perfil) &&
       pasaQuery(a, q) &&
-      (preferencia === 'sin_lactosa' || !esVarianteSinLactosa(a)) &&
+      (sinLactosa || !esVarianteSinLactosa(a)) &&
       (permitidos === null || permitidos.has(a.id)),
   )
   if (!q.ids_preferidos) {
     return { preferidos: [...validos].sort((x, y) => x.id.localeCompare(y.id)), reserva: [] }
   }
-  const preferidos = q.ids_preferidos
+  // Sustitución por variante `_sl` de §3.2, conservando la posición en la lista de preferidos.
+  const preferidos = sustituirSinLactosa(q.ids_preferidos, perfil)
     .map((id) => validos.find((a) => a.id === id))
     .filter((a): a is Alimento => a !== undefined)
   const reserva = validos.filter((a) => !preferidos.includes(a)).sort((x, y) => x.id.localeCompare(y.id))
@@ -160,7 +178,7 @@ function candidatos(
  */
 function elegirAlimento(q: FoodQuery | null, ctx: Contexto, rotacion: number, evitarUsados: boolean): Alimento | null {
   if (!q) return null
-  const { preferidos, reserva } = candidatos(q, ctx.preferencia, ctx.permitidos)
+  const { preferidos, reserva } = candidatos(q, ctx.perfil, ctx.permitidos)
   let lista = preferidos.length > 0 ? preferidos : reserva
   if (lista.length === 0) return null
   const esVegetal = q.grupo === 'verdura' || q.grupo === 'fruta' || q.rol === 'verdura' || q.rol === 'fruta'
@@ -191,14 +209,15 @@ function elegirAlimento(q: FoodQuery | null, ctx: Contexto, rotacion: number, ev
 
 // ---------- Construcción de una comida ----------
 
-const CACHE_PREFERENCIA = new Map<Preferencia, Alimento[]>()
+const CACHE_PERFIL = new Map<string, Alimento[]>()
 
-/** Alimentos que pasan el filtro de preferencia; se reutiliza en alternativas y equivalencias. */
-function alimentosDePreferencia(preferencia: Preferencia): Alimento[] {
-  const guardado = CACHE_PREFERENCIA.get(preferencia)
+/** Alimentos que pasan el filtro de §3.2; se reutiliza en alternativas y equivalencias. */
+function alimentosDePerfil(perfil: PerfilDietetico): Alimento[] {
+  const clave = clavePerfil(perfil)
+  const guardado = CACHE_PERFIL.get(clave)
   if (guardado) return guardado
-  const lista = ALIMENTOS.filter((a) => pasaPreferencia(a, preferencia))
-  CACHE_PREFERENCIA.set(preferencia, lista)
+  const lista = ALIMENTOS.filter((a) => pasaPerfil(a, perfil))
+  CACHE_PERFIL.set(clave, lista)
   return lista
 }
 
@@ -228,7 +247,7 @@ function resolverPlantilla(
   const verdura = elegirAlimento(p.verdura, ctx, i * 2 + rotV, rotVegetal >= 0)
   const fruta = elegirAlimento(p.fruta, ctx, i + rotV, rotVegetal >= 0)
   // Una FoodQuery obligatoria sin alimentos válidos descarta la plantilla (§3.2).
-  if (p.ancla_carbohidrato && !carbohidrato && ctx.preferencia !== 'low_carb') return null
+  if (p.ancla_carbohidrato && !carbohidrato && ctx.perfil.banco !== 'low_carb') return null
   if (p.verdura && !verdura) return null
   if (p.fruta && !fruta) return null
   // Cereal normal de respaldo, solo en low-carb: lo usa `escalarComida` si el ancla low-carb no
@@ -331,7 +350,7 @@ function construirPlato(
         for (const rotHc of ROTACIONES_HC) {
           const resuelta = resolverPlantilla(plantilla, ctx, rotProteina, rotVegetal, rotHc)
           if (!resuelta) continue
-          const porciones = escalarComida(objetivo, resuelta, ctx.preferencia === 'low_carb')
+          const porciones = escalarComida(objetivo, resuelta, ctx.perfil.banco === 'low_carb')
           const desvKcal = objetivo.kcal > 0 ? Math.abs(kcalPublicada(porciones) - objetivo.kcal) / objetivo.kcal : 0
           const desvProt =
             objetivo.prot > 0 ? Math.abs(proteinaPublicada(porciones) - objetivo.prot) / objetivo.prot : 0
@@ -412,7 +431,7 @@ function construirComida(comida: Comida, ctx: Contexto, banco: readonly Plantill
       totales,
       // Las alternativas se buscan SOLO entre los alimentos que pasan el filtro de preferencia:
       // recomendar por escrito pollo a una persona vegana rompía la promesa de la pantalla.
-      alternativas: alternativasComida(porciones, alimentosDePreferencia(ctx.preferencia)),
+      alternativas: alternativasComida(porciones, alimentosDePerfil(ctx.perfil)),
       // Solo cuando hay más de uno: `alimentos` va agrupado y sus gramos son los de la toma
       // entera, así que quien compruebe los límites de ración de §3.3 necesita saberlo.
       ...(platos > 1 ? { platos } : {}),
@@ -437,18 +456,26 @@ interface DiaConstruido {
 interface OpcionesDia {
   /** Reparto por comidas del motor (`resultado.comidas`) o el reconstruido desde `Ejemplos`. */
   comidas: readonly Comida[]
-  preferencia: Preferencia
+  perfil: PerfilDietetico
   offset: number
   priorizarFibra: boolean
   /** Banco de plantillas: el de §3.2 o una de las dos variantes del banco sencillo (§3.7.2). */
   banco: readonly Plantilla[]
   sencillo: boolean
+  /**
+   * Banco sencillo ya resuelto para el perfil (§3.7.2, restricciones combinadas). En modo sencillo
+   * fija la lista blanca de la semana y la vía de escape recortada; `null` en modo normal.
+   */
+  bancoSencillo?: BancoSencillo | null
 }
 
-/** Cereal de respaldo de §3.2: solo en low-carb, y recortado en modo sencillo. */
-function hcAlternoDe(preferencia: Preferencia, sencillo: boolean): FoodQuery | null {
-  if (preferencia !== 'low_carb') return null
-  return sencillo ? BANCOS_SENCILLOS.low_carb.hcAlterno : HC_LOW_CARB_ALTERNO
+/**
+ * Cereal de respaldo de §3.2: solo en low-carb. En modo sencillo llega recortado a un único id de
+ * la lista blanca (`bancoSencillo.hcAlterno`), para no romper el tope de 12 alimentos.
+ */
+function hcAlternoDe(perfil: PerfilDietetico, bancoSencillo: BancoSencillo | null): FoodQuery | null {
+  if (perfil.banco !== 'low_carb') return null
+  return bancoSencillo ? bancoSencillo.hcAlterno : HC_LOW_CARB_ALTERNO
 }
 
 /** Toma con más hidrato del reparto (empates: la primera). Determinista. */
@@ -459,8 +486,9 @@ function indiceMasHidrato(comidas: readonly Comida[]): number {
 }
 
 function construirDia(o: OpcionesDia): DiaConstruido {
+  const bancoSencillo = o.sencillo ? (o.bancoSencillo ?? null) : null
   const ctx: Contexto = {
-    preferencia: o.preferencia,
+    perfil: o.perfil,
     offset: o.offset,
     usados: new Set(),
     indiceComida: 0,
@@ -468,8 +496,12 @@ function construirDia(o: OpcionesDia): DiaConstruido {
     tomaLigera: false,
     plato: 0,
     sencillo: o.sencillo,
-    hcAlterno: hcAlternoDe(o.preferencia, o.sencillo),
-    permitidos: null,
+    hcAlterno: hcAlternoDe(o.perfil, bancoSencillo),
+    // En modo sencillo ninguna `FoodQuery` puede salirse de la lista blanca ya filtrada por el
+    // perfil (§3.7.2, regla 3): cuando los ids de la plantilla no pasan el filtro —un banco
+    // vegetariano con `sin_gluten`, por ejemplo— la reserva se busca dentro de esa lista corta,
+    // no en toda la base, que es lo que rompería el tope de 12 alimentos y la promesa del modo.
+    permitidos: bancoSencillo ? idsPermitidosSemana(bancoSencillo) : null,
   }
   // Vía de escape de §3.2 (el cereal normal del low-carb): en modo sencillo se permite en UNA
   // sola toma, la de más hidrato del reparto. Sin este tope la patata ganaba en las tres comidas
@@ -511,8 +543,12 @@ function diaSinMenu(tipo: 'entreno' | 'descanso'): EjemploDia {
  * de entreno y de día de descanso, así que ambos días del contrato salen del mismo reparto.
  */
 export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante = 0): Ejemplos {
-  const preferencia = resultado.preferencia_efectiva
-  const tablas = equivalencias(preferencia)
+  // Filtro combinable de §3.2: base + todas las restricciones. Sale de `Resultado` (el motor lo
+  // publica normalizado) y, si es un `Resultado` de la v1.0 que no lo trae, de la regla de
+  // traducción de `SPEC-calculo.md` §1.1 aplicada a `preferencia_efectiva`.
+  const perfil = perfilDeResultado(resultado)
+  const preferencia = perfil.banco
+  const tablas = equivalencias(perfil)
 
   // Corte de seguridad por condiciones, antes que nada (§3.1).
   if (inputs.condiciones.includes('renal') || inputs.condiciones.includes('hepatica')) {
@@ -526,19 +562,23 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
     }
   }
 
-  const sencillo = inputs.menu_sencillo === true
+  // Banco sencillo ya resuelto para el perfil (§3.7.2, restricciones combinadas). `null` cuando
+  // ni con el relleno hay candidatos suficientes: entonces el modo sencillo se desactiva y el
+  // menú sale de la rotación normal de §3.2, que sí tiene toda la base disponible (regla 4c).
+  const bancoSencillo = bancoSencilloEfectivo(perfil)
+  const sencillo = inputs.menu_sencillo === true && bancoSencillo !== null
 
   // "Ver otro ejemplo" (§2.5) desplaza el índice de arranque en +1: mismo plan, otras plantillas.
   // En modo sencillo no hay desplazamiento: el menú es siempre el mismo par de días (§3.7.2).
   const offset = sencillo ? 0 : inputs.n_comidas + inputs.edad + Math.max(0, Math.trunc(variante))
-  const bancoSencillo = BANCOS_SENCILLOS[preferencia]
   const opciones: OpcionesDia = {
     comidas: resultado.comidas,
-    preferencia,
+    perfil,
     offset,
     priorizarFibra: false,
-    banco: sencillo ? bancoSencillo.A : BANCOS[preferencia],
+    banco: sencillo && bancoSencillo ? bancoSencillo.A : BANCOS[preferencia],
     sencillo,
+    bancoSencillo,
   }
   let dia = construirDia(opciones)
 
@@ -555,14 +595,14 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
 
   // Modo sencillo: el día B (días pares) usa las variantes `…-B` del mismo banco corto. No viaja
   // en `Ejemplos` (§3.7.3), solo sirve para ponderar 4/3 los gramos de la lista de la compra.
-  let diaB = sencillo ? construirDia({ ...opciones, banco: bancoSencillo.B }) : null
+  let diaB = sencillo && bancoSencillo ? construirDia({ ...opciones, banco: bancoSencillo.B }) : null
 
   // Respaldo de §3.7.2: una toma que el banco sencillo no consigue cuadrar se rehace con el banco
   // normal. Solo se acepta si no rompe el tope de 12 alimentos distintos en la semana, que es la
   // promesa del modo; si lo rompe, se prefiere el menú sencillo con su nota de desviación.
   const notasFallback: string[] = []
-  if (sencillo && diaB) {
-    const conFallback = aplicarFallbackSencillo(dia, diaB, resultado.comidas, preferencia, offset)
+  if (sencillo && diaB && bancoSencillo) {
+    const conFallback = aplicarFallbackSencillo(dia, diaB, resultado.comidas, perfil, bancoSencillo, offset)
     if (conFallback) {
       dia = conFallback.dia
       diaB = conFallback.diaB
@@ -680,12 +720,12 @@ function idsSemana(dia: DiaConstruido, diaB: DiaConstruido | null): Set<string> 
 function rehacerConBancoNormal(
   comida: Comida,
   indice: number,
-  preferencia: Preferencia,
+  perfil: PerfilDietetico,
   offset: number,
   permitidos: ReadonlySet<string>,
 ): ComidaResuelta {
   const ctx: Contexto = {
-    preferencia,
+    perfil,
     offset,
     usados: new Set(),
     indiceComida: indice,
@@ -693,10 +733,10 @@ function rehacerConBancoNormal(
     tomaLigera: false,
     plato: 0,
     sencillo: false,
-    hcAlterno: hcAlternoDe(preferencia, false),
+    hcAlterno: hcAlternoDe(perfil, null),
     permitidos,
   }
-  return construirComida(comida, ctx, plantillasRespaldo(preferencia, comida), new Set())
+  return construirComida(comida, ctx, plantillasRespaldo(perfil.banco, comida), new Set())
 }
 
 /**
@@ -735,17 +775,18 @@ function aplicarFallbackSencillo(
   dia: DiaConstruido,
   diaB: DiaConstruido,
   comidas: readonly Comida[],
-  preferencia: Preferencia,
+  perfil: PerfilDietetico,
+  bancoSencillo: BancoSencillo,
   offset: number,
 ): { dia: DiaConstruido; diaB: DiaConstruido; notas: string[] } | null {
-  const permitidos = new Set(BANCOS_SENCILLOS[preferencia].candidatos)
+  const permitidos = new Set(bancoSencillo.candidatos)
   // Candidatas: tomas que el banco sencillo no cierra y que el normal sí. Se calculan una vez.
   const alternas = new Map<number, ComidaResuelta>()
   for (let i = 0; i < comidas.length; i++) {
     const a = dia.comidas[i]
     const b = diaB.comidas[i]
     if (!a || !b || (a.converge && b.converge)) continue
-    const alterna = rehacerConBancoNormal(comidas[i], i, preferencia, offset, permitidos)
+    const alterna = rehacerConBancoNormal(comidas[i], i, perfil, offset, permitidos)
     if (!alterna.converge || alterna.porciones.length === 0) continue
     // Cerrar las kcal no puede salir caro en proteína: el respaldo solo entra si la deja dentro
     // de la tolerancia de §3.3 o, al menos, no peor que la toma que sustituye. Sin esta guarda,
@@ -772,7 +813,7 @@ function aplicarFallbackSencillo(
   // proteína de guisante en polvo o semillas de lino en la lista de la compra, que es justo lo
   // que el modo promete no hacer (§3.7.2, regla 3). `rehacerConBancoNormal` ya trabaja dentro de
   // la lista blanca; la comprobación se queda como red de seguridad del invariante.
-  const deLaSemana = idsPermitidosSemana(BANCOS_SENCILLOS[preferencia])
+  const deLaSemana = idsPermitidosSemana(bancoSencillo)
   const cabe = (r: { A: ComidaResuelta[]; B: ComidaResuelta[] }): boolean => {
     const ids = idsSemana(recomponerDia(r.A), recomponerDia(r.B))
     if (ids.size > MAX_ALIMENTOS_SENCILLO) return false
@@ -879,13 +920,20 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
   if (!sencillo || comidas.length === 0) return listaCompraDeDias(diaA, null)
 
   const preferencia = preferenciaDelMenu(ejemplos, comidas, inputs)
+  // El perfil sale de `Inputs` (regla de traducción del paso 0): `Ejemplos` solo lleva el banco,
+  // que con la decisión E puede no reflejar todas las restricciones del usuario.
+  const perfil = perfilDeInputs(inputs, preferencia)
+  const bancoSencillo = bancoSencilloEfectivo(perfil)
+  // Sin banco sencillo válido no hubo día B: el menú se generó con la rotación normal (regla 4c).
+  if (!bancoSencillo) return listaCompraDeDias(diaA, null)
   const diaB = construirDia({
     comidas: comidasDeEjemplo(comidas),
-    preferencia,
+    perfil,
     offset: 0,
     priorizarFibra: false,
-    banco: BANCOS_SENCILLOS[preferencia].B,
+    banco: bancoSencillo.B,
     sencillo: true,
+    bancoSencillo,
   })
   return listaCompraDeDias(diaA, gramosDeDia(diaB))
 }

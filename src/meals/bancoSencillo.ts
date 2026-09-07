@@ -18,7 +18,11 @@
 //     nunca pasa de 12 aunque se usen todas las plantillas.
 //
 // `src/meals/__tests__/sencillo.test.ts` comprueba las dos cosas.
+import type { Alimento, RolAlimento } from '../data/foods'
+import { ALIMENTOS, alimentoPorId } from '../data/foods'
 import type { Preferencia } from '../engine/types'
+import type { PerfilDietetico } from './filtros'
+import { esVarianteSinLactosa, pasaPerfil, sustituirSinLactosa } from './filtros'
 import type { FoodQuery, Plantilla } from './plantillas'
 
 /** Tope duro de alimentos distintos en la semana (§3.7.2, regla 1). */
@@ -367,4 +371,90 @@ export function idsDeBanco(banco: BancoSencillo): string[] {
   }
   anadir(banco.hcAlterno)
   return [...ids].sort((a, b) => a.localeCompare(b))
+}
+
+// ---------- Restricciones combinadas (§3.7.2, v1.1) ----------
+//
+// La tabla de candidatos de §3.7.2 está indexada por `preferencia_efectiva` (el banco), que con
+// la decisión E puede llevar solo una parte de lo que el usuario ha pedido: un vegetariano sin
+// gluten usa el banco `vegetariano` y su fila de candidatos lleva avena y pan integral, que no
+// puede comer. La lista efectiva se construye en los cuatro pasos normativos de §3.7.2:
+// sustitución por variante `_sl`, filtrado por la conjunción base + restricciones, relleno cuando
+// un rol se queda corto y, si ni así llega, desactivación del modo sencillo. Ninguno de los pasos
+// puede servir un alimento que incumpla la base o una restricción.
+
+/** Mínimo de candidatos por rol de §3.7.2 (regla 4): 2 en proteína e hidrato, 1 en el resto. */
+export const MINIMOS_ROL_SENCILLO: ReadonlyArray<{ rol: RolAlimento; min: number }> = [
+  { rol: 'proteina', min: 2 },
+  { rol: 'carbohidrato', min: 2 },
+  { rol: 'grasa', min: 1 },
+  { rol: 'verdura', min: 1 },
+  { rol: 'fruta', min: 1 },
+]
+
+function sirveParaRol(a: Alimento, rol: RolAlimento, perfil: PerfilDietetico): boolean {
+  if (!a.roles.includes(rol)) return false
+  // Los cereales, pastas y arroces en crudo están fuera del banco (§3.0).
+  if (rol === 'carbohidrato' && a.estado === 'crudo') return false
+  if (!perfil.restricciones.includes('sin_lactosa') && esVarianteSinLactosa(a)) return false
+  return pasaPerfil(a, perfil)
+}
+
+function candidatoValido(id: string, perfil: PerfilDietetico): boolean {
+  const a = alimentoPorId(id)
+  return a !== undefined && pasaPerfil(a, perfil)
+}
+
+function cuentaRol(ids: readonly string[], rol: RolAlimento, perfil: PerfilDietetico): number {
+  let n = 0
+  for (const id of ids) {
+    const a = alimentoPorId(id)
+    if (a && sirveParaRol(a, rol, perfil)) n++
+  }
+  return n
+}
+
+/**
+ * Banco sencillo con la lista de candidatos ya resuelta para el perfil del usuario (§3.7.2).
+ * `null` significa que ni con el relleno hay candidatos suficientes: el modo sencillo se desactiva
+ * y el menú se genera con la rotación normal de §3.2, que sí tiene toda la base disponible.
+ */
+export function bancoSencilloEfectivo(perfil: PerfilDietetico): BancoSencillo | null {
+  const base = BANCOS_SENCILLOS[perfil.banco]
+  // 1 y 2: la fila del banco, con las variantes sin lactosa en su misma posición.
+  const conVariantes = sustituirSinLactosa(base.candidatos, perfil)
+  // 3: filtrado por la conjunción base + todas las restricciones.
+  const ids: string[] = conVariantes.filter((id) => candidatoValido(id, perfil))
+
+  // 4: relleno por rol, parando en cuanto se llega al mínimo.
+  const respaldoOmnivoro = sustituirSinLactosa(BANCOS_SENCILLOS.omnivoro.candidatos, perfil)
+  const restoDeLaBase = [...ALIMENTOS].sort((x, y) => x.id.localeCompare(y.id, 'es'))
+  for (const { rol, min } of MINIMOS_ROL_SENCILLO) {
+    let n = cuentaRol(ids, rol, perfil)
+    if (n >= min) continue
+    // a) los candidatos de la fila `omnivoro` que sí pasan el filtro.
+    for (const id of respaldoOmnivoro) {
+      if (n >= min) break
+      const a = alimentoPorId(id)
+      if (!a || ids.includes(id) || !sirveParaRol(a, rol, perfil)) continue
+      ids.push(id)
+      n++
+    }
+    // b) el resto de `foods.json`, por id, para que siga siendo determinista.
+    for (const a of restoDeLaBase) {
+      if (n >= min) break
+      if (ids.includes(a.id) || !sirveParaRol(a, rol, perfil)) continue
+      ids.push(a.id)
+      n++
+    }
+    // c) ni así: el modo sencillo se desactiva para este usuario.
+    if (n < min) return null
+  }
+
+  // La vía de escape de §3.2 tampoco puede saltarse el filtro.
+  const escape = (base.hcAlterno?.ids_preferidos ?? []).filter((id) => candidatoValido(id, perfil))
+  const hcAlterno =
+    base.hcAlterno && escape.length > 0 ? { ...base.hcAlterno, ids_preferidos: escape } : null
+
+  return { candidatos: ids, A: base.A, B: base.B, hcAlterno }
 }

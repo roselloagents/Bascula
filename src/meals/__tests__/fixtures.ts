@@ -1,7 +1,17 @@
 // Constructores de `Inputs` y `Resultado` sintéticos para los tests del generador de menús.
 // El reparto por comidas reproduce el Paso 16 de docs/SPEC-calculo.md (tabla 3.13 y tabla 3.14),
 // para que los objetivos por toma tengan las mismas proporciones que los del motor real.
-import type { Comida, Inputs, NComidas, Objetivo, ObjetivoEfectivo, Preferencia, Resultado } from '../../engine/types'
+import type {
+  Comida,
+  Inputs,
+  NComidas,
+  Objetivo,
+  ObjetivoEfectivo,
+  Preferencia,
+  PreferenciaBase,
+  Restriccion,
+  Resultado,
+} from '../../engine/types'
 
 interface FilaReparto {
   nombres: string[]
@@ -47,12 +57,37 @@ function repartir(total: number, vec: readonly number[], principal: number): num
 export interface OpcionesPlan {
   kcal: number
   nComidas: NComidas
+  /** Banco de plantillas (`preferencia_efectiva`, regla inversa de `SPEC-calculo.md` §1.1). */
   preferencia: Preferencia
   objetivo?: ObjetivoEfectivo
   pesoKg?: number
   edad?: number
   /** Índice de la comida peri-entreno; `null` si no aplica. */
   peri?: number | null
+  /** v1.1: base dietética excluyente. Ausente ⇒ `Resultado` de la v1.0, sin los campos nuevos. */
+  base?: PreferenciaBase
+  /** v1.1: restricciones combinables. */
+  restricciones?: Restriccion[]
+  /** v1.1: interruptor "bajo en hidratos" ya efectivo (el paso 6.8 lo anula con `diabetes`). */
+  lowCarb?: boolean
+  /** Hidrato diario del plan **ajustado por el usuario** (§2.2b): la grasa se recalcula como resto. */
+  hcAjustado?: number
+}
+
+/**
+ * Regla inversa de `SPEC-calculo.md` §1.1: qué banco de plantillas toca con una base, unas
+ * restricciones y el interruptor de bajo en hidratos.
+ */
+export function bancoDe(
+  base: PreferenciaBase,
+  restricciones: readonly Restriccion[] = [],
+  lowCarb = false,
+): Preferencia {
+  if (lowCarb) return 'low_carb'
+  if (base === 'vegano' || base === 'vegetariano') return base
+  if (restricciones.includes('sin_gluten')) return 'sin_gluten'
+  if (restricciones.includes('sin_lactosa')) return 'sin_lactosa'
+  return 'omnivoro'
 }
 
 /** `Resultado` sintético con un reparto por comidas construido como el Paso 16 del motor. */
@@ -61,8 +96,13 @@ export function resultadoDe(o: OpcionesPlan): Resultado {
   const peso = o.pesoKg ?? 75
   const proteinaDia = round5(peso * 2)
   const pctGrasa = o.preferencia === 'low_carb' ? 0.45 : 0.25
-  const grasaDia = round5((o.kcal * pctGrasa) / 9)
-  const hcDia = Math.max(50, round5((o.kcal - 4 * proteinaDia - 9 * grasaDia) / 4))
+  const grasaRecomendada = round5((o.kcal * pctGrasa) / 9)
+  const hcRecomendado = Math.max(50, round5((o.kcal - 4 * proteinaDia - 9 * grasaRecomendada) / 4))
+  // Plan ajustado (§2.2b): la proteína no se toca, el hidrato lo fija el usuario y la grasa es el
+  // resto, (kcal − 4P − 4HC)/9. Es exactamente lo que devuelve `ajustarMacros`.
+  const ajustado = o.hcAjustado !== undefined
+  const hcDia = ajustado ? round5(o.hcAjustado as number) : hcRecomendado
+  const grasaDia = ajustado ? round5((o.kcal - 4 * proteinaDia - 4 * hcDia) / 9) : grasaRecomendada
 
   const principal = indicePrincipal(fila.pct)
   const hcv = [...fila.pct]
@@ -110,6 +150,12 @@ export function resultadoDe(o: OpcionesPlan): Resultado {
     objetivo_efectivo: o.objetivo ?? 'mantener',
     ritmo_efectivo: 'moderado',
     preferencia_efectiva: o.preferencia,
+    // Los tres campos de la v1.1 solo viajan si el test los pide: sin ellos, `src/meals` tiene que
+    // deducirlos de `preferencia_efectiva` con la regla de traducción de §1.1 (compatibilidad).
+    ...(o.base ? { preferencia_base: o.base } : {}),
+    ...(o.base ? { restricciones: o.restricciones ?? [] } : {}),
+    ...(o.base ? { low_carb: o.lowCarb === true } : {}),
+    ...(ajustado ? { ajuste: { kcal: false, hc: true } } : {}),
     kcal: o.kcal,
     kcal_cierre: kcalCierre,
     macros: {
@@ -164,6 +210,9 @@ export function inputsDe(o: OpcionesPlan & { objetivoCrudo?: Objetivo; condicion
     ritmo: 'moderado',
     peso_objetivo: null,
     preferencia: o.preferencia,
+    ...(o.base
+      ? { preferencia_base: o.base, restricciones: o.restricciones ?? [], low_carb: o.lowCarb === true }
+      : {}),
     n_comidas: o.nComidas,
     clima_caluroso: false,
     embarazo_lactancia: false,

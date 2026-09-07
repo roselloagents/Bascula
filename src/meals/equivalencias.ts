@@ -6,7 +6,8 @@ import type { Alimento } from '../data/foods'
 import { ALIMENTOS } from '../data/foods'
 import type { Preferencia, TablaEquivalencia, TablasEquivalencia } from '../engine/types'
 import { limiteRacion, textoMedida } from './escalado'
-import { pasaPreferencia } from './filtros'
+import type { PerfilDietetico } from './filtros'
+import { esVarianteSinLactosa, pasaPerfil, perfilDePreferencia } from './filtros'
 
 /** Múltiplo de 5 g: la rejilla de báscula doméstica de §3.3. */
 const round5 = (x: number): number => 5 * Math.round(x / 5)
@@ -49,13 +50,20 @@ export const NOTA_VERDURA_FRUTA_EQUIVALENCIAS =
 
 /**
  * Tres tablas (isoproteica, isoglucídica e isolipídica) con los alimentos de cada rol que
- * superan el filtro de preferencia y cuya ración equivalente cabe en su fila de `clampRacion`.
+ * superan el filtro de §3.2 —base Y todas las restricciones— y cuya ración equivalente cabe en su
+ * fila de `clampRacion`. Acepta un perfil combinable (v1.1) o una preferencia única (v1.0), que se
+ * traduce con la regla de `SPEC-calculo.md` §1.1.
  */
-export function equivalencias(preferencia: Preferencia): TablasEquivalencia {
+export function equivalencias(preferencia: Preferencia | PerfilDietetico): TablasEquivalencia {
+  const perfil = typeof preferencia === 'string' ? perfilDePreferencia(preferencia) : preferencia
+  const sinLactosa = perfil.restricciones.includes('sin_lactosa')
   const base = ALIMENTOS.filter(
     // Los cereales, pastas y arroces en crudo están fuera del banco (§3.0): tampoco son
-    // sustituciones servibles tal cual.
-    (a) => pasaPreferencia(a, preferencia) && !(a.grupo === 'carbohidrato' && a.estado === 'crudo'),
+    // sustituciones servibles tal cual. Las variantes `_sl` solo se ofrecen a quien las necesita.
+    (a) =>
+      pasaPerfil(a, perfil) &&
+      !(a.grupo === 'carbohidrato' && a.estado === 'crudo') &&
+      (sinLactosa || !esVarianteSinLactosa(a)),
   )
   return {
     cabecera: CABECERA_EQUIVALENCIAS,
