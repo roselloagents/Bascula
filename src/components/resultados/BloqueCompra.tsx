@@ -12,6 +12,7 @@ import {
   textoCantidadSemana,
   textoComprar,
   textoDura,
+  textoModoSencillo,
 } from './compra'
 import { Seccion } from './comun'
 
@@ -40,8 +41,7 @@ export function BloqueCompra({ ejemplos }: { ejemplos: Ejemplos }) {
       {ejemplos.modo_sencillo ? (
         <p className="distintivo-sencillo distintivo-ancho">
           <IconoMarca tam={14} />
-          Modo sencillo: {entero(distintos)} {distintos === 1 ? 'alimento' : 'alimentos'} para toda la
-          semana.
+          {textoModoSencillo(distintos)} para toda la semana.
         </p>
       ) : (
         <p className="compra-resumen">

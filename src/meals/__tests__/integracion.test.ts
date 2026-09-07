@@ -1,11 +1,14 @@
-// Integración real: `calcular()` → `generarEjemplos()`, con los nueve vectores de la §5.
+// Integración real: `calcular()` → `generarEjemplos()` → lista de la compra, con los catorce
+// vectores de la §5 (los cinco últimos los pidió la revisión adversaria del motor y solo llegaban
+// al motor: el fallo de envases de la lista de la compra únicamente aparecía en el vector 11).
 // Los tests del módulo trabajaban con un `Resultado` sintético, así que los fallos que solo
 // aparecen encadenando motor y menús (low-carb sin hidratos, alternativas que ignoran la
 // preferencia, raciones fuera de los límites) no los veía nadie.
 import { describe, expect, it } from 'vitest'
 import { ALIMENTOS, alimentoPorId } from '../../data/foods'
 import { calcular } from '../../engine'
-import { generarEjemplos } from '../index'
+import { DIAS_A, DIAS_B } from '../compra'
+import { generarEjemplos, generarListaCompra } from '../index'
 import { limiteRacion } from '../escalado'
 import { pasaPreferencia } from '../filtros'
 import { nombreCorto } from '../textos'
@@ -53,10 +56,14 @@ describe('motor + generador de menús — vectores de la §5', () => {
 
     it(`no supera los límites de ración de §3.3 — ${etiqueta}`, () => {
       for (const comida of ejemplos.entreno.comidas) {
+        // Una toma que no cabe en un plato se sirve en varios y `alimentos` viene agrupado: los
+        // límites de ración de §3.3 son por plato, así que el techo se multiplica por `platos`.
+        const platos = comida.platos ?? 1
         for (const a of comida.alimentos) {
           const alimento = alimentoPorId(a.id)!
           const { min, max } = limiteRacion(alimento)
-          expect(a.gramos, `${etiqueta} · ${a.id}: ${a.gramos} g (máx ${max})`).toBeLessThanOrEqual(max)
+          const techo = max * platos
+          expect(a.gramos, `${etiqueta} · ${a.id}: ${a.gramos} g (máx ${techo})`).toBeLessThanOrEqual(techo)
           expect(a.gramos, `${etiqueta} · ${a.id}: ${a.gramos} g (mín ${min})`).toBeGreaterThanOrEqual(min)
         }
       }
@@ -130,5 +137,64 @@ describe('motor + generador de menús — vectores de la §5', () => {
       e.entreno.comidas.map((c) => c.alimentos.map((a) => a.id).join(',')).join('|')
     expect(ids(segundo)).not.toBe(ids(primero))
     expect(segundo.entreno.comidas.length).toBe(primero.entreno.comidas.length)
+  })
+})
+
+describe('motor + lista de la compra — los catorce vectores en los dos modos', () => {
+  it('compra la semana real: 7 días del menú, o 4 días A + 3 días B en modo sencillo', () => {
+    for (const v of VECTORES) {
+      for (const sencillo of [false, true]) {
+        const inputs = { ...v.inputs, menu_sencillo: sencillo }
+        const resultado = calcular(inputs)
+        const ejemplos = generarEjemplos(inputs, resultado)
+        const etiqueta = `caso ${v.n} sencillo=${sencillo}`
+
+        // §3.1: con condición renal o hepática no hay menú y tampoco hay lista.
+        if (ejemplos.entreno.comidas.length === 0) {
+          expect(ejemplos.compra, etiqueta).toBeUndefined()
+          continue
+        }
+        expect(ejemplos.compra, etiqueta).toBeDefined()
+
+        const diaA = new Map<string, number>()
+        for (const c of ejemplos.entreno.comidas) {
+          for (const a of c.alimentos) diaA.set(a.id, (diaA.get(a.id) ?? 0) + a.gramos)
+        }
+
+        for (const item of ejemplos.compra!.items) {
+          const gA = diaA.get(item.alimento_id) ?? 0
+          const contexto = `${etiqueta} · ${item.alimento_id}`
+          if (!sencillo) {
+            expect(item.gramos_semana, contexto).toBe(Math.round(gA * 7))
+          } else {
+            // La semana nunca compra menos de los cuatro días del día A (era el fallo de la
+            // media aritmética: 3,5 días de cada variante).
+            expect(item.gramos_semana, contexto).toBeGreaterThanOrEqual(DIAS_A * gA)
+            // Y lo que sobra por encima de esos cuatro días son exactamente tres días del día B.
+            const restoB = item.gramos_semana - DIAS_A * gA
+            expect(restoB % DIAS_B, contexto).toBe(0)
+            expect(item.gramos_semana, contexto).toBe(DIAS_A * gA + DIAS_B * (restoB / DIAS_B))
+          }
+          // Lo comprado cubre de verdad la semana, sin cruzar el borde de envase.
+          expect(item.envases * item.envase_g, contexto).toBeGreaterThanOrEqual(item.gramos_semana)
+          expect(item.gramos_dia, contexto).toBe(Math.round((item.gramos_semana / 7) * 10) / 10)
+        }
+
+        // `generarListaCompra` sobre un `Ejemplos` sin `compra` (uno construido a mano) rehace el
+        // día B con la preferencia efectiva que ahora viaja en `Ejemplos`, no con una deducida a
+        // ojo: en modo normal la lista sale idéntica, y en modo sencillo cumple las mismas
+        // fórmulas —no puede ser idéntica porque el respaldo por toma de §3.7.2 no se reconstruye.
+        const rehecha = generarListaCompra({ ...ejemplos, compra: undefined }, inputs)
+        if (!sencillo) {
+          expect(JSON.stringify(rehecha), etiqueta).toBe(JSON.stringify(ejemplos.compra))
+        }
+        for (const item of rehecha.items) {
+          const gA = diaA.get(item.alimento_id) ?? 0
+          const contexto = `${etiqueta} (rehecha) · ${item.alimento_id}`
+          expect(item.gramos_semana, contexto).toBeGreaterThanOrEqual(sencillo ? DIAS_A * gA : 7 * gA)
+          expect(item.gramos_dia, contexto).toBe(Math.round((item.gramos_semana / 7) * 10) / 10)
+        }
+      }
+    }
   })
 })

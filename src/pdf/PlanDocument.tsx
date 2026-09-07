@@ -17,6 +17,9 @@ import type {
   TablasEquivalencia,
 } from '../engine/types'
 import { NOMBRE_SECCION, ORDEN_SECCIONES } from '../data/secciones'
+// Las celdas de cantidad y el rótulo del modo sencillo salen del mismo helper que usa la
+// pantalla (§4.4b: "las mismas cuatro columnas de §2.5b"). Aquí no se recalcula ningún número.
+import { textoCantidadDia, textoCantidadSemana, textoModoSencillo } from '../meals/compra'
 import { etiqueta, NOMBRE_FORMULA_CLASICA } from './etiquetas'
 import {
   anchoBarra,
@@ -424,8 +427,8 @@ function LineaCompra({ item }: { item: ItemCompra }) {
         </Text>
       </View>
       <View style={{ flex: 1.25, paddingRight: 6 }}>
-        <Text style={s.celdaCompraNum}>{gramos(item.gramos_semana)} en la semana</Text>
-        <Text style={[s.compraSmall, { textAlign: 'right' }]}>{gramos(item.gramos_dia, 0)} al día</Text>
+        <Text style={s.celdaCompraNum}>{winAnsi(textoCantidadSemana(item))}</Text>
+        <Text style={[s.compraSmall, { textAlign: 'right' }]}>{winAnsi(textoCantidadDia(item))}</Text>
       </View>
       <Text style={[s.celdaCompraNum, { flex: 1.9, paddingRight: 6 }]}>{comprarTexto(item)}</Text>
       <Text style={[s.celdaCompraNum, { flex: 0.75 }]}>{duracionTexto(item.dura_dias)}</Text>
@@ -856,7 +859,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           {ejemplos.modo_sencillo ? (
             <View style={[s.tarjeta, { marginBottom: 6, padding: 6, borderLeftWidth: 3, borderLeftColor: C.acento }]} wrap={false}>
               <Text style={{ fontFamily: 'Helvetica-Bold', color: C.acento }}>
-                Modo sencillo: {num(compra.alimentos_distintos)} alimentos para toda la semana.
+                {winAnsi(textoModoSencillo(compra.alimentos_distintos))} para toda la semana.
               </Text>
             </View>
           ) : null}

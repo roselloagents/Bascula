@@ -277,6 +277,13 @@ export interface EjemploComida {
   alimentos: AlimentoPorcion[]
   totales: Macros // suma real de los alimentos
   alternativas: string[] // 2-3 sustituciones en texto ("Cambia el pollo por 150 g de merluza")
+  /**
+   * Número de platos en que se sirve la toma cuando no cabe en uno solo (§3.3). Ausente si es 1,
+   * que es el caso normal. `alimentos` viene agrupado por alimento, así que sus gramos son los de
+   * **toda la toma**: para comprobar los límites de ración de §3.3 hay que dividirlos entre este
+   * número. La nota de §3.6 dice lo mismo en palabras; la pantalla y el PDF no necesitan el campo.
+   */
+  platos?: number
 }
 
 export interface EjemploDia {
@@ -319,6 +326,13 @@ export interface Ejemplos {
   /** `true` si el menú se ha generado con el banco sencillo (`inputs.menu_sencillo`, §3.7).
    *  La pantalla y el PDF lo usan solo para el rótulo del bloque; no cambia ningún número. */
   modo_sencillo?: boolean
+  /**
+   * Preferencia con la que se construyó el menú: `Resultado.preferencia_efectiva`, que no tiene
+   * por qué ser `Inputs.preferencia` (el Paso 6.8 anula el low-carb con `diabetes`). La escribe
+   * `generarEjemplos` para que `generarListaCompra` no tenga que deducirla de los alimentos.
+   * Opcional: un `Ejemplos` construido a mano puede no traerla.
+   */
+  preferencia_efectiva?: Preferencia
 }
 
 // ---------- Lista de la compra semanal (docs/SPEC-ux-comidas-pdf.md §3.7) ----------

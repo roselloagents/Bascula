@@ -1,4 +1,4 @@
-// Los nueve vectores de `SPEC-calculo.md` §5 escritos como `Inputs` del motor real (copiados de
+// Los catorce vectores de `SPEC-calculo.md` §5 escritos como `Inputs` del motor real (copiados de
 // `docs/verify-vectors.mjs`, la implementación de referencia). Existen para que el generador de
 // comidas y el PDF se prueben contra la salida de `calcular()` y no contra un `Resultado`
 // fabricado a mano: los fallos de low-carb, de preferencia en las alternativas y de límites de
@@ -257,6 +257,117 @@ export const VECTORES: VectorMenu[] = [
       n_comidas: 6,
     },
   },
+
+  // ---- Vectores 10-14: los que pidió la revisión adversaria del motor (docs/verify-vectors.mjs,
+  // constante `CASOS`). Sin ellos, el generador de menús, la lista de la compra y el PDF nunca
+  // veían el bucle de factibilidad, el suelo por encima del TDEE, el cap renal ni los ≥ 65 años.
+  {
+    n: '10',
+    descripcion: 'Mujer 30, 150 cm, obesidad y ritmo agresivo — bucle de factibilidad del paso 10',
+    inputs: {
+      ...BASE,
+      sexo: 'mujer',
+      edad: 30,
+      altura_cm: 150,
+      peso_kg: 70,
+      grasa: { metodo: 'visual', categoria: 'obesidad_visible' },
+      actividad_diaria: 'sedentario',
+      entrenamiento: ent(),
+      objetivo: 'perder',
+      ritmo: 'agresivo',
+      n_comidas: 3,
+    },
+  },
+  {
+    n: '11',
+    descripcion: 'Hombre 25, 195 cm y 8 % de grasa — suelo por encima del TDEE (paso 7)',
+    inputs: {
+      ...BASE,
+      sexo: 'hombre',
+      edad: 25,
+      altura_cm: 195,
+      peso_kg: 100,
+      grasa: { metodo: 'conocido', valor: 8, fuente: 'fiable' },
+      actividad_diaria: 'sedentario',
+      entrenamiento: ent(),
+      objetivo: 'perder',
+      ritmo: 'moderado',
+      n_comidas: 3,
+    },
+  },
+  {
+    n: '12',
+    descripcion: 'Hombre 35 en el borde exacto de la banda medio — WARN_YA_EN_OBJETIVO',
+    inputs: {
+      ...BASE,
+      sexo: 'hombre',
+      edad: 35,
+      altura_cm: 180,
+      peso_kg: 80,
+      grasa: { metodo: 'conocido', valor: 15, fuente: 'estimado' },
+      actividad_diaria: 'ligero',
+      entrenamiento: ent({
+        tipo: 'fuerza',
+        dias_semana: 3,
+        minutos_sesion: 60,
+        intensidad: 'media',
+        experiencia: 'intermedio',
+        momento: 'tarde',
+      }),
+      objetivo: 'perder',
+      ritmo: 'moderado',
+      n_comidas: 4,
+    },
+  },
+  {
+    n: '13',
+    descripcion: 'Hombre 62 con enfermedad renal e IMC ≥ 30 — sin menú por §3.1',
+    inputs: {
+      ...BASE,
+      sexo: 'hombre',
+      edad: 62,
+      altura_cm: 170,
+      peso_kg: 95,
+      grasa: { metodo: 'desconocido' },
+      actividad_diaria: 'ligero',
+      entrenamiento: ent({
+        tipo: 'fuerza',
+        dias_semana: 3,
+        minutos_sesion: 45,
+        intensidad: 'media',
+        experiencia: 'novato',
+        momento: 'manana',
+      }),
+      objetivo: 'perder',
+      ritmo: 'moderado',
+      n_comidas: 3,
+      condiciones: ['renal'],
+    },
+  },
+  {
+    n: '14',
+    descripcion: 'Mujer 70 con objetivo perder — modificadores de edad ≥ 65',
+    inputs: {
+      ...BASE,
+      sexo: 'mujer',
+      edad: 70,
+      altura_cm: 158,
+      peso_kg: 75,
+      grasa: { metodo: 'desconocido' },
+      actividad_diaria: 'ligero',
+      entrenamiento: ent({
+        tipo: 'fuerza',
+        dias_semana: 2,
+        minutos_sesion: 40,
+        intensidad: 'baja',
+        experiencia: 'novato',
+        momento: 'manana',
+      }),
+      objetivo: 'perder',
+      ritmo: 'agresivo',
+      n_comidas: 4,
+    },
+  },
 ]
 
 /** kcal de la tabla resumen de la §5: si el motor cambia, este test lo detecta antes que nadie. */
@@ -270,4 +381,9 @@ export const KCAL_VECTORES: Record<string, number> = {
   '7': 2420,
   '8': 1430,
   '9': 3110,
+  '10': 1380,
+  '11': 3140,
+  '12': 2430,
+  '13': 1780,
+  '14': 1580,
 }

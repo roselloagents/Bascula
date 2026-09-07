@@ -1,4 +1,4 @@
-// Integración real motor → menús → PDF con los nueve vectores de la §5.
+// Integración real motor → menús → PDF con los catorce vectores de la §5, en los dos modos.
 // El PDF se probaba solo con dos fixtures escritas a mano: los fallos que aparecen al encadenar
 // los tres módulos (raciones imposibles, alternativas fuera de la preferencia, caracteres que
 // Helvetica/WinAnsi no puede imprimir) no los veía ningún test.
@@ -65,7 +65,7 @@ describe('PDF — vectores de la §5 de punta a punta', () => {
     })
   }
 
-  it('rinde los nueve casos sin NaN ni undefined y dentro del máximo de páginas', async () => {
+  it('rinde los catorce casos sin NaN ni undefined y dentro del máximo de páginas', async () => {
     for (let i = 0; i < VECTORES.length; i++) {
       const v = VECTORES[i]
       const buffer = await renderToBuffer(elementoPlan(datosDe(i)))
@@ -80,15 +80,20 @@ describe('PDF — vectores de la §5 de punta a punta', () => {
   // El modo sencillo llega al PDF por el mismo camino que a la pantalla: no hay fixture de por
   // medio. Se comprueba que el generador rellena la lista, que respeta su tope, y que la página
   // de la compra no desborda el máximo de páginas con una lista real.
-  it('imprime también los nueve casos en modo sencillo, con su lista real', async () => {
+  it('imprime también los catorce casos en modo sencillo, con su lista real', async () => {
     for (let i = 0; i < VECTORES.length; i++) {
       const v = VECTORES[i]
       const datos = datosDe(i, true)
       const { compra, modo_sencillo } = datos.ejemplos
       expect(modo_sencillo, `caso ${v.n}`).toBe(true)
-      expect(compra, `caso ${v.n}`).toBeDefined()
-      expect(compra!.alimentos_distintos, `caso ${v.n}`).toBeLessThanOrEqual(ALIMENTOS_MAX_SENCILLO)
-      expect(compra!.items.length, `caso ${v.n}`).toBe(compra!.alimentos_distintos)
+      // El vector 13 es renal: §3.1 lo deja sin menú y, por tanto, sin lista de la compra. El
+      // PDF tiene que imprimirse igual, sin la página de §4.4b.
+      const sinMenu = datos.ejemplos.entreno.comidas.length === 0
+      expect(compra === undefined, `caso ${v.n}`).toBe(sinMenu)
+      if (!sinMenu) {
+        expect(compra!.alimentos_distintos, `caso ${v.n}`).toBeLessThanOrEqual(ALIMENTOS_MAX_SENCILLO)
+        expect(compra!.items.length, `caso ${v.n}`).toBe(compra!.alimentos_distintos)
+      }
 
       const buffer = await renderToBuffer(elementoPlan(datos))
       const paginas = (buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length

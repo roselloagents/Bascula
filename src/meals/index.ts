@@ -411,6 +411,9 @@ function construirComida(comida: Comida, ctx: Contexto, banco: readonly Plantill
       // Las alternativas se buscan SOLO entre los alimentos que pasan el filtro de preferencia:
       // recomendar por escrito pollo a una persona vegana rompía la promesa de la pantalla.
       alternativas: alternativasComida(porciones, alimentosDePreferencia(ctx.preferencia)),
+      // Solo cuando hay más de uno: `alimentos` va agrupado y sus gramos son los de la toma
+      // entera, así que quien compruebe los límites de ración de §3.3 necesita saberlo.
+      ...(platos > 1 ? { platos } : {}),
     },
     porciones,
     converge: desviacionKcal <= TOLERANCIA_KCAL,
@@ -517,6 +520,7 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
       consejos: consejos(resultado.objetivo_efectivo, preferencia, inputs.n_comidas),
       equivalencias: tablas,
       modo_sencillo: inputs.menu_sencillo === true,
+      preferencia_efectiva: preferencia,
     }
   }
 
@@ -642,6 +646,7 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
     // La lista de la compra se genera SIEMPRE que hay menú, en modo sencillo o normal (§3.7.3).
     compra: listaCompraDeDias(gramosDeDia(dia), diaB ? gramosDeDia(diaB) : null),
     modo_sencillo: sencillo,
+    preferencia_efectiva: preferencia,
   }
 }
 
@@ -794,19 +799,29 @@ const PREFERENCIAS: readonly Preferencia[] = [
 
 /**
  * Preferencia con la que se construyó un menú sencillo. No se puede leer de `inputs.preferencia`
- * sin más: el Paso 6.8 del motor anula el low-carb con `diabetes`, y `preferencia_efectiva` no
- * viaja en `Ejemplos`. Se deduce de los alimentos del día A, que en modo sencillo salen siempre
- * de la lista corta de su preferencia; la del usuario se prueba primero, así que en el caso normal
- * la respuesta es esa.
+ * sin más: el Paso 6.8 del motor anula el low-carb con `diabetes`. Lo normal es que `Ejemplos`
+ * la traiga escrita (`preferencia_efectiva`); si no —un `Ejemplos` construido a mano—, se deduce
+ * de los alimentos del día A **por mayoría**, no exigiendo que todos estén en el banco: con la
+ * pertenencia total, un solo alimento raro dejaba sin encajar a las seis preferencias y la
+ * respuesta caía en `inputs.preferencia`, que puede no ser la efectiva.
  */
-function preferenciaDelMenu(comidas: readonly EjemploComida[], inputs: Inputs): Preferencia {
+function preferenciaDelMenu(ejemplos: Ejemplos, comidas: readonly EjemploComida[], inputs: Inputs): Preferencia {
+  if (ejemplos.preferencia_efectiva) return ejemplos.preferencia_efectiva
   const ids = new Set(gramosDeEjemplo(comidas).map((g) => g.id))
+  // La del usuario va primero: con empate a votos, gana ella.
   const orden = [inputs.preferencia, ...PREFERENCIAS.filter((p) => p !== inputs.preferencia)]
+  let mejor = inputs.preferencia
+  let mejorVotos = -1
   for (const p of orden) {
-    const permitidos = new Set(BANCOS_SENCILLOS[p].candidatos)
-    if ([...ids].every((id) => permitidos.has(id))) return p
+    const permitidos = idsPermitidosSemana(BANCOS_SENCILLOS[p])
+    let votos = 0
+    for (const id of ids) if (permitidos.has(id)) votos++
+    if (votos > mejorVotos) {
+      mejorVotos = votos
+      mejor = p
+    }
   }
-  return inputs.preferencia
+  return mejor
 }
 
 /** Reconstruye el reparto por comidas a partir del día que viaja en `Ejemplos`. */
@@ -839,7 +854,7 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
   const sencillo = inputs.menu_sencillo === true
   if (!sencillo || comidas.length === 0) return listaCompraDeDias(diaA, null)
 
-  const preferencia = preferenciaDelMenu(comidas, inputs)
+  const preferencia = preferenciaDelMenu(ejemplos, comidas, inputs)
   const diaB = construirDia({
     comidas: comidasDeEjemplo(comidas),
     preferencia,

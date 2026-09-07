@@ -5,7 +5,11 @@
 
 import { NOMBRE_SECCION, ORDEN_SECCIONES } from '../../data/secciones'
 import type { ItemCompra, SeccionSuper } from '../../engine/types'
-import { entero, numCorto } from '../utiles/formato'
+import { entero } from '../utiles/formato'
+
+// Las dos celdas de cantidad y el rótulo del modo sencillo se escriben con el mismo helper que
+// usa el PDF (§4.4b: "las mismas cuatro columnas de §2.5b"), no con una copia paralela.
+export { textoCantidadDia, textoCantidadSemana, textoModoSencillo } from '../../meals/compra'
 
 export interface GrupoCompra {
   seccion: SeccionSuper
@@ -35,17 +39,6 @@ export function agruparPorSeccion(items: readonly ItemCompra[]): GrupoCompra[] {
   }))
 }
 
-/** Cantidad semanal: en kilos a partir de 1 kg, porque "1,4 kg" se lee mejor que "1.400 g". */
-export function textoCantidadSemana(item: ItemCompra): string {
-  if (item.gramos_semana >= 1000) return `${numCorto(item.gramos_semana / 1000, 2)} kg en la semana`
-  return `${entero(item.gramos_semana)} g en la semana`
-}
-
-/** Cantidad diaria del menú, en la línea secundaria de la misma celda. */
-export function textoCantidadDia(item: ItemCompra): string {
-  return `${numCorto(item.gramos_dia, 1)} g al día`
-}
-
 /** "2 × bandeja ≈ 1 kg". */
 export function textoComprar(item: ItemCompra): string {
   return `${entero(item.envases)} × ${item.envase_descripcion}`
@@ -56,8 +49,3 @@ export function textoDura(item: ItemCompra): string {
   return item.dura_dias === 1 ? 'te dura 1 día' : `te dura ${entero(item.dura_dias)} días`
 }
 
-/** Rótulo del distintivo de modo sencillo (§2.5b). */
-export function textoModoSencillo(alimentos: number | undefined): string {
-  if (alimentos === undefined) return 'Modo sencillo'
-  return `Modo sencillo: ${entero(alimentos)} ${alimentos === 1 ? 'alimento' : 'alimentos'}`
-}

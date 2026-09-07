@@ -33,6 +33,41 @@ export const NOTAS_COMPRA: readonly string[] = [
 
 const ORDEN: ReadonlyMap<SeccionSuper, number> = new Map(ORDEN_SECCIONES.map((s, i) => [s, i]))
 
+// ---------- Texto de las celdas de cantidad (§2.5b y §4.4b) ----------
+// Vive aquí, y no en la pantalla, porque §4.4b obliga al PDF a llevar "las mismas cuatro
+// columnas de §2.5b": con una función de formato en cada capa, la pantalla decía "1,93 kg en la
+// semana · 82,5 g al día" y el PDF "1.925 g en la semana · 83 g al día" para la misma línea.
+// El formateador es propio (nada de `Intl`) porque el PDF solo puede imprimir WinAnsi.
+
+/** Número con punto de millares, coma decimal y sin ceros de relleno (1.925 / 82,5 / 2). */
+function cifra(n: number, decimales: number): string {
+  const negativo = n < 0
+  const fijo = Math.abs(n).toFixed(decimales)
+  const limpio = decimales > 0 ? fijo.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '') : fijo
+  const [entera, decimal] = limpio.split('.')
+  const conMillares = entera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  const cuerpo = decimal ? `${conMillares},${decimal}` : conMillares
+  return negativo ? `-${cuerpo}` : cuerpo
+}
+
+/** Cantidad semanal: en kilos a partir de 1 kg, porque "1,4 kg" se lee mejor que "1.400 g". */
+export function textoCantidadSemana(item: ItemCompra): string {
+  if (item.gramos_semana >= 1000) return `${cifra(item.gramos_semana / 1000, 2)} kg en la semana`
+  return `${cifra(item.gramos_semana, 0)} g en la semana`
+}
+
+/** Cantidad diaria del menú, en la línea secundaria de la misma celda. */
+export function textoCantidadDia(item: ItemCompra): string {
+  return `${cifra(item.gramos_dia, 1)} g al día`
+}
+
+/** Rótulo del distintivo de modo sencillo, con el singular resuelto (§2.5b y §4.4b). */
+export function textoModoSencillo(alimentos: number | undefined): string {
+  if (alimentos === undefined || !Number.isFinite(alimentos)) return 'Modo sencillo'
+  const n = Math.round(alimentos)
+  return `Modo sencillo: ${cifra(n, 0)} ${n === 1 ? 'alimento' : 'alimentos'}`
+}
+
 function redondea1(n: number): number {
   return Math.round(n * 10) / 10
 }

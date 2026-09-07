@@ -169,4 +169,15 @@ describe('textos de cada línea', () => {
     expect(textoModoSencillo(1)).toBe('Modo sencillo: 1 alimento')
     expect(textoModoSencillo(undefined)).toBe('Modo sencillo')
   })
+
+  it('la pantalla y el PDF escriben la misma celda: el helper es literalmente el mismo', async () => {
+    // §4.4b: el PDF lleva "las mismas cuatro columnas de §2.5b". Con una función de formato en
+    // cada capa, la pantalla decía "1,93 kg en la semana · 82,5 g al día" y el PDF
+    // "1.925 g en la semana · 83 g al día". Las tres viven en `src/meals/compra.ts`, que es de
+    // donde tiran los dos; aquí solo se reexportan.
+    const dominio = await import('../../../meals/compra')
+    expect(textoCantidadSemana).toBe(dominio.textoCantidadSemana)
+    expect(textoCantidadDia).toBe(dominio.textoCantidadDia)
+    expect(textoModoSencillo).toBe(dominio.textoModoSencillo)
+  })
 })
