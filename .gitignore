@@ -1,12 +1,31 @@
+# Dependencias y artefactos de build
 node_modules
 dist
 dist-ssr
-*.local
+*.tsbuildinfo
 .vite
+
+# Entorno local
+*.local
+.env
+.env.*
+!.env.example
+
+# Salidas de pruebas y muestras (los tests escriben fuera del repo, pero por si acaso)
+coverage
+*.tmp.test.ts
+bascula-pdf/
+*.pdf
+
+# Sistema y editores
 .DS_Store
 Thumbs.db
+.idea
+.vscode
+*.swp
+
+# Logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-*.tsbuildinfo
