@@ -23,6 +23,7 @@ import {
   cargarBorrador,
   cargarSesion,
   guardarBorrador,
+  guardarPasoSesion,
   guardarSesion,
   pasoDeCampo,
   type Borrador,
@@ -80,7 +81,7 @@ export default function App() {
 
   // Estable a propósito: el `useEffect` del wizard que mueve el foco y el scroll depende de esta
   // función, y una identidad nueva por render la dispararía en cada pulsación de tecla.
-  const guardarPaso = useCallback((paso: PasoId) => guardarSesion({ paso, planGenerado: false }), [])
+  const guardarPaso = useCallback((paso: PasoId) => guardarPasoSesion(paso), [])
 
   // El motor marca los campos de `ERR_INPUT_RANGO`; la marca se retira en cuanto el usuario edita.
   const cambiarBorrador = useCallback((actualizar: (previo: Borrador) => Borrador) => {

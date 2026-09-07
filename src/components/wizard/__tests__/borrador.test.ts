@@ -9,7 +9,10 @@ import {
   anclarPlan,
   borradorInicial,
   cargarBorrador,
+  cargarSesion,
   estadoPaso,
+  guardarPasoSesion,
+  guardarSesion,
   pasoDeCampo,
   pasosVisibles,
   preferenciaHeredada,
@@ -178,4 +181,40 @@ describe('borrador guardado con la v1.0', () => {
     // Y, sobre todo, que no llega al motor.
     expect(aInputs({ ...completo(), ...restaurado }).cribado_tca).toBeNull()
   })
+
+  it('la preferencia "sin gluten" de la v1.0 se convierte en restricción, no en base', () => {
+    almacen.set(
+      CLAVE_ALMACEN,
+      JSON.stringify({ sexo: 'hombre', peso_kg: '80', preferencia: 'sin_gluten' }),
+    )
+    const restaurado = cargarBorrador()
+    expect(restaurado.preferencia_base).toBe('omnivoro')
+    expect(restaurado.restricciones).toEqual(['sin_gluten'])
+    expect(restaurado.low_carb).toBe(false)
+    // La preferencia muerta no se vuelve a guardar, pero el motor sigue recibiendo su equivalente.
+    expect((restaurado as unknown as { preferencia?: unknown }).preferencia).toBeUndefined()
+    const inputs = aInputs({ ...completo(), ...restaurado })
+    expect(inputs.preferencia).toBe('sin_gluten')
+    expect(inputs.restricciones).toEqual(['sin_gluten'])
+  })
 })
+
+describe('sesión: paso actual y huella del plan', () => {
+  it('guardar el paso no borra la huella del último plan', () => {
+    // El wizard escribe su paso nada más montarse: al recargar con un plan hecho, o al volver
+    // desde los resultados con "Editar tus datos", esa escritura llegaba antes que nada.
+    guardarSesion({ paso: null, planGenerado: true, firmaPlan: 'huella-del-plan' })
+    guardarPasoSesion('preferencias')
+    const sesion = cargarSesion()
+    expect(sesion.paso).toBe('preferencias')
+    expect(sesion.planGenerado).toBe(false)
+    // Sin esto, el ajuste manual guardado se descartaba aunque el usuario no cambiara ni un dato.
+    expect(sesion.firmaPlan).toBe('huella-del-plan')
+  })
+
+  it('sin plan previo no se inventa ninguna huella', () => {
+    guardarPasoSesion('sexo')
+    expect(cargarSesion().firmaPlan).toBeUndefined()
+  })
+})
+

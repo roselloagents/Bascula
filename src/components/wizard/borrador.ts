@@ -278,6 +278,17 @@ export function cargarSesion(): Sesion {
   }
 }
 
+/**
+ * Guarda el paso en el que está el usuario **conservando la huella del último plan**. El wizard
+ * escribe su paso nada más montarse, y también al volver desde los resultados con "Editar tus
+ * datos": si esa escritura borrase `firmaPlan`, el ajuste manual guardado se descartaría al
+ * recalcular aunque el usuario no hubiera tocado ni un dato (SPEC-ux §2.2b: el ajuste solo se
+ * pierde al recalcular con datos **distintos**).
+ */
+export function guardarPasoSesion(paso: PasoId): void {
+  guardarSesion({ paso, planGenerado: false, firmaPlan: cargarSesion().firmaPlan })
+}
+
 export function borrarSesion(): void {
   try {
     window.localStorage.removeItem(CLAVE_SESION)
