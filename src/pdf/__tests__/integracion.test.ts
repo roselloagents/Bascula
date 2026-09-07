@@ -15,9 +15,14 @@ import type { DatosPdf } from '../../engine/types'
  * Máximo de páginas declarado en SPEC-ux-comidas-pdf.md §4.0, ya con la página de la compra
  * (§4.4b). Baja de 9 a 8 al fundir la portada con la antigua página de "Tus datos / Tus
  * resultados", que repetía sexo, edad, altura y peso (QA §6), y al compactar los interlineados y
- * los márgenes del documento. Los vectores que se quedan en 8 son los extremos de la §5: once
- * avisos (caso 8), seis comidas y 3.100 kcal (caso 9), diez avisos (caso 14). Nueve de los
- * catorce casos caben ya en 7 páginas, y el más corto (caso 13, renal y sin menú) en 6.
+ * los márgenes del documento.
+ *
+ * El recuento va **por vector y por modo**: son 28 renderizados, no 14. Se quedan en 8 páginas
+ * ocho de ellos, los extremos de la §5 por dos motivos distintos: muchos avisos (caso 8 con once,
+ * caso 10 con nueve, caso 14 con diez, los tres en los dos modos) y mucha comida que listar
+ * (casos 9 y 11, por encima de 3.100 kcal y con listas de la compra de 18 líneas, y solo en modo
+ * normal: el modo sencillo los baja a 7). Los otros dieciocho renderizados caben en 7 páginas, y
+ * los dos más cortos —caso 13, renal y sin menú— en 6. Ninguno baja de ahí.
  */
 const PAGINAS_MAX = 8
 
