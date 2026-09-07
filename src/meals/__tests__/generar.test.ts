@@ -157,17 +157,34 @@ describe('generarEjemplos — preferencias dietéticas', () => {
     }
   })
 
-  it('low carb: reparto pobre en hidratos y sin cereales de alta carga', () => {
+  it('low carb: cereal normal solo como vía de escape de §3.2', () => {
+    // El ancla low-carb (arroz de coliflor, pan proteico) aporta como mucho 18 g de hidrato con
+    // su ración máxima. Cuando el plan pide más, §3.2 permite un cereal normal con la ración
+    // rebajada: sin esa vía de escape el menú entregaba un tercio del hidrato prescrito.
     for (const plan of planesDe('low_carb')) {
       const ejemplos = generar(plan)
       for (const comida of ejemplos.entreno.comidas) {
         for (const a of comida.alimentos) {
           const alimento = alimentoPorId(a.id)!
-          if (alimento.grupo === 'carbohidrato') {
-            expect(alimento.tags, `${etiqueta(plan)} · ${a.id} no es low_carb`).toContain('low_carb')
+          if (alimento.grupo === 'carbohidrato' && !alimento.tags.includes('low_carb')) {
+            expect(
+              comida.objetivo.carb,
+              `${etiqueta(plan)} · ${a.id}: cereal normal sin necesitarlo`,
+            ).toBeGreaterThan(18)
           }
         }
       }
+    }
+  })
+
+  it('low carb: el hidrato del día no se aleja más del 20 % del plan', () => {
+    for (const plan of planesDe('low_carb')) {
+      const resultado = resultadoDe(plan)
+      const ejemplos = generar(plan)
+      const desviacion =
+        Math.abs(ejemplos.entreno.totales.carb - resultado.macros.hc_g) / resultado.macros.hc_g
+      expect(desviacion, `${etiqueta(plan)}: ${ejemplos.entreno.totales.carb} vs ${resultado.macros.hc_g} g`)
+        .toBeLessThanOrEqual(0.2)
     }
   })
 
@@ -237,13 +254,16 @@ describe('generarEjemplos — textos, notas y consejos', () => {
     }
   })
 
-  it('reparte en dos platos las tomas de más de 1.100 kcal', () => {
+  it('reparte en varios platos las tomas que no caben en uno solo', () => {
     const plan: OpcionesPlan = { kcal: 3500, nComidas: 2, preferencia: 'omnivoro', pesoKg: 100, peri: 0 }
     const ejemplos = generar(plan)
-    const grandes = ejemplos.entreno.comidas.filter((c) => c.objetivo.kcal > 1100)
+    const grandes = ejemplos.entreno.comidas.filter((c) => c.objetivo.kcal > 900)
     expect(grandes.length).toBeGreaterThan(0)
     for (const c of grandes) {
-      expect(ejemplos.entreno.notas.some((n) => n.startsWith(`${c.comida}:`) && n.includes('dos platos'))).toBe(true)
+      expect(
+        ejemplos.entreno.notas.some((n) => n.startsWith(`${c.comida}:`) && /(dos|tres|cuatro) platos/.test(n)),
+        `${c.comida} sin nota de reparto en platos`,
+      ).toBe(true)
     }
   })
 

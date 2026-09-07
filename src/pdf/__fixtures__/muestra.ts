@@ -1,6 +1,7 @@
 // Datos de muestra para revisar y testar el PDF sin arrancar la aplicación.
 // No son datos reales de nadie: son perfiles plausibles construidos sobre los vectores de SPEC-calculo.md §5.
 import type { AvisoTexto, DatosPdf, Ejemplos, Inputs, Resultado } from '../../engine/types'
+import { equivalencias } from '../../meals/equivalencias'
 
 // =====================================================================
 // Muestra A — caso completo: hombre de 38 años que quiere perder grasa,
@@ -241,6 +242,7 @@ const EJEMPLOS_A: Ejemplos = {
     'Come una ración de proteína (20-40 g) en las 1-3 horas antes o después de entrenar: no es obligatorio, pero ayuda a recuperar mejor.',
     'Prepara comida para 2-3 días (batch cooking) de los alimentos base —arroz, pollo, legumbres— para no depender de decisiones bajo hambre o cansancio.',
   ],
+  equivalencias: equivalencias('omnivoro'),
 }
 
 // En la v1 el motor devuelve un único reparto: el día de descanso es el mismo que el de entreno.
@@ -415,6 +417,7 @@ const EJEMPLOS_B: Ejemplos = {
     'Bebe agua antes de las comidas y a lo largo del día: la sed a veces se confunde con hambre.',
     'Si algún día solo puedes hacer 1 o 2 comidas, no pasa nada: reparte tu proteína y tus calorías del día entre esas tomas. Lo que cuenta es el total de la semana, no un día suelto.',
   ],
+  equivalencias: equivalencias('sin_lactosa'),
 }
 
 EJEMPLOS_B.descanso = { ...EJEMPLOS_B.entreno, tipo: 'descanso' }

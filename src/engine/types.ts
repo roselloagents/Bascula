@@ -281,10 +281,33 @@ export interface EjemploDia {
   notas: string[]
 }
 
+/** Una fila de una tabla de equivalencias: la ración de ese alimento que iguala la referencia. */
+export interface FilaEquivalencia {
+  id: string
+  nombre: string
+  gramos: number
+  medida: string
+}
+
+export interface TablaEquivalencia {
+  titulo: string
+  descripcion: string
+  filas: FilaEquivalencia[]
+}
+
+/** Bloque "Equivalencias" de SPEC-ux §2.5 y §4.4: se genera solo con `foods.json`. */
+export interface TablasEquivalencia {
+  cabecera: string
+  nota_verdura_fruta: string
+  tablas: TablaEquivalencia[]
+}
+
 export interface Ejemplos {
   entreno: EjemploDia
   descanso: EjemploDia // si no entrena, igual que entreno
   consejos: string[] // 3-5 consejos prácticos de adherencia según preferencia/objetivo
+  /** Tablas isoproteica, isoglucídica e isolipídica filtradas por `preferencia_efectiva` (§2.5). */
+  equivalencias: TablasEquivalencia
 }
 
 // ---------- Datos para el PDF ----------

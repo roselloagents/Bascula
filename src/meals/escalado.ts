@@ -19,6 +19,8 @@ export interface PlantillaResuelta {
   proteina: Alimento | null
   proteina2: Alimento | null
   carbohidrato: Alimento | null
+  /** Vía de escape de §3.2 en `low_carb`: cereal normal cuando el ancla low-carb no llega. */
+  carbohidrato_alterno: Alimento | null
   grasa: Alimento | null
   verdura: Alimento | null
   fruta: Alimento | null
@@ -61,14 +63,14 @@ export function filaRacion(a: Alimento): LimiteRacion {
 /**
  * Límites efectivos: en los alimentos contables el mínimo es una unidad y el máximo, el mayor
  * múltiplo de `unidad_g` que no supere el máximo de su fila (§3.3).
- * `platos` multiplica el máximo cuando la toma es tan grande que se sirve en varios platos.
+ * Los máximos de la tabla de §3.3 son duros: una toma muy grande se reparte en varios platos
+ * (cada uno con su propia plantilla), nunca ampliando la ración de un alimento.
  */
-export function limiteRacion(a: Alimento, platos = 1): LimiteRacion {
+export function limiteRacion(a: Alimento): LimiteRacion {
   const base = filaRacion(a)
-  const max = base.max * platos
-  if (!esContable(a)) return { min: base.min, max }
+  if (!esContable(a)) return base
   const u = a.unidad_g
-  return { min: u, max: Math.max(u, Math.floor(max / u) * u) }
+  return { min: u, max: Math.max(u, Math.floor(base.max / u) * u) }
 }
 
 /** Paso de báscula: múltiplos de 5 g por debajo de 100 g, de 10 g a partir de 100 g (§3.3). */
@@ -77,8 +79,8 @@ function paso(gramos: number): number {
 }
 
 /** Redondea a la rejilla de báscula y recorta a los límites de ración del alimento. */
-export function redondearGramos(a: Alimento, gramos: number, platos = 1): number {
-  const { min, max } = limiteRacion(a, platos)
+export function redondearGramos(a: Alimento, gramos: number): number {
+  const { min, max } = limiteRacion(a)
   if (!Number.isFinite(gramos)) return min
   if (esContable(a)) {
     const u = a.unidad_g
@@ -94,8 +96,8 @@ export function redondearGramos(a: Alimento, gramos: number, platos = 1): number
 }
 
 /** Siguiente gramaje válido en la dirección pedida, o el mismo valor si la palanca está agotada. */
-export function siguienteGramaje(a: Alimento, gramos: number, direccion: 1 | -1, platos = 1): number {
-  const { min, max } = limiteRacion(a, platos)
+export function siguienteGramaje(a: Alimento, gramos: number, direccion: 1 | -1): number {
+  const { min, max } = limiteRacion(a)
   const salto = esContable(a) ? a.unidad_g : direccion < 0 ? (gramos > 100 ? 10 : 5) : gramos >= 100 ? 10 : 5
   const g = Math.min(max, Math.max(min, gramos + direccion * salto))
   return g
@@ -133,7 +135,7 @@ export const TOLERANCIA_PROTEINA = 0.15
  * Orden: verdura y fruta (ración fija, descontadas) → proteína → segunda proteína →
  * carbohidrato → grasa de ajuste → cierre de kcal.
  */
-export function escalarComida(objetivo: Macros, plan: PlantillaResuelta, lowCarb: boolean, platos = 1): Porcion[] {
+export function escalarComida(objetivo: Macros, plan: PlantillaResuelta, lowCarb: boolean): Porcion[] {
   const sel: Porcion[] = []
   const anadir = (rol: RolPorcion, alimento: Alimento, gramos: number): void => {
     if (gramos > 0) sel.push({ rol, alimento, gramos })
@@ -141,20 +143,20 @@ export function escalarComida(objetivo: Macros, plan: PlantillaResuelta, lowCarb
 
   // 0. Verdura y fruta: ración fija, pero sus macros se descuentan del objetivo.
   if (plan.verdura) {
-    anadir('verdura', plan.verdura, redondearGramos(plan.verdura, plan.verdura.racionTipica_g * platos, platos))
+    anadir('verdura', plan.verdura, redondearGramos(plan.verdura, plan.verdura.racionTipica_g))
   }
   if (plan.fruta) {
-    anadir('fruta', plan.fruta, redondearGramos(plan.fruta, plan.fruta.racionTipica_g * platos, platos))
+    anadir('fruta', plan.fruta, redondearGramos(plan.fruta, plan.fruta.racionTipica_g))
   }
 
   // 1. Ancla de proteína, con topes cruzados sobre grasa e hidrato.
   if (plan.proteina && plan.proteina.proteina > 0) {
-    anadir('proteina', plan.proteina, gramosAncla(plan.proteina, objetivo, sel, platos))
+    anadir('proteina', plan.proteina, gramosAncla(plan.proteina, objetivo, sel))
   }
 
   // 1b. Segunda fuente de proteína si la primera se quedó corta por un tope.
   if (plan.proteina2 && plan.proteina2.proteina > 0 && objetivo.prot - sumaProteina(sel) > 5) {
-    anadir('proteina2', plan.proteina2, gramosAncla(plan.proteina2, objetivo, sel, platos))
+    anadir('proteina2', plan.proteina2, gramosAncla(plan.proteina2, objetivo, sel))
   }
 
   // 2. Ancla de carbohidrato: cubre lo que falta, con lo ya aportado descontado.
@@ -164,41 +166,50 @@ export function escalarComida(objetivo: Macros, plan: PlantillaResuelta, lowCarb
     // Regla propia de low-carb (§3.2): sin ancla de HC, la verdura sube al doble de su ración.
     const verdura = sel.find((x) => x.rol === 'verdura')
     if (verdura) {
-      verdura.gramos = redondearGramos(verdura.alimento, verdura.alimento.racionTipica_g * 2 * platos, platos)
+      verdura.gramos = redondearGramos(verdura.alimento, verdura.alimento.racionTipica_g * 2)
     }
     hcPendiente = Math.max(0, objetivo.carb - sumaHc(sel))
   }
-  if (plan.carbohidrato && plan.carbohidrato.carbohidratos > 0 && !sinAnclaHc) {
-    const g = hcPendiente / (plan.carbohidrato.carbohidratos / 100)
-    anadir('carbohidrato', plan.carbohidrato, redondearGramos(plan.carbohidrato, g, platos))
+  if (!sinAnclaHc) {
+    // Vía de escape de §3.2: si el ancla low-carb no puede cubrir el hidrato pendiente ni con su
+    // ración máxima, se permite un cereal normal y se rebaja la ración (se escala al pendiente).
+    let ancla = plan.carbohidrato
+    if (lowCarb && plan.carbohidrato_alterno) {
+      const techo = ancla ? (ancla.carbohidratos * limiteRacion(ancla).max) / 100 : 0
+      if (techo < hcPendiente) ancla = plan.carbohidrato_alterno
+    }
+    if (ancla && ancla.carbohidratos > 0) {
+      const g = hcPendiente / (ancla.carbohidratos / 100)
+      anadir('carbohidrato', ancla, redondearGramos(ancla, g))
+    }
   }
 
   // 3. Ancla de grasa: solo si falta grasa apreciable (con < 4 g ya se pasaría el mínimo de 5 g).
   const grasaPendiente = objetivo.fat - sumaGrasa(sel)
   if (plan.grasa && plan.grasa.grasa > 0 && grasaPendiente >= 4) {
     const g = grasaPendiente / (plan.grasa.grasa / 100)
-    anadir('grasa', plan.grasa, redondearGramos(plan.grasa, g, platos))
+    anadir('grasa', plan.grasa, redondearGramos(plan.grasa, g))
   }
 
   // 4. Cierre de kcal y, si hace falta, ajuste fino de la proteína.
-  cerrarKcal(sel, objetivo, platos)
-  cerrarProteina(sel, objetivo, platos)
+  cerrarKcal(sel, objetivo)
+  cerrarProteina(sel, objetivo)
   return sel
 }
 
 /** Gramos de un ancla de proteína con los topes cruzados de §3.3. */
-function gramosAncla(a: Alimento, objetivo: Macros, sel: readonly Porcion[], platos: number): number {
+function gramosAncla(a: Alimento, objetivo: Macros, sel: readonly Porcion[]): number {
   let g = (objetivo.prot - sumaProteina(sel)) / (a.proteina / 100)
   if (a.grasa > 5) g = Math.min(g, (objetivo.fat - sumaGrasa(sel)) / (a.grasa / 100))
   if (a.carbohidratos > 5) g = Math.min(g, (objetivo.carb - sumaHc(sel)) / (a.carbohidratos / 100))
-  return redondearGramos(a, g, platos)
+  return redondearGramos(a, g)
 }
 
 /** Orden de sacrificio del cierre: carbohidrato → grasa → proteína (§3.3). */
 const ORDEN_CIERRE: readonly RolPorcion[] = ['carbohidrato', 'grasa', 'proteina2', 'proteina']
 
 /** Ajusta la comida en pasos de báscula hasta entrar en el ±10 % de kcal, o hasta agotar palancas. */
-function cerrarKcal(sel: Porcion[], objetivo: Macros, platos: number): void {
+function cerrarKcal(sel: Porcion[], objetivo: Macros): void {
   if (objetivo.kcal <= 0) return
   const desviacion = (): number => Math.abs(kcalPublicada(sel) - objetivo.kcal) / objetivo.kcal
   for (const rol of ORDEN_CIERRE) {
@@ -209,7 +220,7 @@ function cerrarKcal(sel: Porcion[], objetivo: Macros, platos: number): void {
       const direccion: 1 | -1 = kcalPublicada(sel) > objetivo.kcal ? -1 : 1
       const previo = p.gramos
       const desviacionPrevia = desviacion()
-      const nuevo = siguienteGramaje(p.alimento, previo, direccion, platos)
+      const nuevo = siguienteGramaje(p.alimento, previo, direccion)
       if (nuevo === previo) break
       p.gramos = nuevo
       if (desviacion() >= desviacionPrevia) {
@@ -227,7 +238,7 @@ function cerrarKcal(sel: Porcion[], objetivo: Macros, platos: number): void {
  * carbohidrato (o la grasa). Cualquier paso que empeore la proteína o saque las kcal del ±10 %
  * se deshace por completo, así que este ajuste nunca puede estropear el cierre anterior.
  */
-function cerrarProteina(sel: Porcion[], objetivo: Macros, platos: number): void {
+function cerrarProteina(sel: Porcion[], objetivo: Macros): void {
   if (objetivo.prot <= 0 || objetivo.kcal <= 0) return
   const ancla = sel.find((x) => x.rol === 'proteina')
   if (!ancla) return
@@ -239,7 +250,7 @@ function cerrarProteina(sel: Porcion[], objetivo: Macros, platos: number): void 
     const copia = sel.map((x) => x.gramos)
     const antesProteina = desvProteina()
     const direccion: 1 | -1 = proteinaPublicada(sel) > objetivo.prot ? -1 : 1
-    const nuevo = siguienteGramaje(ancla.alimento, ancla.gramos, direccion, platos)
+    const nuevo = siguienteGramaje(ancla.alimento, ancla.gramos, direccion)
     if (nuevo === ancla.gramos) break
     ancla.gramos = nuevo
     if (compensa) {
@@ -247,7 +258,7 @@ function cerrarProteina(sel: Porcion[], objetivo: Macros, platos: number): void 
         const antesKcal = desvKcal()
         const dirKcal: 1 | -1 = kcalPublicada(sel) > objetivo.kcal ? -1 : 1
         const previo = compensa.gramos
-        const siguiente = siguienteGramaje(compensa.alimento, previo, dirKcal, platos)
+        const siguiente = siguienteGramaje(compensa.alimento, previo, dirKcal)
         if (siguiente === previo) break
         compensa.gramos = siguiente
         if (desvKcal() >= antesKcal) {

@@ -244,6 +244,18 @@ const HC_LOW_CARB: FoodQuery = {
   ids_preferidos: ['arroz_coliflor', 'pan_proteico'],
 }
 
+/**
+ * Vía de escape de §3.2 para `low_carb`: cuando ni el arroz de coliflor ni el pan proteico pueden
+ * cubrir el hidrato del plan (su ración máxima aporta 9 g y 18 g), se permite un cereal normal
+ * con la ración rebajada. Sin esto un plan low-carb de 170 g de hidrato entregaba menús de 60 g.
+ */
+export const HC_LOW_CARB_ALTERNO: FoodQuery = {
+  rol: 'carbohidrato',
+  grupo: 'carbohidrato',
+  estado_excluye: ['crudo'],
+  ids_preferidos: ['patata_cocida', 'arroz_blanco_cocido', 'boniato_cocido', 'quinoa_cocida', 'pan_integral'],
+}
+
 const CARNE_O_PESCADO: FoodQuery = {
   rol: 'proteina',
   grupo: 'proteina',
@@ -665,7 +677,8 @@ const LCB: Plantilla[] = [
     rol_comida: 'principal',
     ancla_proteina: CARNE_O_PESCADO,
     ancla_proteina_2: HUEVO,
-    ancla_carbohidrato: null,
+    // Ancla de HC opcional: la regla `hc_pendiente < 20` la retira cuando no hace falta (§3.2).
+    ancla_carbohidrato: HC_LOW_CARB,
     ancla_grasa: AOVE,
     verdura: VERDURAS,
     fruta: null,

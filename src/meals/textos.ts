@@ -82,6 +82,19 @@ export function avisoProteinaVegetal(nComidas: number, proteinaDia: number): str
   return `Con fuentes solo vegetales y ${nComidas} comidas al día, llegar a ${numero(proteinaDia)} g de proteína exige raciones muy grandes. Repártela en una comida más o apóyate en un suplemento de proteína vegetal (guisante o soja): es la forma realista de llegar.`
 }
 
+/**
+ * Nota cuando el hidrato (o la grasa) del día se aleja del reparto que imprime la tabla de
+ * macros. El algoritmo cierra sobre kcal y proteína, así que estos dos macros pueden desviarse;
+ * con `diabetes` el hidrato es justo el que no puede desviarse en silencio.
+ */
+export function notaMacroDia(macro: 'hidratos' | 'grasa', real: number, objetivo: number, diabetes: boolean): string {
+  const direccion = real > objetivo ? 'por encima' : 'por debajo'
+  const cola = diabetes
+    ? ' Con diabetes esa diferencia importa: ajusta las raciones de hidratos del ejemplo a tu objetivo antes de usarlo, y consúltalo con tu equipo médico.'
+    : ' El menú cierra sobre las calorías y la proteína, así que este macro puede moverse; ajusta la ración del acompañamiento si quieres afinarlo.'
+  return `El menú de ejemplo suma ${numero(real)} g de ${macro} al día, ${direccion} de los ${numero(objetivo)} g de tu plan.${cola}`
+}
+
 /** Nota fija por condición médica sobre el bloque de menús (§3.1). */
 export const NOTA_DIABETES =
   'Estos gramajes de hidratos son un ejemplo: si usas insulina o pastillas que bajan el azúcar, revisa la dosis con tu equipo médico antes de cambiar tu forma de comer.'
@@ -92,7 +105,7 @@ export const TEXTO_SIN_MENU =
 
 /** Nota de la toma muy grande, repartida en varios platos. */
 export function notaDosPlatos(comida: string, kcal: number, platos: number): string {
-  const cuantos = platos >= 3 ? 'tres platos' : 'dos platos'
+  const cuantos = platos >= 4 ? 'cuatro platos' : platos === 3 ? 'tres platos' : 'dos platos'
   return `${comida}: son ${numero(kcal)} kcal en una sola toma, así que el ejemplo va repartido en ${cuantos}; puedes comerlos seguidos o separados una hora.`
 }
 
