@@ -2,7 +2,7 @@
 // La interfaz no implementa ninguna fórmula: consume `calcular`, `textosAvisos`,
 // `textoError` (motor) y `generarEjemplos` (menús, cargado en diferido).
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { calcular, textoError, textosAvisos } from './engine'
 import type {
   AvisoTexto,
@@ -53,6 +53,16 @@ export default function App() {
   }, [borrador])
 
   useEffect(() => () => window.clearTimeout(temporizador.current), [])
+
+  // Estable a propósito: el `useEffect` del wizard que mueve el foco y el scroll depende de esta
+  // función, y una identidad nueva por render la dispararía en cada pulsación de tecla.
+  const guardarPaso = useCallback((paso: PasoId) => guardarSesion({ paso, planGenerado: false }), [])
+
+  // El motor marca los campos de `ERR_INPUT_RANGO`; la marca se retira en cuanto el usuario edita.
+  const cambiarBorrador = useCallback((actualizar: (previo: Borrador) => Borrador) => {
+    setBorrador(actualizar)
+    setCamposMarcados((previos) => (previos.length > 0 ? [] : previos))
+  }, [])
 
   const irAResultados = (inputs: InputCalculo) => {
     setFase({ nombre: 'calculando' })
@@ -141,11 +151,11 @@ export default function App() {
         {fase.nombre === 'wizard' ? (
           <Wizard
             borrador={borrador}
-            onCambio={setBorrador}
+            onCambio={cambiarBorrador}
             onTerminar={irAResultados}
             onExclusion={excluirDesdeWizard}
             onReiniciar={reiniciar}
-            onPaso={(paso) => guardarSesion({ paso, planGenerado: false })}
+            onPaso={guardarPaso}
             pasoInicial={pasoInicial}
             camposMarcados={camposMarcados}
           />
