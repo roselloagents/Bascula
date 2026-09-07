@@ -30,7 +30,7 @@ import { equivalencias } from './equivalencias'
 import { esVarianteSinLactosa, pasaPreferencia } from './filtros'
 import type { FoodQuery, Plantilla, RolComida } from './plantillas'
 import { BANCOS, HC_LOW_CARB_ALTERNO, plantillasDe } from './plantillas'
-import { BANCOS_SENCILLOS, MAX_ALIMENTOS_SENCILLO } from './bancoSencillo'
+import { BANCOS_SENCILLOS, MAX_ALIMENTOS_SENCILLO, idsPermitidosSemana } from './bancoSencillo'
 import type { GramosAlimento } from './compra'
 import { listaCompraDeDias } from './compra'
 import {
@@ -89,6 +89,13 @@ interface Contexto {
   sencillo: boolean
   /** Cereal de respaldo de §3.2 cuando el ancla low-carb no cubre el hidrato. `null` si no aplica. */
   hcAlterno: FoodQuery | null
+  /**
+   * Lista blanca de ids: ninguna `FoodQuery` puede resolverse fuera de ella. `null` en la ruta
+   * normal (toda la base). La usa el respaldo de §3.7.2 para rehacer una toma con las plantillas
+   * del banco normal —que tienen más formas de plato— sin salirse de la lista corta del modo
+   * sencillo, que es la promesa del modo.
+   */
+  permitidos: ReadonlySet<string> | null
 }
 
 interface ComidaResuelta {
@@ -123,14 +130,19 @@ function pasaQuery(a: Alimento, q: FoodQuery): boolean {
  * Candidatos de una consulta separados en dos tramos: los `ids_preferidos` que pasan los
  * filtros (por donde rota la variedad) y el resto de la base como reserva.
  */
-function candidatos(q: FoodQuery, preferencia: Preferencia): { preferidos: Alimento[]; reserva: Alimento[] } {
+function candidatos(
+  q: FoodQuery,
+  preferencia: Preferencia,
+  permitidos: ReadonlySet<string> | null = null,
+): { preferidos: Alimento[]; reserva: Alimento[] } {
   // Las variantes «sin lactosa» solo entran en la rotación de quien las necesita; para el resto
   // de preferencias quedan como reserva (§3.2): son el mismo alimento, más caro y sin motivo.
   const validos = ALIMENTOS.filter(
     (a) =>
       pasaPreferencia(a, preferencia) &&
       pasaQuery(a, q) &&
-      (preferencia === 'sin_lactosa' || !esVarianteSinLactosa(a)),
+      (preferencia === 'sin_lactosa' || !esVarianteSinLactosa(a)) &&
+      (permitidos === null || permitidos.has(a.id)),
   )
   if (!q.ids_preferidos) {
     return { preferidos: [...validos].sort((x, y) => x.id.localeCompare(y.id)), reserva: [] }
@@ -148,7 +160,7 @@ function candidatos(q: FoodQuery, preferencia: Preferencia): { preferidos: Alime
  */
 function elegirAlimento(q: FoodQuery | null, ctx: Contexto, rotacion: number, evitarUsados: boolean): Alimento | null {
   if (!q) return null
-  const { preferidos, reserva } = candidatos(q, ctx.preferencia)
+  const { preferidos, reserva } = candidatos(q, ctx.preferencia, ctx.permitidos)
   let lista = preferidos.length > 0 ? preferidos : reserva
   if (lista.length === 0) return null
   const esVegetal = q.grupo === 'verdura' || q.grupo === 'fruta' || q.rol === 'verdura' || q.rol === 'fruta'
@@ -399,6 +411,13 @@ function hcAlternoDe(preferencia: Preferencia, sencillo: boolean): FoodQuery | n
   return sencillo ? BANCOS_SENCILLOS.low_carb.hcAlterno : HC_LOW_CARB_ALTERNO
 }
 
+/** Toma con más hidrato del reparto (empates: la primera). Determinista. */
+function indiceMasHidrato(comidas: readonly Comida[]): number {
+  let mejor = 0
+  for (let i = 1; i < comidas.length; i++) if (comidas[i].hc_g > comidas[mejor].hc_g) mejor = i
+  return mejor
+}
+
 function construirDia(o: OpcionesDia): DiaConstruido {
   const ctx: Contexto = {
     preferencia: o.preferencia,
@@ -410,11 +429,19 @@ function construirDia(o: OpcionesDia): DiaConstruido {
     plato: 0,
     sencillo: o.sencillo,
     hcAlterno: hcAlternoDe(o.preferencia, o.sencillo),
+    permitidos: null,
   }
+  // Vía de escape de §3.2 (el cereal normal del low-carb): en modo sencillo se permite en UNA
+  // sola toma, la de más hidrato del reparto. Sin este tope la patata ganaba en las tres comidas
+  // —encabezando la lista de la compra de quien había pedido low-carb— y ni el arroz de coliflor
+  // ni el pan proteico llegaban a aparecer nunca.
+  const escapeSencillo = ctx.hcAlterno
+  const indiceEscape = o.sencillo ? indiceMasHidrato(o.comidas) : -1
   const banco = o.banco
   const usadas = new Set<string>()
   const comidas: ComidaResuelta[] = []
   for (const comida of o.comidas) {
+    if (o.sencillo) ctx.hcAlterno = ctx.indiceComida === indiceEscape ? escapeSencillo : null
     comidas.push(construirComida(comida, ctx, banco, usadas))
     ctx.indiceComida += 1
     // Las proteínas se reservan dentro del día; verduras y frutas se liberan si se agotan.
@@ -594,20 +621,26 @@ function gramosDeDia(dia: DiaConstruido): GramosAlimento[] {
   return lista
 }
 
-/** Alimentos distintos que aparecen en la semana (día A + día B). */
-function distintosSemana(dia: DiaConstruido, diaB: DiaConstruido | null): number {
+/** Ids de los alimentos que aparecen en la semana (día A + día B). */
+function idsSemana(dia: DiaConstruido, diaB: DiaConstruido | null): Set<string> {
   const ids = new Set<string>()
   for (const g of gramosDeDia(dia)) ids.add(g.id)
   if (diaB) for (const g of gramosDeDia(diaB)) ids.add(g.id)
-  return ids.size
+  return ids
 }
 
-/** Rehace una sola toma con el banco normal de §3.2, con su propio contexto (determinista). */
+/**
+ * Rehace una sola toma con las plantillas del banco normal de §3.2 —que reparten los papeles de
+ * otra manera y suelen cerrar mejor una toma difícil— pero **restringidas a la lista blanca del
+ * banco sencillo**: el respaldo de §3.7.2 no puede meter en la compra nada que no esté en la
+ * lista corta de la preferencia. Contexto propio y determinista.
+ */
 function rehacerConBancoNormal(
   comida: Comida,
   indice: number,
   preferencia: Preferencia,
   offset: number,
+  permitidos: ReadonlySet<string>,
 ): ComidaResuelta {
   const ctx: Contexto = {
     preferencia,
@@ -619,6 +652,7 @@ function rehacerConBancoNormal(
     plato: 0,
     sencillo: false,
     hcAlterno: hcAlternoDe(preferencia, false),
+    permitidos,
   }
   return construirComida(comida, ctx, BANCOS[preferencia], new Set())
 }
@@ -635,7 +669,8 @@ function recomponerDia(comidas: ComidaResuelta[]): DiaConstruido {
  * Respaldo de §3.7.2: sustituye por el banco normal de §3.2 las tomas que el banco sencillo no
  * consigue meter dentro del ±10 % de kcal de §3.3. Las tomas se prueban de una en una y en orden,
  * y una sustitución solo se acepta si la semana sigue cabiendo en `MAX_ALIMENTOS_SENCILLO`
- * alimentos distintos: el tope de variedad es la promesa del modo y manda sobre el ajuste fino.
+ * alimentos distintos **y todos ellos están en la lista blanca de la preferencia**: el tope de
+ * variedad y la lista corta son la promesa del modo y mandan sobre el ajuste fino.
  * Devuelve `null` si no se ha aceptado ninguna sustitución.
  */
 function aplicarFallbackSencillo(
@@ -645,14 +680,15 @@ function aplicarFallbackSencillo(
   preferencia: Preferencia,
   offset: number,
 ): { dia: DiaConstruido; diaB: DiaConstruido; notas: string[] } | null {
+  const permitidos = new Set(BANCOS_SENCILLOS[preferencia].candidatos)
   // Candidatas: tomas que el banco sencillo no cierra y que el normal sí. Se calculan una vez.
   const alternas = new Map<number, ComidaResuelta>()
   for (let i = 0; i < comidas.length; i++) {
     const a = dia.comidas[i]
     const b = diaB.comidas[i]
     if (!a || !b || (a.converge && b.converge)) continue
-    const alterna = rehacerConBancoNormal(comidas[i], i, preferencia, offset)
-    if (alterna.converge) alternas.set(i, alterna)
+    const alterna = rehacerConBancoNormal(comidas[i], i, preferencia, offset, permitidos)
+    if (alterna.converge && alterna.porciones.length > 0) alternas.set(i, alterna)
   }
   if (alternas.size === 0) return null
 
@@ -667,8 +703,18 @@ function aplicarFallbackSencillo(
     }
     return { A, B }
   }
-  const cabe = (r: { A: ComidaResuelta[]; B: ComidaResuelta[] }): boolean =>
-    distintosSemana(recomponerDia(r.A), recomponerDia(r.B)) <= MAX_ALIMENTOS_SENCILLO
+  // Guarda del respaldo: la semana tiene que seguir cabiendo en el tope de variedad Y no salirse
+  // de la lista blanca de §3.7.2. Sin la segunda condición el menú "sencillo" acababa con
+  // proteína de guisante en polvo o semillas de lino en la lista de la compra, que es justo lo
+  // que el modo promete no hacer (§3.7.2, regla 3). `rehacerConBancoNormal` ya trabaja dentro de
+  // la lista blanca; la comprobación se queda como red de seguridad del invariante.
+  const deLaSemana = idsPermitidosSemana(BANCOS_SENCILLOS[preferencia])
+  const cabe = (r: { A: ComidaResuelta[]; B: ComidaResuelta[] }): boolean => {
+    const ids = idsSemana(recomponerDia(r.A), recomponerDia(r.B))
+    if (ids.size > MAX_ALIMENTOS_SENCILLO) return false
+    for (const id of ids) if (!deLaSemana.has(id)) return false
+    return true
+  }
 
   // Primero, todas a la vez: es lo que menos alimentos añade cuando el banco normal reutiliza los
   // mismos básicos. Si no cabe, se aceptan de una en una mientras el tope lo permita.

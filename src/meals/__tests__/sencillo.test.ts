@@ -3,8 +3,14 @@
 import { describe, expect, it } from 'vitest'
 import { ALIMENTOS, alimentoPorId } from '../../data/foods'
 import type { NComidas, Preferencia } from '../../engine/types'
-import { BANCOS_SENCILLOS, MAX_ALIMENTOS_SENCILLO, idsDeBanco } from '../bancoSencillo'
-import { TOLERANCIA_KCAL } from '../escalado'
+import {
+  BANCOS_SENCILLOS,
+  MAX_ALIMENTOS_SENCILLO,
+  MAX_CANDIDATOS_SENCILLO,
+  idsDeBanco,
+  idsPermitidosSemana,
+} from '../bancoSencillo'
+import { TOLERANCIA_KCAL, TOLERANCIA_PROTEINA } from '../escalado'
 import { pasaPreferencia } from '../filtros'
 import { generarEjemplos } from '../index'
 import { inputsDe, resultadoDe } from './fixtures'
@@ -22,9 +28,15 @@ describe('banco sencillo (§3.7.2)', () => {
   for (const p of PREFERENCIAS) {
     const banco = BANCOS_SENCILLOS[p]
 
-    it(`${p}: no más de ${MAX_ALIMENTOS_SENCILLO} candidatos y sin duplicados`, () => {
-      expect(banco.candidatos.length).toBeLessThanOrEqual(MAX_ALIMENTOS_SENCILLO)
+    it(`${p}: la lista blanca no pasa de ${MAX_CANDIDATOS_SENCILLO} y no tiene duplicados`, () => {
+      expect(banco.candidatos.length).toBeLessThanOrEqual(MAX_CANDIDATOS_SENCILLO)
       expect(new Set(banco.candidatos).size).toBe(banco.candidatos.length)
+    })
+
+    it(`${p}: las plantillas no usan más de ${MAX_ALIMENTOS_SENCILLO} alimentos distintos`, () => {
+      // Es lo que garantiza el tope de §3.7.2 por construcción: la semana es la unión de los dos
+      // días y los dos días salen de estas plantillas.
+      expect(idsDeBanco(banco).length).toBeLessThanOrEqual(MAX_ALIMENTOS_SENCILLO)
     })
 
     it(`${p}: todos los candidatos existen y pasan el filtro de preferencia`, () => {
@@ -36,7 +48,10 @@ describe('banco sencillo (§3.7.2)', () => {
     })
 
     it(`${p}: ninguna plantilla usa un alimento de fuera de la lista corta`, () => {
-      for (const id of idsDeBanco(banco)) expect(banco.candidatos, id).toContain(id)
+      // `idsPermitidosSemana` añade la vía de escape de §3.2 (la patata del low-carb), que no es
+      // un candidato de la tabla de §3.7.2 pero sí puede aparecer en el plato.
+      const permitidos = idsPermitidosSemana(banco)
+      for (const id of idsDeBanco(banco)) expect(permitidos.has(id), id).toBe(true)
     })
 
     it(`${p}: dos variantes por rol de comida (día A y día B)`, () => {
@@ -98,6 +113,48 @@ describe('menú sencillo: tope de variedad y marcas', () => {
   })
 })
 
+describe('menú sencillo: nada fuera de la lista corta (§3.7.2, regla 3)', () => {
+  it('ni el menú ni la lista de la compra salen de la lista blanca de la preferencia', () => {
+    // Incluido el respaldo de §3.7.2: rehacer una toma con el banco normal no puede meter en la
+    // compra proteína de guisante en polvo, semillas de lino ni ningún otro alimento de fuera.
+    for (const p of PREFERENCIAS) {
+      const permitidos = idsPermitidosSemana(BANCOS_SENCILLOS[p])
+      for (const kcal of KCAL) {
+        for (const n of COMIDAS) {
+          const e = menuSencillo(kcal, n, p)
+          for (const item of e.compra!.items) {
+            expect(permitidos.has(item.alimento_id), `${p} ${kcal} ${n}: ${item.alimento_id}`).toBe(true)
+          }
+          for (const c of e.entreno.comidas) {
+            for (const a of c.alimentos) {
+              expect(permitidos.has(a.id), `${p} ${kcal} ${n} ${c.comida}: ${a.id}`).toBe(true)
+            }
+          }
+        }
+      }
+    }
+  })
+
+  it('low-carb: usa sus propias anclas y la patata no gana en más de una toma', () => {
+    // §3.2 deja una vía de escape al cereal normal; en modo sencillo está limitada a una sola
+    // toma del día para que la lista de la compra de un low-carb no salga encabezada por patatas.
+    const vistos = new Set<string>()
+    for (const kcal of KCAL) {
+      for (const n of COMIDAS) {
+        const e = menuSencillo(kcal, n, 'low_carb')
+        const tomasConPatata = e.entreno.comidas.filter((c) =>
+          c.alimentos.some((a) => a.id === 'patata_cocida'),
+        ).length
+        expect(tomasConPatata, `${kcal} ${n}`).toBeLessThanOrEqual(1)
+        for (const item of e.compra!.items) vistos.add(item.alimento_id)
+      }
+    }
+    // Y las anclas low-carb de §3.7.2 aparecen de verdad, no solo en la tabla de candidatos.
+    expect(vistos.has('arroz_coliflor')).toBe(true)
+    expect(vistos.has('pan_proteico')).toBe(true)
+  })
+})
+
 describe('menú sencillo: preferencia dietética (§3.7.2, regla 4)', () => {
   it('vegano: ni un solo alimento sin el tag `vegano`, tampoco en la lista de la compra', () => {
     for (const kcal of KCAL) {
@@ -154,6 +211,43 @@ describe('menú sencillo: tolerancias de §3.3', () => {
               e.entreno.notas.some((t) => t.startsWith(`${c.comida}:`)),
               `${p} ${kcal} ${n} ${c.comida} ${c.totales.kcal}/${c.objetivo.kcal}`,
             ).toBe(true)
+          }
+        }
+      }
+    }
+  })
+
+  it('cada toma cierra dentro del ±15 % de proteína o lleva su nota', () => {
+    // Misma estructura que la comprobación de kcal: §3.7.2 obliga a mantener las tolerancias de
+    // §3.3, y cuando una toma no llega el usuario tiene que verlo escrito en la pantalla.
+    for (const p of PREFERENCIAS) {
+      for (const kcal of KCAL) {
+        for (const n of COMIDAS) {
+          const e = menuSencillo(kcal, n, p)
+          for (const c of e.entreno.comidas) {
+            if (c.objetivo.prot <= 0) continue
+            const desv = Math.abs(c.totales.prot - c.objetivo.prot) / c.objetivo.prot
+            if (desv <= TOLERANCIA_PROTEINA) continue
+            expect(
+              e.entreno.notas.some((t) => t.startsWith(`${c.comida}:`)),
+              `${p} ${kcal} ${n} ${c.comida} ${c.totales.prot}/${c.objetivo.prot}`,
+            ).toBe(true)
+          }
+        }
+      }
+    }
+  })
+
+  it('ninguna toma se va a más del 45 % de su objetivo de proteína', () => {
+    // Techo duro del modo sencillo: con doce alimentos y los límites de ración de §3.3 hay tomas
+    // (mucha proteína en pocas kcal) que no cierran, pero no pueden irse a cualquier sitio.
+    for (const p of PREFERENCIAS) {
+      for (const kcal of KCAL) {
+        for (const n of COMIDAS) {
+          for (const c of menuSencillo(kcal, n, p).entreno.comidas) {
+            if (c.objetivo.prot <= 0) continue
+            const desv = Math.abs(c.totales.prot - c.objetivo.prot) / c.objetivo.prot
+            expect(desv, `${p} ${kcal} ${n} ${c.comida}`).toBeLessThanOrEqual(0.45)
           }
         }
       }

@@ -103,9 +103,11 @@ describe('lo que la pantalla recibe del generador', () => {
       expect(item.gramos_semana).toBe(Math.round(item.gramos_dia * 7))
       expect(item.envases).toBe(Math.ceil(item.gramos_semana / item.envase_g))
       expect(item.dura_dias).toBe(Math.min(bruto, fila.conservacion_dias))
-      if (item.conservacion === 'fresco' && bruto > fila.conservacion_dias) {
+      // El consejo fijo del fresco solo entra cuando de verdad se compran dos envases o más.
+      if (item.conservacion === 'fresco' && bruto > fila.conservacion_dias && item.envases >= 2) {
         expect(item.consejo).toBe(CONSEJO_FRESCO)
       }
+      if (item.envases === 1) expect(item.consejo).not.toBe(CONSEJO_FRESCO)
     }
     expect(SENCILLA.alimentos_distintos).toBe(SENCILLA.items.length)
     expect(SENCILLA.alimentos_distintos).toBeLessThanOrEqual(12)
