@@ -22,6 +22,8 @@ export interface EntradaObjetivo {
 
 export interface SalidaObjetivo {
   objetivo_efectivo: ObjetivoEfectivo
+  /** Objetivo resuelto por la regla 6.1 (solo con `objetivo === 'no_se'`). */
+  objetivo_propuesto?: ObjetivoEfectivo
   ritmo_efectivo: Ritmo
   preferencia_efectiva: Preferencia
   /** %grasa objetivo central y franja (paso 13); el central lo usa también la regla 6.3. */
@@ -47,6 +49,7 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
   const pobj = inputs.peso_objetivo ?? null
   let obj: ObjetivoEfectivo | 'no_se' = inputs.objetivo
   let resueltoPorPeso = false
+  let objetivo_propuesto: ObjetivoEfectivo | undefined
 
   // 6.1 — "no lo sé"
   if (obj === 'no_se') {
@@ -54,12 +57,18 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
       obj = pobj < PC ? 'perder' : 'ganar'
       resueltoPorPeso = true
       emitir('INFO_OBJETIVO_RESUELTO_POR_PESO')
+    } else if (pobj !== null) {
+      // Meta a menos de 1 kg del peso actual: misma lectura conservadora que la regla 6.2, que
+      // no cubre este caso por estar restringida a `objetivo !== 'no_se'`.
+      obj = 'mantener'
+      emitir('INFO_OBJETIVO_IGUAL')
     } else if (imc < 20) obj = 'mantener'
     else if (banda === 'alto' || banda === 'muy_alto') obj = 'perder'
     else if (banda === 'muy_bajo' && perfil === 'fuerza') obj = 'ganar'
     else if (perfil === 'fuerza') obj = 'recomposicion'
     else obj = 'mantener'
     if (!resueltoPorPeso) emitir('INFO_OBJETIVO_RESUELTO')
+    objetivo_propuesto = obj
   } else if (pobj !== null && (obj === 'perder' || obj === 'ganar')) {
     // 6.2 — coherencia con el peso objetivo (solo si el usuario eligió objetivo)
     if (Math.abs(pobj - PC) < 1) {
@@ -124,5 +133,5 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
     emitir('WARN_LOWCARB_DIABETES')
   }
 
-  return { objetivo_efectivo: obj, ritmo_efectivo, preferencia_efectiva, g_c, g_lo, g_hi }
+  return { objetivo_efectivo: obj, objetivo_propuesto, ritmo_efectivo, preferencia_efectiva, g_c, g_lo, g_hi }
 }

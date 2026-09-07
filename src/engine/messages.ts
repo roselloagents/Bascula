@@ -4,7 +4,7 @@
 // del paso 17.
 
 import { capDeficit } from './calories'
-import { PROT_KCAL_VEGETAL_UMBRAL } from './constants'
+import { EA_MIN, EA_MIN_MUY_ALTO } from './constants'
 import { round5 } from './round'
 import { mensajesDeErrores, validarInputs } from './validate'
 import type { AvisoTexto, Inputs, Resultado, Severidad } from './types'
@@ -102,9 +102,13 @@ function num(x: number, decimales = 1): string {
   return Number.isInteger(redondeado) ? String(redondeado) : redondeado.toFixed(decimales).replace('.', ',')
 }
 
-/** Nombre del objetivo tal y como lo enuncian INFO_OBJETIVO_RESUELTO* (§4). */
+/**
+ * Nombre del objetivo tal y como lo enuncian INFO_OBJETIVO_RESUELTO* (§4). Se resuelve contra el
+ * objetivo que propuso la regla 6.1, no contra el final: los pasos 6.3, 6.4, 7 y 10bis pueden
+ * haberlo reescrito después y el aviso habla de lo que se propuso por composición corporal.
+ */
 function nombreObjetivo(ctx: Contexto): string {
-  switch (ctx.resultado.objetivo_efectivo) {
+  switch (ctx.resultado.objetivo_propuesto ?? ctx.resultado.objetivo_efectivo) {
     case 'perder':
       return 'perder grasa'
     case 'ganar':
@@ -116,10 +120,18 @@ function nombreObjetivo(ctx: Contexto): string {
   }
 }
 
-/** `pct_cap` realmente aplicado en el paso 8: 30 % en dieta vegetal con menos de 1.800 kcal. */
+/**
+ * `pct_cap` realmente aplicado en el paso 8: 30 % en dieta vegetal con menos de 1.800 kcal.
+ * Lo publica el motor porque los pasos 9 y 10 pueden subir `kcal` después de aplicar el cap:
+ * recalcularlo aquí con las kcal finales imprimiría un porcentaje que no se aplicó.
+ */
 function pctCapAplicado(ctx: Contexto): number {
-  const pref = ctx.resultado.preferencia_efectiva
-  return (pref === 'vegano' || pref === 'vegetariano') && ctx.resultado.kcal < PROT_KCAL_VEGETAL_UMBRAL ? 30 : 35
+  return Math.round(ctx.resultado.macros.pct_cap * 100)
+}
+
+/** Suelo de disponibilidad energética aplicado en el paso 7 (25 kcal/kg MLG en banda `muy_alto`). */
+function sueloEa(ctx: Contexto): number {
+  return ctx.resultado.grasa.banda === 'muy_alto' ? EA_MIN_MUY_ALTO : EA_MIN
 }
 
 /** El fragmento sobre el calendario se omite cuando no hay cronograma. */
@@ -262,7 +274,7 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
     severidad: 'warn',
     titulo: 'Disponibilidad energética protegida',
     texto: (ctx) =>
-      `Con ese ritmo tu disponibilidad energética caería por debajo de 30 kcal por kilo de masa magra, un nivel asociado a alteraciones hormonales. Hemos subido las calorías para evitarlo${conCalendario(ctx, ' y alargado el calendario')}.`,
+      `Con ese ritmo tu disponibilidad energética caería por debajo de ${sueloEa(ctx)} kcal por kilo de masa magra, un nivel asociado a alteraciones hormonales. Hemos subido las calorías hasta ese mínimo${conCalendario(ctx, ' y alargado el calendario')}.`,
   },
   WARN_DEFICIT_MINIMO: {
     severidad: 'warn',
@@ -578,6 +590,7 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
 // ---------------------------------------------------------------- supresiones (paso 6) y filtro TCA (paso 17)
 
 const CRONOGRAMA_CORTE: CodigoAviso[] = [
+  'INFO_SIN_CRONOGRAMA',
   'INFO_SIN_CRONOGRAMA_SIN_MARGEN',
   'INFO_CRONOGRAMA_NO_ESTIMABLE',
   'INFO_CRONOGRAMA_FUERA_DE_HORIZONTE',

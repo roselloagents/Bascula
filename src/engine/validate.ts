@@ -71,15 +71,17 @@ export function validarInputs(inputs: Inputs): string[] {
   // --- dominios de los enumerados
   if (!enDominio(DOMINIOS.sexo, inputs.sexo)) e.push('sexo')
   if (!enDominio(DOMINIOS.metodo, grasa.metodo)) e.push('grasa.metodo')
-  if (grasa.metodo === 'conocido' && grasa.fuente !== undefined && grasa.fuente !== null && !enDominio(DOMINIOS.fuente, grasa.fuente)) {
+  // `grasa.fuente` se valida siempre que venga informada: la §1 la enumera sin condicionarla al método.
+  if (grasa.fuente !== undefined && grasa.fuente !== null && !enDominio(DOMINIOS.fuente, grasa.fuente)) {
     e.push('grasa.fuente')
   }
   if (!enDominio(DOMINIOS.actividad_diaria, inputs.actividad_diaria)) e.push('actividad_diaria')
   if (!enDominio(DOMINIOS.tipo, ent.tipo)) e.push('entrenamiento.tipo')
+  // La §1 exime de validación cuatro campos con `tipo = 'ninguno'`: dias_semana, minutos_sesion,
+  // intensidad y momento. `experiencia` no está entre ellos, así que se valida siempre.
+  if (!enDominio(DOMINIOS.experiencia, ent.experiencia)) e.push('entrenamiento.experiencia')
   if (ent.tipo !== 'ninguno') {
-    // Con `tipo = 'ninguno'` la §1 declara ignorados intensidad, experiencia, momento y minutos.
     if (!enDominio(DOMINIOS.intensidad, ent.intensidad)) e.push('entrenamiento.intensidad')
-    if (!enDominio(DOMINIOS.experiencia, ent.experiencia)) e.push('entrenamiento.experiencia')
     if (ent.momento !== null && ent.momento !== undefined && !enDominio(DOMINIOS.momento, ent.momento)) {
       e.push('entrenamiento.momento')
     }
@@ -125,7 +127,7 @@ export function validarInputs(inputs: Inputs): string[] {
   if (inputs.peso_objetivo !== null && inputs.peso_objetivo !== undefined && !enRango(inputs.peso_objetivo, 30, 300)) {
     e.push('peso_objetivo')
   }
-  if (ent.tipo !== 'ninguno' && (ent.dias_semana ?? 0) > 0 && !enRango(ent.minutos_sesion, 10, 240)) {
+  if (ent.tipo !== 'ninguno' && !enRango(ent.minutos_sesion, 10, 240)) {
     e.push('entrenamiento.minutos_sesion')
   }
   if (!enRango(ent.dias_semana, 0, 7)) e.push('entrenamiento.dias_semana')

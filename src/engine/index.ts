@@ -263,6 +263,7 @@ export function calcular(inputs: Inputs): Resultado {
       perfil: tdee.perfil,
     },
     objetivo_efectivo,
+    objetivo_propuesto: objetivo.objetivo_propuesto,
     ritmo_efectivo: objetivo.ritmo_efectivo,
     preferencia_efectiva: objetivo.preferencia_efectiva,
     kcal,
@@ -282,6 +283,7 @@ export function calcular(inputs: Inputs): Resultado {
       base_proteina: macros.base_proteina,
       base_kg: macros.base_kg,
       somatotipo: macros.somatotipo,
+      pct_cap: macros.pct_cap,
     },
     agua,
     peso_objetivo,
@@ -324,6 +326,7 @@ const RESULTADO_BLOQUEADO: Resultado = {
     base_proteina: 'peso_corporal',
     base_kg: 0,
     somatotipo: 'mesomorfo',
+    pct_cap: 0,
   },
   agua: null,
   peso_objetivo: {

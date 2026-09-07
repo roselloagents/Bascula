@@ -123,6 +123,7 @@ export function resultadoDe(o: OpcionesPlan): Resultado {
       base_proteina: 'peso_corporal',
       base_kg: peso,
       somatotipo: 'mesomorfo',
+    pct_cap: 0.35,
     },
     agua: { ml: 2500, rango: [2200, 2800], vasos: 10 },
     peso_objetivo: {

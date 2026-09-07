@@ -140,6 +140,10 @@ export interface ResultadoMacros {
   base_proteina: BaseProteina
   base_kg: number
   somatotipo: Somatotipo
+  /** Fracción de kcal del cap de proteína realmente aplicada en el paso 8 (0,35 o 0,30).
+   *  El texto de `INFO_PROTEINA_CAPADA` la imprime: no puede deducirse de `kcal`, porque los
+   *  pasos 9 y 10 pueden haberlas subido después de aplicar el cap. */
+  pct_cap: number
 }
 
 /** `null` con condición `renal` o `cardiaca` (SPEC Paso 12). */
@@ -208,6 +212,10 @@ export interface Resultado {
   bmr: ResultadoBmr
   tdee: ResultadoTdee
   objetivo_efectivo: ObjetivoEfectivo
+  /** Objetivo que propuso la regla 6.1 con `objetivo === 'no_se'`; `undefined` si el usuario
+   *  eligió objetivo. Los pasos 6.3-6.4, 7 y 10bis pueden reescribir `objetivo_efectivo` después,
+   *  y los textos de `INFO_OBJETIVO_RESUELTO*` hablan de lo que se propuso, no del plan final. */
+  objetivo_propuesto?: ObjetivoEfectivo
   ritmo_efectivo: Ritmo
   /** Paso 6.8: `diabetes` + `low_carb` -> `omnivoro`. El generador de comidas y el PDF deben usar
    *  este valor, nunca `inputs.preferencia`. */

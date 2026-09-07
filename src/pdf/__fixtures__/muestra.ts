@@ -69,6 +69,7 @@ const RESULTADO_A: Resultado = {
     base_proteina: 'peso_corporal',
     base_kg: 84,
     somatotipo: 'mesomorfo',
+    pct_cap: 0.35,
   },
   agua: { ml: 3250, rango: [3000, 3500], vasos: 13 },
   peso_objetivo: {
@@ -317,6 +318,7 @@ const RESULTADO_B: Resultado = {
     base_proteina: 'peso_ajustado',
     base_kg: 58.4,
     somatotipo: 'endomorfo',
+    pct_cap: 0.35,
   },
   agua: { ml: 2050, rango: [1900, 2200], vasos: 8 },
   peso_objetivo: {

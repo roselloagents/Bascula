@@ -93,6 +93,8 @@ export interface SalidaMacros {
   base_proteina: BaseProteina
   somatotipo: Somatotipo
   p_cap: number
+  /** Fracción de kcal del cap de proteína realmente aplicada en el paso 8 (0,35 o 0,30). */
+  pct_cap: number
   suelo_g: number
   techo_g: number
 }
@@ -150,6 +152,9 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
 
   const P_raw = gkg * base
   let p_cap = calcularPcap()
+  // Se guarda el porcentaje con el que se calculó el cap que de verdad limita la proteína: los
+  // pasos 9 y 10 pueden subir las kcal después y `resultado.kcal` ya no serviría para deducirlo.
+  let pct_cap = pctCap()
   let P = Math.min(P_raw, p_cap)
   P = Math.max(P, PROT_LINEA_ROJA * PC) // línea roja RDA
   if (P < P_raw) emitir('INFO_PROTEINA_CAPADA')
@@ -193,16 +198,28 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
 
   let suelo_g = calcularSueloG()
   let techo_g = calcularTechoG()
-  if (suelo_g > techo_g) {
-    // Faltan calorías para cuadrar los macros: se suben las kcal en vez de forzar la grasa.
-    kcal = roundUp10(suelo_gkg * base * 9 / pctTecho)
-    emitir('WARN_KCAL_INSUFICIENTES_PARA_MACROS')
-    suelo_g = calcularSueloG()
-    techo_g = calcularTechoG()
-    p_cap = calcularPcap()
-    if (P > p_cap) P = roundDown5(p_cap)
-    if (suelo_g > techo_g) techo_g = suelo_g
+
+  /**
+   * Faltan calorías para cuadrar los macros: se suben las kcal en vez de forzar la grasa.
+   * La franja no basta con que exista (`suelo_g ≤ techo_g`): tiene que contener algún múltiplo
+   * de 5 g, porque la grasa se prescribe redondeada a 5. Si no lo contiene, el redondeo dirigido
+   * del final del paso 9 deja G por debajo del suelo obligatorio sin ningún aviso.
+   */
+  const asegurarFranjaGrasa = (): void => {
+    for (let it = 0; roundUp5(suelo_g) > techo_g; it++) {
+      if (it > 10) throw new Error('paso 9: la franja de grasa no converge')
+      kcal = roundUp10(roundUp5(suelo_g) * 9 / pctTecho)
+      emitir('WARN_KCAL_INSUFICIENTES_PARA_MACROS')
+      suelo_g = calcularSueloG()
+      techo_g = calcularTechoG()
+      p_cap = calcularPcap()
+      if (P > p_cap) {
+        P = roundDown5(p_cap)
+        pct_cap = pctCap()
+      }
+    }
   }
+  asegurarFranjaGrasa()
 
   const G0 = clamp(pct_grasa * kcal / 9, suelo_g, techo_g)
   const soma = clasificarSomatotipo(e.somatotipo)
@@ -243,12 +260,20 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
     techo_g = calcularTechoG()
     p_cap = calcularPcap()
     p_min = calcularPmin()
-    if (P > p_cap) P = roundDown5(p_cap)
+    if (P > p_cap) {
+      P = roundDown5(p_cap)
+      pct_cap = pctCap()
+    }
+    asegurarFranjaGrasa() // la franja debe seguir admitiendo un múltiplo de 5 g
     if (G < suelo_g) G = roundUp5(suelo_g)
     if (G > techo_g) G = roundDown5(techo_g)
   }
   HC = round5(HC)
   const kcal_cierre = 4 * P + 4 * HC + 9 * G
+  // Invariante del paso 10: agotar la tolerancia es un fallo del motor, no una salida válida.
+  if (Math.abs(kcal_cierre - kcal) > 0.02 * kcal) {
+    throw new Error('paso 10: kcal_cierre fuera de tolerancia')
+  }
 
   return {
     kcal,
@@ -261,6 +286,7 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
     base_proteina,
     somatotipo: soma,
     p_cap,
+    pct_cap,
     suelo_g,
     techo_g,
   }
