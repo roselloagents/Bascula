@@ -75,7 +75,9 @@ export interface Borrador {
     momentoRespondido: boolean
   }
   objetivo: Objetivo | null
-  ritmo: Ritmo
+  /** Sin preseleccionar (QA §1): el ritmo cambia el tamaño del déficit y el cronograma,
+   *  así que no es un valor por defecto razonable como el número de comidas o el clima. */
+  ritmo: Ritmo | null
   quierePesoObjetivo: boolean | null
   peso_objetivo: string
   preferencia: Preferencia | null
@@ -118,7 +120,7 @@ export function borradorInicial(): Borrador {
       momentoRespondido: false,
     },
     objetivo: null,
-    ritmo: 'moderado',
+    ritmo: null,
     quierePesoObjetivo: null,
     peso_objetivo: '',
     preferencia: null,
@@ -354,7 +356,7 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
       return { completo: b.objetivo !== null, errores }
 
     case 'ritmo':
-      return { completo: true, errores }
+      return { completo: b.ritmo !== null, errores }
 
     case 'pesoObjetivo': {
       if (b.quierePesoObjetivo === null) return { completo: false, errores }
@@ -432,7 +434,9 @@ export function aInputs(b: Borrador): InputCalculo {
     actividad_diaria: b.actividad_diaria ?? 'sedentario',
     entrenamiento,
     objetivo: b.objetivo ?? 'mantener',
-    ritmo: pasos.includes('ritmo') ? b.ritmo : 'moderado',
+    // Fuera del paso 11 (objetivos que no usan ritmo) el motor pide igualmente un valor:
+    // se resuelve aquí, como el resto de campos que el cuestionario puede no preguntar.
+    ritmo: (pasos.includes('ritmo') ? b.ritmo : null) ?? 'moderado',
     peso_objetivo: pesoObjetivo,
     preferencia: b.preferencia ?? 'omnivoro',
     n_comidas: b.n_comidas,
