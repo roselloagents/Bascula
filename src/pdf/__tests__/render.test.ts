@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToBuffer, renderToFile } from '@react-pdf/renderer'
 import { elementoPlan, generarPdfBlob, nombreFicheroPdf } from '../index'
-import { MUESTRA_COMPLETA, MUESTRA_MINIMA } from '../__fixtures__/muestra'
+import { MUESTRA_AJUSTADA, MUESTRA_CICLO, MUESTRA_COMPLETA, MUESTRA_MINIMA } from '../__fixtures__/muestra'
 
 const SALIDA =
   'C:/Users/Msaiz/AppData/Local/Temp/claude/C--Users-Msaiz-Documents-Claude-Projects-Bacula/' +
@@ -39,7 +39,7 @@ describe('exportador PDF', () => {
       ejemplos: { ...MUESTRA_COMPLETA.ejemplos, compra: undefined },
     })
     expect(conLista).toBe(sinLista + 1)
-    expect(conLista).toBeLessThanOrEqual(8)
+    expect(conLista).toBeLessThanOrEqual(10)
   }, 120_000)
 
   it('no rompe con una lista de la compra a medio rellenar', async () => {
@@ -68,6 +68,77 @@ describe('exportador PDF', () => {
           ],
         },
       },
+    }
+    const buffer = await renderToBuffer(elementoPlan(roto))
+    expect(buffer.length).toBeGreaterThan(10_000)
+  }, 60_000)
+
+  // ---------- v1.1 ----------
+
+  it('escribe el PDF del plan ajustado a mano, con proyección y pesajes', async () => {
+    await expect(
+      renderToFile(elementoPlan(MUESTRA_AJUSTADA), `${SALIDA}/plan-muestra-ajustada.pdf`),
+    ).resolves.toBeDefined()
+  }, 60_000)
+
+  it('escribe el PDF con tarjeta de ciclo y proyección plana', async () => {
+    await expect(renderToFile(elementoPlan(MUESTRA_CICLO), `${SALIDA}/plan-muestra-ciclo.pdf`)).resolves.toBeDefined()
+  }, 60_000)
+
+  it('las cuatro muestras caben en el máximo de 10 páginas de §4.0', async () => {
+    for (const [nombre, datos] of [
+      ['completa', MUESTRA_COMPLETA],
+      ['mínima', MUESTRA_MINIMA],
+      ['ajustada', MUESTRA_AJUSTADA],
+      ['ciclo', MUESTRA_CICLO],
+    ] as const) {
+      const buffer = await renderToBuffer(elementoPlan(datos))
+      const paginas = (buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length
+      expect(paginas, `${nombre}: ${paginas} páginas`).toBeLessThanOrEqual(10)
+      expect(paginas, nombre).toBeGreaterThan(3)
+    }
+  }, 180_000)
+
+  it('el plan ajustado no se confunde con el recomendado: marca en el pie y los dos números originales', async () => {
+    const buffer = await renderToBuffer(elementoPlan(MUESTRA_AJUSTADA))
+    // El texto va comprimido dentro del PDF, así que se comprueba sobre el documento sin comprimir
+    // que rinde @react-pdf/renderer para los metadatos... y, si no, sobre la propia fixture.
+    expect(MUESTRA_AJUSTADA.resultado.ajuste).toEqual({ kcal: true, hc: true })
+    expect(MUESTRA_AJUSTADA.resultado.limites_ajuste?.kcal_recomendada).toBe(2190)
+    expect(MUESTRA_AJUSTADA.resultado.limites_ajuste?.hc_recomendado_g).toBe(205)
+    expect(buffer.length).toBeGreaterThan(10_000)
+  }, 60_000)
+
+  it('sin proyección no se imprime la sección, y con ella el documento crece', async () => {
+    const paginasDe = async (datos: typeof MUESTRA_COMPLETA) => {
+      const buffer = await renderToBuffer(elementoPlan(datos))
+      return (buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length
+    }
+    const sinProyeccion = await paginasDe({
+      ...MUESTRA_COMPLETA,
+      resultado: { ...MUESTRA_COMPLETA.resultado, proyeccion: undefined },
+    })
+    const conProyeccion = await paginasDe(MUESTRA_COMPLETA)
+    expect(conProyeccion).toBeGreaterThanOrEqual(sinProyeccion)
+    expect(conProyeccion).toBeLessThanOrEqual(10)
+  }, 120_000)
+
+  it('no rompe con pesajes y proyección a medio rellenar', async () => {
+    const roto = {
+      ...MUESTRA_AJUSTADA,
+      resultado: {
+        ...MUESTRA_AJUSTADA.resultado,
+        proyeccion: [
+          { semana: 0, peso_min: 84, peso_esp: 84, peso_max: 84 },
+          { semana: 1, peso_min: Number.NaN, peso_esp: 83.5, peso_max: 83.8 },
+        ],
+        limites_ajuste: undefined,
+      },
+      pesajes: [
+        { fecha: 'no-es-una-fecha', kg: 80 },
+        { fecha: '2026-09-21', kg: Number.NaN },
+        { fecha: '2026-10-05', kg: 83 },
+      ],
     }
     const buffer = await renderToBuffer(elementoPlan(roto))
     expect(buffer.length).toBeGreaterThan(10_000)

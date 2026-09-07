@@ -1,7 +1,7 @@
 // Documento PDF del plan (docs/SPEC-ux-comidas-pdf.md §4).
 // Regla del contrato: aquí no se calcula nada. Todo número sale de `datos.resultado` / `datos.ejemplos`.
 // Fuentes estándar (Helvetica) para no depender de la red.
-import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { Circle, Document, Line, Page, Path, Polyline, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
 import type { ReactNode } from 'react'
 import type {
   AlimentoPorcion,
@@ -13,6 +13,8 @@ import type {
   ItemCompra,
   ListaCompra,
   Macros,
+  Pesaje,
+  PuntoProyeccion,
   SeccionSuper,
   TablasEquivalencia,
 } from '../engine/types'
@@ -20,7 +22,16 @@ import { NOMBRE_SECCION, ORDEN_SECCIONES } from '../data/secciones'
 // Las celdas de cantidad y el rótulo del modo sencillo salen del mismo helper que usa la
 // pantalla (§4.4b: "las mismas cuatro columnas de §2.5b"). Aquí no se recalcula ningún número.
 import { textoCantidadDia, textoCantidadSemana, textoModoSencillo } from '../meals/compra'
-import { etiqueta, NOMBRE_FORMULA_CLASICA } from './etiquetas'
+import { etiqueta, formaDeComer, matizRecomposicion, NOMBRE_FORMULA_CLASICA } from './etiquetas'
+import {
+  crearEscala,
+  fraseBalance,
+  GRAFICA,
+  pathBanda,
+  pesajesOrdenados,
+  puntosPolilinea,
+  semanaDePesaje,
+} from './proyeccion'
 import {
   anchoBarra,
   fechaCorta,
@@ -186,13 +197,25 @@ function Cabecera({ fecha }: { fecha: string }) {
 
 // El pie va escrito dentro de `Marco`, no como componente aparte: @react-pdf/renderer descarta el texto
 // dinámico (`render`) cuando el bloque `fixed` viene envuelto en un componente propio.
-function Marco({ fecha, children }: { fecha: string; children: ReactNode }) {
+function Marco({
+  fecha,
+  ajustado,
+  children,
+}: {
+  fecha: string
+  /** §4.3: con un plan ajustado a mano, la marca va en el pie de TODAS las páginas. */
+  ajustado?: boolean
+  children: ReactNode
+}) {
   return (
     <Page size="A4" style={s.page}>
       <Cabecera fecha={fecha} />
       {children}
       <View style={s.pie} fixed>
-        <Text>Una herramienta de RS Agents</Text>
+        <Text>
+          Una herramienta de RS Agents
+          {ajustado ? ' · plan ajustado por ti' : ''}
+        </Text>
         <Text render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
       </View>
     </Page>
@@ -461,6 +484,172 @@ function BloqueSeccionCompra({ seccion, items }: { seccion: SeccionSuper; items:
 }
 
 // ---------- Textos fijos ----------
+/**
+ * Gráfica de proyección (§4.5b): las mismas primitivas de `@react-pdf/renderer` sobre los mismos
+ * `resultado.proyeccion` que pinta la pantalla. Aquí no se recalcula ningún peso.
+ *
+ * Las etiquetas de los ejes y de los hitos no van dentro del `<Svg>`: son `<View>` posicionadas
+ * sobre el lienzo, porque el `<Text>` de SVG de la librería no comparte tipo con el `<Text>` de
+ * flujo y obliga a castear. Las coordenadas son las mismas, así que el resultado es idéntico.
+ */
+function GraficaProyeccion({
+  proyeccion,
+  pesajes,
+  fechaInicio,
+  objetivoKg,
+}: {
+  proyeccion: readonly PuntoProyeccion[]
+  pesajes: readonly Pesaje[]
+  fechaInicio: string
+  objetivoKg: number | null
+}) {
+  const escala = crearEscala(proyeccion, [...pesajes.map((p) => p.kg), ...(objetivoKg === null ? [] : [objetivoKg])])
+  if (!escala) return null
+
+  const puntos = proyeccion.filter((p) => p && Number.isFinite(p.semana))
+  const hitos = puntos.filter((p) => p.semana === 4 || p.semana === 8 || p.semana === 12)
+  const puntosPesaje = pesajes.map((p) => ({
+    kg: p.kg,
+    x: escala.x(semanaDePesaje(p.fecha, fechaInicio, escala.semanaMax)),
+    y: escala.y(p.kg),
+  }))
+
+  return (
+    <View style={{ width: escala.ancho, height: escala.alto, position: 'relative', marginBottom: 4 }} wrap={false}>
+      <Svg width={escala.ancho} height={escala.alto} viewBox={`0 0 ${escala.ancho} ${escala.alto}`}>
+        {escala.marcasY.map((kg, i) => (
+          <Line
+            key={`gy-${i}`}
+            x1={escala.x0}
+            y1={escala.y(kg)}
+            x2={escala.x1}
+            y2={escala.y(kg)}
+            stroke={C.linea}
+            strokeWidth={0.5}
+          />
+        ))}
+        <Path d={pathBanda(puntos, escala)} fill={C.acento} fillOpacity={0.18} />
+        {objetivoKg === null ? null : (
+          <Line
+            x1={escala.x0}
+            y1={escala.y(objetivoKg)}
+            x2={escala.x1}
+            y2={escala.y(objetivoKg)}
+            stroke={C.acento}
+            strokeWidth={0.9}
+            strokeDasharray="4 3"
+          />
+        )}
+        <Polyline
+          points={puntosPolilinea(puntos.map((p) => ({ x: escala.x(p.semana), y: escala.y(p.peso_esp) })))}
+          fill="none"
+          stroke={C.acento}
+          strokeWidth={2}
+        />
+        {hitos.map((p) => (
+          <Circle key={`h-${p.semana}`} cx={escala.x(p.semana)} cy={escala.y(p.peso_esp)} r={3} fill={C.acento} />
+        ))}
+        {puntosPesaje.length > 1 ? (
+          <Polyline points={puntosPolilinea(puntosPesaje)} fill="none" stroke={C.proteina} strokeWidth={1} />
+        ) : null}
+        {puntosPesaje.map((p, i) => (
+          <Circle key={`p-${i}`} cx={p.x} cy={p.y} r={2.4} fill={C.proteina} />
+        ))}
+        <Line x1={escala.x0} y1={escala.y1} x2={escala.x1} y2={escala.y1} stroke={C.suave} strokeWidth={0.75} />
+        <Line x1={escala.x0} y1={escala.y0} x2={escala.x0} y2={escala.y1} stroke={C.suave} strokeWidth={0.75} />
+      </Svg>
+
+      {/* Etiquetas del eje vertical (kilos) */}
+      {escala.marcasY.map((kg, i) => (
+        <View
+          key={`ly-${i}`}
+          style={{ position: 'absolute', left: 0, top: escala.y(kg) - 4, width: GRAFICA.margenIzq - 4 }}
+        >
+          <Text style={{ fontSize: 6.5, color: C.suave, textAlign: 'right' }}>{num(kg, 1)}</Text>
+        </View>
+      ))}
+      <View style={{ position: 'absolute', left: 0, top: 0, width: GRAFICA.margenIzq - 4 }}>
+        <Text style={{ fontSize: 6.5, color: C.suave, textAlign: 'right' }}>kg</Text>
+      </View>
+
+      {/* Etiquetas del eje horizontal (semanas) */}
+      {escala.marcasX.map((semana, i) => (
+        <View
+          key={`lx-${i}`}
+          style={{ position: 'absolute', left: escala.x(semana) - 22, top: escala.y1 + 3, width: 44 }}
+        >
+          <Text style={{ fontSize: 6.5, color: C.suave, textAlign: 'center' }}>semana {num(semana)}</Text>
+        </View>
+      ))}
+
+      {/* Etiquetas de los hitos de 4, 8 y 12 semanas */}
+      {hitos.map((p) => (
+        <View
+          key={`lh-${p.semana}`}
+          style={{ position: 'absolute', left: escala.x(p.semana) - 20, top: escala.y(p.peso_esp) - 13, width: 40 }}
+        >
+          <Text style={{ fontSize: 7, color: C.acento, textAlign: 'center', fontFamily: 'Helvetica-Bold' }}>
+            {kilos(p.peso_esp)}
+          </Text>
+        </View>
+      ))}
+
+      {objetivoKg === null ? null : (
+        <View style={{ position: 'absolute', left: escala.x1 - 74, top: escala.y(objetivoKg) - 9, width: 72 }}>
+          <Text style={{ fontSize: 6.5, color: C.acento, textAlign: 'right' }}>objetivo {kilos(objetivoKg)}</Text>
+        </View>
+      )}
+    </View>
+  )
+}
+
+/** Media tabla de la proyección: cabecera más una fila por semana. */
+function ColumnaProyeccion({ puntos }: { puntos: readonly PuntoProyeccion[] }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <View style={[s.tablaCabecera, { paddingBottom: 2, marginBottom: 1 }]}>
+        <Text style={[s.cabeceraCelda, { flex: 1 }]}>SEM.</Text>
+        <Text style={[s.cabeceraCelda, { flex: 1.2, textAlign: 'right' }]}>MÍN.</Text>
+        <Text style={[s.cabeceraCelda, { flex: 1.4, textAlign: 'right' }]}>ESPERADO</Text>
+        <Text style={[s.cabeceraCelda, { flex: 1.2, textAlign: 'right' }]}>MÁX.</Text>
+      </View>
+      {puntos.map((p, i) => (
+        <View
+          key={`fp-${p.semana}-${i}`}
+          style={[s.tablaFila, { paddingVertical: 1.2, borderBottomWidth: i === puntos.length - 1 ? 0 : 0.5 }]}
+          wrap={false}
+        >
+          <Text style={[s.celdaTexto, { flex: 1, fontSize: 8 }]}>{num(p.semana)}</Text>
+          <Text style={[s.celdaNum, { flex: 1.2, fontSize: 8 }]}>{kilos(p.peso_min)}</Text>
+          <Text style={[s.celdaNum, { flex: 1.4, fontSize: 8, fontFamily: 'Helvetica-Bold' }]}>
+            {kilos(p.peso_esp)}
+          </Text>
+          <Text style={[s.celdaNum, { flex: 1.2, fontSize: 8 }]}>{kilos(p.peso_max)}</Text>
+        </View>
+      ))}
+    </View>
+  )
+}
+
+/**
+ * Tabla equivalente a la gráfica, obligatoria en el PDF (§4.5b): una fila por semana, sin esconder
+ * nada. Va **en dos columnas** —primera mitad de semanas a la izquierda, segunda a la derecha—
+ * porque con 27 semanas una sola columna se come una página entera y el documento se pasaba del
+ * máximo de 10 de §4.0.
+ */
+function TablaProyeccion({ proyeccion }: { proyeccion: readonly PuntoProyeccion[] }) {
+  const mitad = Math.ceil(proyeccion.length / 2)
+  const izquierda = proyeccion.slice(0, mitad)
+  const derecha = proyeccion.slice(mitad)
+  return (
+    <View style={{ flexDirection: 'row' }}>
+      <ColumnaProyeccion puntos={izquierda} />
+      <View style={{ width: 18 }} />
+      {derecha.length > 0 ? <ColumnaProyeccion puntos={derecha} /> : <View style={{ flex: 1 }} />}
+    </View>
+  )
+}
+
 const AVISOS_DESTACADOS = [
   'WARN_DIABETES',
   'WARN_RENAL',
@@ -487,6 +676,18 @@ const NOTA_AGUA =
   '1 litro por hora. Si entrenas más de una hora, sudas mucho o hace calor, añade sal a las comidas o una ' +
   'bebida con electrolitos: beber mucha agua sin sodio puede bajarte el sodio en sangre.'
 
+/** "Nota proyección" de `SPEC-calculo.md` §4, íntegra (§4.5b). */
+const NOTA_PROYECCION =
+  'Esta curva es una estimación, no una promesa: sale de tu déficit actual y de un factor de adaptación que ' +
+  'crece con el tiempo. Tu peso real va a oscilar por agua, sal e intestino; lo que importa es la tendencia de ' +
+  'varias semanas, no el dato de un día.'
+
+const SUBTITULO_PROYECCION = 'Semana a semana, con el margen que toca.'
+
+/** Línea de ayuda de §2.10 y §4.6, literal y siempre presente. */
+const LINEA_ADANER =
+  'Si la comida o el peso te generan ansiedad, puedes hablar gratis con ADANER (adaner.org) o con tu centro de salud.'
+
 const SIN_MENU =
   'No te proponemos menús de ejemplo. Con tu condición, la elección concreta de alimentos (potasio, fósforo, ' +
   'sodio y tipo de proteína) cambia mucho el resultado y debe hacerla un/a dietista-nutricionista ' +
@@ -497,7 +698,11 @@ function sufijoObjetivo(datos: DatosPdf): string {
   if (objetivo_efectivo === 'perder' || objetivo_efectivo === 'ganar') {
     return `ritmo ${etiqueta.ritmo(ritmo_efectivo)}`
   }
-  if (objetivo_efectivo === 'recomposicion') return 'cambios lentos, es lo esperable'
+  if (objetivo_efectivo === 'recomposicion') {
+    // §4.2: con prioridad declarada, el matiz sustituye a la coletilla genérica.
+    const matiz = matizRecomposicion(datos.resultado)
+    return matiz ? `prioridad: ${matiz}` : 'cambios lentos, es lo esperable'
+  }
   return ''
 }
 
@@ -522,11 +727,14 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
     )
   }
 
-  // Guarda del cribado (§2.1, §2.6, §2.9 y §4.5): sin %grasa, sin peso objetivo, sin otras referencias.
-  const ocultarGrasa =
-    inputs.cribado_tca === 'positivo' ||
-    inputs.cribado_tca === 'evitado' ||
-    (inputs.condiciones ?? []).includes('tca')
+  // v1.1 (decisión A): la guarda del cribado que ocultaba %grasa, peso objetivo y "otras
+  // referencias" queda retirada. El paso 5b del wizard ya no existe y estas páginas se imprimen
+  // completas siempre. `'tca'` sigue sin serializarse en ninguna lista de condiciones (§4.0).
+
+  // v1.1 (decisión B): marca de plan ajustado a mano. `resultado.ajuste` solo lo pone `ajustarMacros`.
+  const ajuste = resultado.ajuste
+  const ajustado = ajuste?.kcal === true || ajuste?.hc === true
+  const limites = resultado.limites_ajuste
 
   const warns = avisos.filter((a) => a.severidad === 'warn' || a.severidad === 'error')
   const infos = avisos.filter((a) => a.severidad === 'info')
@@ -573,13 +781,28 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
   const crono = resultado.cronograma
   const avisoCronograma = avisos.find((a) => a.codigo.includes('CRONOGRAMA'))
 
+  // §4.3b: la tarjeta del ciclo se imprime exactamente cuando el motor emite INFO_CICLO.
+  const avisoCiclo = avisos.find((a) => a.codigo === 'INFO_CICLO')
+
+  // §4.5b: proyección y seguimiento. Sin `resultado.proyeccion` no se imprime nada de esto.
+  const proyeccion: PuntoProyeccion[] = resultado.proyeccion ?? []
+  const pesajes: Pesaje[] = pesajesOrdenados(datos.pesajes)
+  const proyeccionPlana = avisos.some((a) => a.codigo === 'INFO_PROYECCION_PLANA') || crono === null
+  const balance = fraseBalance(
+    pesajes,
+    proyeccion,
+    inputs.fecha_inicio,
+    resultado.objetivo_efectivo,
+    proyeccionPlana,
+  )
+
   return (
     <Document title="Báscula — plan nutricional" author="RS Agents" language="es-ES">
       {/* ---------- Página 1: portada con los resultados clave y los datos del usuario ----------
           Antes la portada gastaba media página en blanco y la página 2 repetía sexo, edad, altura y
           peso (QA §6). Ahora el plan se resume de un vistazo aquí y el documento tiene una página
           menos. ---------- */}
-      <Marco fecha={fecha}>
+      <Marco fecha={fecha} ajustado={ajustado}>
         <View>
           <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 30, color: C.acento }}>Báscula</Text>
           <Text style={{ fontSize: 11, color: C.suave, marginBottom: 12 }}>Tus macros, bien calculados</Text>
@@ -600,7 +823,9 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             </Text>
 
             <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 0.75, borderTopColor: C.linea }}>
-              <Text style={{ fontSize: 9, color: C.suave }}>CALORÍAS AL DÍA</Text>
+              <Text style={{ fontSize: 9, color: C.suave }}>
+                CALORÍAS AL DÍA{ajustado ? ' · AJUSTADO POR TI' : ''}
+              </Text>
               <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 38, color: C.acento }}>
                 {num(resultado.kcal)}
                 <Text style={{ fontSize: 14, color: C.suave }}> kcal</Text>
@@ -634,14 +859,12 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                 etiqueta="Índice de masa corporal (IMC)"
                 valor={`${num(resultado.imc, 1)} · ${etiqueta.imc(resultado.imc_categoria)}`}
               />
-              {ocultarGrasa ? null : (
-                <Fila
-                  etiqueta="Grasa corporal estimada"
-                  valor={`${rango(resultado.grasa?.rango, (v) => num(v, 0))} % · ${etiqueta.fiabilidad(
-                    resultado.grasa?.fiabilidad,
-                  )}`}
-                />
-              )}
+              <Fila
+                etiqueta="Grasa corporal estimada"
+                valor={`${rango(resultado.grasa?.rango, (v) => num(v, 0))} % · ${etiqueta.fiabilidad(
+                  resultado.grasa?.fiabilidad,
+                )}`}
+              />
               <Fila etiqueta="Gasto energético estimado" valor={`${fmtKcal(resultado.tdee?.valor)} al día`} ultima />
             </View>
           </View>
@@ -652,16 +875,20 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             <Fila etiqueta="Edad" valor={`${num(inputs.edad)} años`} />
             <Fila etiqueta="Altura" valor={`${num(inputs.altura_cm)} cm`} />
             <Fila etiqueta="Peso" valor={kilos(inputs.peso_kg)} />
-            {ocultarGrasa ? null : (
-              <Fila
-                etiqueta="Grasa corporal"
-                valor={`${rango(resultado.grasa?.rango, (v) => num(v, 0))} % · ${etiqueta.metodoGrasa(
-                  resultado.grasa?.metodo_efectivo,
-                )}`}
-              />
-            )}
+            <Fila
+              etiqueta="Grasa corporal"
+              valor={`${rango(resultado.grasa?.rango, (v) => num(v, 0))} % · ${etiqueta.metodoGrasa(
+                resultado.grasa?.metodo_efectivo,
+              )}`}
+            />
             <Fila etiqueta="Actividad diaria" valor={etiqueta.actividad(inputs.actividad_diaria)} />
             <Fila etiqueta="Entrenamiento" valor={entrenoTexto} />
+            <Fila
+              etiqueta="Objetivo"
+              valor={`${etiqueta.objetivo(resultado.objetivo_efectivo)}${
+                matizRecomposicion(resultado) ? ` · prioridad: ${matizRecomposicion(resultado)}` : ''
+              }`}
+            />
             <Fila
               etiqueta="Ritmo"
               valor={
@@ -670,7 +897,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                   : 'no aplica con este objetivo'
               }
             />
-            <Fila etiqueta="Forma de comer" valor={etiqueta.preferencia(resultado.preferencia_efectiva)} />
+            {/* §4.2 (v1.1): base + restricciones + bajo en hidratos, nunca `inputs.preferencia`. */}
+            <Fila etiqueta="Forma de comer" valor={formaDeComer(resultado)} />
             <Fila etiqueta="Comidas al día" valor={num(inputs.n_comidas)} ultima={condiciones.length === 0} />
             {condiciones.length > 0 ? <Fila etiqueta="Nos has contado" valor={lista(condiciones)} ultima /> : null}
           </View>
@@ -687,17 +915,14 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
 
           <Text style={[s.small, { marginTop: 10 }]}>
             A tu gasto estimado le hemos restado un 5 % como margen de seguridad, porque casi todos sobrestimamos
-            lo que nos movemos.
-            {ocultarGrasa
-              ? ''
-              : ' Ninguna fórmula sin aparato mide la grasa corporal exacta: por eso te damos un rango, no una cifra cerrada.'}{' '}
-            Documento informativo generado automáticamente. No sustituye una valoración nutricional individualizada.
+            lo que nos movemos. Ninguna fórmula sin aparato mide la grasa corporal exacta: por eso te damos un
+            rango, no una cifra cerrada. Documento informativo generado automáticamente. No sustituye una valoración nutricional individualizada.
           </Text>
         </View>
       </Marco>
 
       {/* ---------- Página 2: avisos del caso, macros, agua y método ---------- */}
-      <Marco fecha={fecha}>
+      <Marco fecha={fecha} ajustado={ajustado}>
         {destacados.length > 0 ? (
           <Seccion titulo="Avisos para tu caso">
             {destacados.map((a) => (
@@ -707,6 +932,27 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
         ) : null}
 
         <Seccion titulo="Tus macronutrientes">
+          {/* §4.3 (v1.1, decisión B): banda de plan ajustado, encima de las cuatro tarjetas. */}
+          {ajustado ? (
+            <View
+              style={[s.tarjeta, { marginBottom: 10, borderLeftWidth: 4, borderLeftColor: C.acento, padding: 8 }]}
+              wrap={false}
+            >
+              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 13, color: C.acento }}>
+                Plan ajustado por ti
+              </Text>
+              <Text style={[s.p, { marginTop: 3 }]}>
+                Has cambiado{' '}
+                {ajuste?.kcal && ajuste?.hc
+                  ? 'las calorías y los hidratos'
+                  : ajuste?.kcal
+                    ? 'las calorías'
+                    : 'los hidratos'}{' '}
+                respecto a lo que te propusimos. Lo que te propusimos era: {fmtKcal(limites?.kcal_recomendada)} y{' '}
+                {gramos(limites?.hc_recomendado_g)} de hidratos.
+              </Text>
+            </View>
+          ) : null}
           <View style={{ marginBottom: 12 }}>
             <Barra
               segmentos={[
@@ -755,7 +1001,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             frase="Cuida tu digestión y te ayuda a sentirte saciado/a. Repártela entre varias comidas: verdura, fruta y legumbres."
           />
           <Text style={s.small}>
-            Las calorías de tus macros pueden diferir hasta 10 kcal del objetivo por el redondeo a múltiplos de 5
+            Las calorías de tus macros pueden diferir hasta {ajustado ? '25' : '10'} kcal del objetivo por el
+            redondeo a múltiplos de 5
             gramos (el cierre real de tu plan son {fmtKcal(resultado.kcal_cierre)}). Como referencia, limita los
             azúcares añadidos a menos de {gramos(resultado.macros?.azucares_libres_max_g)} al día.
           </Text>
@@ -781,6 +1028,15 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           <Text style={s.small}>{NOTA_AGUA}</Text>
         </Seccion>
 
+        {/* §4.3b (v1.1, decisión D): tarjeta del ciclo, debajo de la hidratación. Nunca se parte
+            ni se resume, y el dato `menstruacion` no se imprime en ninguna parte. */}
+        {avisoCiclo ? (
+          <View style={[s.nota, { marginBottom: 7 }]} wrap={false}>
+            <Text style={s.h3}>Tu ciclo y tu plan</Text>
+            <Text>{avisoCiclo.texto}</Text>
+          </View>
+        ) : null}
+
         <Seccion titulo="Cómo lo calculamos">
           <Text style={s.p}>
             Tu metabolismo basal (las calorías que gastarías en reposo) sale de la ecuación{' '}
@@ -802,7 +1058,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
       </Marco>
 
       {/* ---------- Página 3: reparto y menú ---------- */}
-      <Marco fecha={fecha}>
+      <Marco fecha={fecha} ajustado={ajustado}>
         <Seccion titulo="Reparto por comidas">
           <View style={s.tablaCabecera}>
             <Text style={[s.cabeceraCelda, { flex: 2.4 }]}>COMIDA</Text>
@@ -873,7 +1129,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
 
       {/* ---------- Página 3b: lista de la compra (§4.4b). Sin menú o sin lista, no se imprime. ---------- */}
       {compra ? (
-        <Marco fecha={fecha}>
+        <Marco fecha={fecha} ajustado={ajustado}>
           <Text style={[s.h1, { fontSize: 19, marginBottom: 2 }]}>Tu lista de la compra de la semana</Text>
           <Text style={[s.small, { marginBottom: 6 }]}>{SUBTITULO_COMPRA}</Text>
           {ejemplos.modo_sencillo ? (
@@ -897,9 +1153,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
       ) : null}
 
       {/* ---------- Página 4: peso objetivo, consejos y referencias ---------- */}
-      <Marco fecha={fecha}>
-        {ocultarGrasa ? null : (
-          <Seccion titulo="Peso objetivo y cronograma">
+      <Marco fecha={fecha} ajustado={ajustado}>
+        <Seccion titulo="Peso objetivo y cronograma">
             <View style={[s.tarjeta, { marginBottom: 10 }]}>
               {resultado.peso_objetivo?.mostrar_central && resultado.peso_objetivo?.efectivo !== null ? (
                 <View>
@@ -972,15 +1227,64 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             {crono && avisoAdaptacion ? (
               <Text style={[s.small, { marginTop: 6 }]}>{avisoAdaptacion.texto}</Text>
             ) : null}
+        </Seccion>
+
+        {/* ---------- §4.5b (v1.1, decisión F): proyección y seguimiento. Sin `proyeccion` no se
+            imprime nada, ni un hueco ni una nota. ---------- */}
+        {proyeccion.length > 0 ? (
+          <Seccion titulo="Cómo debería ir la cosa">
+            <Text style={[s.small, { marginBottom: 6 }]}>{SUBTITULO_PROYECCION}</Text>
+            <GraficaProyeccion
+              proyeccion={proyeccion}
+              pesajes={pesajes}
+              fechaInicio={inputs.fecha_inicio}
+              objetivoKg={resultado.peso_objetivo?.efectivo ?? null}
+            />
+            {pesajes.length > 0 ? (
+              <Text style={[s.small, { marginBottom: 6 }]}>
+                La línea verde es la previsión; los puntos rojos, tu peso real.
+              </Text>
+            ) : null}
+            <Text style={[s.p, { marginBottom: 6 }]}>
+              {proyeccionPlana
+                ? (avisos.find((a) => a.codigo === 'INFO_PROYECCION_PLANA')?.texto ?? NOTA_PROYECCION)
+                : NOTA_PROYECCION}
+            </Text>
+            <Text style={[s.h3, { marginTop: 2 }]}>Los números, semana a semana</Text>
+            <TablaProyeccion proyeccion={proyeccion} />
+
+            {pesajes.length > 0 ? (
+              <View style={{ marginTop: 8 }}>
+                <Text style={s.h3}>Tu seguimiento</Text>
+                <Text style={[s.small, { marginBottom: 4 }]}>
+                  Estos pesajes estaban guardados solo en tu móvil el {fechaLarga(fecha)}. Este PDF es la única
+                  copia que sale de él.
+                </Text>
+                {pesajes.map((p, i) => (
+                  <View key={`pes-${p.fecha}-${i}`} style={[s.fila, s.filaLinea]} wrap={false}>
+                    <Text style={s.filaEtiqueta}>{fechaCorta(p.fecha)}</Text>
+                    <Text style={s.filaValor}>{kilos(p.kg)}</Text>
+                  </View>
+                ))}
+                {balance ? (
+                  <View style={{ marginTop: 6 }}>
+                    {balance.map((t, i) => (
+                      <Text key={`bal-${i}`} style={s.p}>
+                        {t}
+                      </Text>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </Seccion>
-        )}
+        ) : null}
 
         <Seccion titulo="Qué haría un nutricionista">
           <Vinetas textos={ejemplos?.consejos ?? []} />
         </Seccion>
 
-        {ocultarGrasa ? null : (
-          <Seccion titulo="Otras referencias, no son un objetivo">
+        <Seccion titulo="Otras referencias, no son un objetivo">
             <View style={s.tarjeta}>
               <Fila
                 etiqueta="Grasa corporal"
@@ -1028,8 +1332,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
               Son puntos de comparación de la literatura (CUN-BAE, Deurenberg, US Navy, Devine, Robinson, Miller y
               Hamwi), no metas que tengas que alcanzar.
             </Text>
-          </Seccion>
-        )}
+        </Seccion>
 
         {/* ---------- Avisos y disclaimer: siguen en el mismo flujo, sin salto forzado, para no
             dejar media página en blanco (§4.0 pide compacidad). ---------- */}
@@ -1051,10 +1354,9 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
 
         <Seccion titulo="Aviso legal" sinCortes>
           <Text style={s.p}>{DISCLAIMER}</Text>
-          <Text style={s.p}>
-            ¿La comida o el peso te generan ansiedad? Puedes hablar gratis con ADANER, la asociación de ayuda en
-            trastornos de la conducta alimentaria (adaner.org).
-          </Text>
+          {/* §4.6: literal, palabra por palabra igual que en pantalla (§2.10). No depende de
+              ninguna respuesta del cuestionario. */}
+          <Text style={s.p}>{LINEA_ADANER}</Text>
           <Text style={s.small}>
             Plan generado el {fechaLarga(fecha)} con el motor de cálculo de Báscula, versión 1. Si vuelves más
             adelante con datos distintos, el cálculo se rehace con las mismas fórmulas.

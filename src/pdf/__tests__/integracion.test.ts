@@ -13,9 +13,8 @@ import type { DatosPdf } from '../../engine/types'
 
 /**
  * Máximo de páginas declarado en SPEC-ux-comidas-pdf.md §4.0, ya con la página de la compra
- * (§4.4b). Baja de 9 a 8 al fundir la portada con la antigua página de "Tus datos / Tus
- * resultados", que repetía sexo, edad, altura y peso (QA §6), y al compactar los interlineados y
- * los márgenes del documento.
+ * (§4.4b) y con la proyección y el seguimiento de la v1.1 (§4.5b), que suben el rango a 6-10
+ * páginas: la tabla semana a semana de la proyección puede llegar a 27 filas.
  *
  * El recuento va **por vector y por modo**: son 28 renderizados, no 14. Se quedan en 8 páginas
  * ocho de ellos, los extremos de la §5 por dos motivos distintos: muchos avisos (caso 8 con once,
@@ -24,7 +23,7 @@ import type { DatosPdf } from '../../engine/types'
  * normal: el modo sencillo los baja a 7). Los otros dieciocho renderizados caben en 7 páginas, y
  * los dos más cortos —caso 13, renal y sin menú— en 6. Ninguno baja de ahí.
  */
-const PAGINAS_MAX = 8
+const PAGINAS_MAX = 10
 
 
 /** Tope de alimentos distintos del modo sencillo (SPEC-ux-comidas-pdf.md §3.7.2). */

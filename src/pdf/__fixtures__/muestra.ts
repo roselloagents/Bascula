@@ -1,6 +1,15 @@
 // Datos de muestra para revisar y testar el PDF sin arrancar la aplicación.
 // No son datos reales de nadie: son perfiles plausibles construidos sobre los vectores de SPEC-calculo.md §5.
-import type { AvisoTexto, DatosPdf, Ejemplos, Inputs, ListaCompra, Resultado } from '../../engine/types'
+import type {
+  AvisoTexto,
+  DatosPdf,
+  Ejemplos,
+  Inputs,
+  ListaCompra,
+  Pesaje,
+  PuntoProyeccion,
+  Resultado,
+} from '../../engine/types'
 import { equivalencias } from '../../meals/equivalencias'
 
 // =====================================================================
@@ -28,6 +37,10 @@ const INPUTS_A: Inputs = {
   ritmo: 'moderado',
   peso_objetivo: null,
   preferencia: 'omnivoro',
+  // v1.1: preferencias combinables (paso 13). `preferencia` se conserva por compatibilidad.
+  preferencia_base: 'omnivoro',
+  restricciones: ['sin_lactosa'],
+  low_carb: false,
   n_comidas: 4,
   clima_caluroso: false,
   embarazo_lactancia: false,
@@ -35,6 +48,33 @@ const INPUTS_A: Inputs = {
   cribado_tca: 'negativo',
   fecha_inicio: '2026-09-07',
 }
+
+/** Proyección del caso A (perder, 22 semanas hasta el objetivo de 74,5 kg). SPEC Paso 14b. */
+const PROYECCION_A: PuntoProyeccion[] = [
+  { semana: 0, peso_min: 84, peso_esp: 84, peso_max: 84 },
+  { semana: 1, peso_min: 83.2, peso_esp: 83.5, peso_max: 83.8 },
+  { semana: 2, peso_min: 82.6, peso_esp: 83, peso_max: 83.4 },
+  { semana: 3, peso_min: 82, peso_esp: 82.5, peso_max: 83 },
+  { semana: 4, peso_min: 81.5, peso_esp: 82, peso_max: 82.6 },
+  { semana: 5, peso_min: 80.9, peso_esp: 81.6, peso_max: 82.2 },
+  { semana: 6, peso_min: 80.4, peso_esp: 81.1, peso_max: 81.8 },
+  { semana: 7, peso_min: 79.9, peso_esp: 80.6, peso_max: 81.4 },
+  { semana: 8, peso_min: 79.4, peso_esp: 80.2, peso_max: 81 },
+  { semana: 9, peso_min: 78.9, peso_esp: 79.7, peso_max: 80.6 },
+  { semana: 10, peso_min: 78.4, peso_esp: 79.3, peso_max: 80.2 },
+  { semana: 11, peso_min: 77.9, peso_esp: 78.9, peso_max: 79.8 },
+  { semana: 12, peso_min: 77.5, peso_esp: 78.4, peso_max: 79.4 },
+  { semana: 13, peso_min: 77, peso_esp: 78, peso_max: 79 },
+  { semana: 14, peso_min: 76.6, peso_esp: 77.6, peso_max: 78.6 },
+  { semana: 15, peso_min: 76.1, peso_esp: 77.2, peso_max: 78.3 },
+  { semana: 16, peso_min: 75.7, peso_esp: 76.8, peso_max: 77.9 },
+  { semana: 17, peso_min: 75.2, peso_esp: 76.4, peso_max: 77.5 },
+  { semana: 18, peso_min: 74.8, peso_esp: 76, peso_max: 77.2 },
+  { semana: 19, peso_min: 74.5, peso_esp: 75.6, peso_max: 76.8 },
+  { semana: 20, peso_min: 74.5, peso_esp: 75.2, peso_max: 76.5 },
+  { semana: 21, peso_min: 74.5, peso_esp: 74.9, peso_max: 76.2 },
+  { semana: 22, peso_min: 74.5, peso_esp: 74.5, peso_max: 75.8 },
+]
 
 const RESULTADO_A: Resultado = {
   imc: 26.511804065143288,
@@ -110,6 +150,25 @@ const RESULTADO_A: Resultado = {
     { nombre: 'Cena', hora: '21:00', pct_kcal: 30, proteina_g: 55, grasa_g: 20, hc_g: 60, kcal: 640, peri: false },
   ],
   avisos: ['WARN_HIPERTENSION', 'WARN_PROTEINA_TOMA_ALTA', 'INFO_BMR_ATLETA', 'INFO_ADAPTACION', 'INFO_GRASA_ESTIMADA'],
+  // ---------- v1.1 ----------
+  preferencia_base: 'omnivoro',
+  restricciones: ['sin_lactosa'],
+  low_carb: false,
+  proyeccion: PROYECCION_A,
+  limites_ajuste: {
+    kcal_recomendada: 2190,
+    hc_recomendado_g: 205,
+    grasa_recomendada_g: 70,
+    kcal_min: 1810,
+    kcal_max: 2740,
+    kcal_paso: 50,
+    hc_min_ui_g: 30,
+    hc_min_motor_g: 130,
+    suelo_grasa_abs_g: 58.8,
+    peso_kg: 84,
+    fecha_inicio: '2026-09-07',
+    kcal_micronutrientes: 1800,
+  },
 }
 
 const AVISOS_A: AvisoTexto[] = [
@@ -625,6 +684,9 @@ const INPUTS_B: Inputs = {
   ritmo: 'moderado',
   peso_objetivo: null,
   preferencia: 'vegetariano',
+  preferencia_base: 'vegetariano',
+  restricciones: ['sin_lactosa'],
+  low_carb: false,
   n_comidas: 2,
   clima_caluroso: false,
   embarazo_lactancia: false,
@@ -632,6 +694,23 @@ const INPUTS_B: Inputs = {
   cribado_tca: 'negativo',
   fecha_inicio: '2026-09-07',
 }
+
+/** Proyección plana del caso B (sin cronograma): 13 puntos, banda de +-1 kg (SPEC Paso 14b). */
+const PROYECCION_B: PuntoProyeccion[] = [
+  { semana: 0, peso_min: 58.4, peso_esp: 58.4, peso_max: 58.4 },
+  { semana: 1, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 2, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 3, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 4, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 5, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 6, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 7, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 8, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 9, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 10, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 11, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+  { semana: 12, peso_min: 57.4, peso_esp: 58.4, peso_max: 59.4 },
+]
 
 const RESULTADO_B: Resultado = {
   imc: 26.3,
@@ -681,7 +760,12 @@ const RESULTADO_B: Resultado = {
     { nombre: 'Comida', hora: '14:00', pct_kcal: 55, proteina_g: 50, grasa_g: 30, hc_g: 80, kcal: 840, peri: false },
     { nombre: 'Cena', hora: '21:00', pct_kcal: 45, proteina_g: 40, grasa_g: 25, hc_g: 65, kcal: 680, peri: false },
   ],
-  avisos: ['WARN_TIROIDES', 'INFO_SIN_CRONOGRAMA', 'INFO_AGUA_MAYORES'],
+  avisos: ['WARN_TIROIDES', 'INFO_SIN_CRONOGRAMA', 'INFO_AGUA_MAYORES', 'INFO_PROYECCION_PLANA'],
+  // ---------- v1.1 ----------
+  preferencia_base: 'vegetariano',
+  restricciones: ['sin_lactosa'],
+  low_carb: false,
+  proyeccion: PROYECCION_B,
 }
 
 const AVISOS_B: AvisoTexto[] = [
@@ -709,6 +793,15 @@ const AVISOS_B: AvisoTexto[] = [
     texto:
       'A partir de los 65 años la sensación de sed se reduce: reparte el agua en tomas regulares a lo largo del ' +
       'día en vez de esperar a tener sed.',
+  },
+  {
+    codigo: 'INFO_PROYECCION_PLANA',
+    severidad: 'info',
+    titulo: 'Sin curva de peso',
+    texto:
+      'Con este objetivo no proyectamos una curva de peso: lo que esperamos es que tu peso se mantenga, con la ' +
+      'oscilación normal de un kilo arriba o abajo por agua, sal e intestino. Lo que sí debería cambiar es cómo ' +
+      'te queda la ropa, las medidas y las cargas del entrenamiento.',
   },
 ]
 
@@ -774,4 +867,132 @@ export const MUESTRA_MINIMA: DatosPdf = {
   ejemplos: EJEMPLOS_B,
   avisos: AVISOS_B,
   fecha: '2026-09-07',
+}
+
+// =====================================================================
+// Muestra C — plan ajustado a mano (v1.1, decisión B) con seguimiento de pesajes.
+// Parte del caso A: el usuario ha bajado a 2.000 kcal y a 120 g de hidratos (por debajo del
+// mínimo de 130 g del motor, así que aparece WARN_HC_BAJO_MINIMO). La proteína no se toca y la
+// grasa absorbe el resto: (2.000 - 4*185 - 4*120) / 9 = 86,7 -> 85 g redondeando a 5.
+// =====================================================================
+
+const AVISOS_C: AvisoTexto[] = [
+  ...AVISOS_A,
+  {
+    codigo: 'WARN_HC_BAJO_MINIMO',
+    severidad: 'warn',
+    titulo: 'Hidratos por debajo del mínimo',
+    texto:
+      'Has bajado los hidratos por debajo de los 130 g que usamos como mínimo de referencia. No es peligroso a ' +
+      'corto plazo y hay gente que se encuentra mejor así, pero cuenta con dos cosas: entrenar fuerte cuesta más ' +
+      'y la fibra es más difícil de cubrir. Si te notas sin energía, con mal descanso o con estreñimiento, ' +
+      'súbelos otra vez.',
+  },
+  {
+    codigo: 'INFO_AJUSTE_MANUAL',
+    severidad: 'info',
+    titulo: 'Has ajustado tu plan',
+    texto:
+      'Has ajustado a mano las calorías o los hidratos, así que estos ya no son los números que te propusimos. ' +
+      'Hemos recalculado con tu ajuste la grasa, el reparto por comidas, el menú, la lista de la compra y el ' +
+      'calendario. La proteína no la tocamos: es la que protege tu músculo cuando comes menos. Puedes volver a ' +
+      'lo recomendado cuando quieras.',
+  },
+]
+
+const RESULTADO_C: Resultado = {
+  ...RESULTADO_A,
+  kcal: 2000,
+  kcal_cierre: 1985,
+  macros: {
+    ...RESULTADO_A.macros,
+    grasa_g: 85,
+    hc_g: 120,
+    fibra_g: 28,
+    pct: { p: 0.3728, g: 0.3854, hc: 0.2418 },
+    gkg: { p: 2.2023809523809526, g: 1.0119047619047619, hc: 1.4285714285714286 },
+  },
+  comidas: [
+    { nombre: 'Desayuno', hora: '08:00', pct_kcal: 25, proteina_g: 46, grasa_g: 21, hc_g: 30, kcal: 496, peri: false },
+    { nombre: 'Comida', hora: '14:00', pct_kcal: 30, proteina_g: 56, grasa_g: 26, hc_g: 36, kcal: 602, peri: false },
+    { nombre: 'Merienda', hora: '17:30', pct_kcal: 15, proteina_g: 28, grasa_g: 13, hc_g: 18, kcal: 301, peri: true },
+    { nombre: 'Cena', hora: '21:00', pct_kcal: 30, proteina_g: 55, grasa_g: 25, hc_g: 36, kcal: 589, peri: false },
+  ],
+  avisos: [...RESULTADO_A.avisos, 'WARN_HC_BAJO_MINIMO', 'INFO_AJUSTE_MANUAL'],
+  ajuste: { kcal: true, hc: true },
+}
+
+/**
+ * Pesajes de ejemplo. El último (semana 4, 83,0 kg) queda por encima de `peso_max` de esa semana
+ * (82,6 kg), así que la frase de balance es la de "por detrás" de §2.6c.
+ */
+const PESAJES_C: Pesaje[] = [
+  { fecha: '2026-09-07', kg: 84 },
+  { fecha: '2026-09-21', kg: 83.6 },
+  { fecha: '2026-10-05', kg: 83 },
+]
+
+/** Muestra con plan ajustado a mano y con pesajes registrados (§4.3 y §4.5b). */
+export const MUESTRA_AJUSTADA: DatosPdf = {
+  inputs: INPUTS_A,
+  resultado: RESULTADO_C,
+  ejemplos: EJEMPLOS_A,
+  avisos: AVISOS_C,
+  fecha: '2026-10-05',
+  pesajes: PESAJES_C,
+}
+
+// =====================================================================
+// Muestra D — mujer con regla irregular (v1.1, decisión D): tarjeta "Tu ciclo y tu plan",
+// aviso de seguridad y proyección plana con pesajes dentro de la banda.
+// =====================================================================
+
+const AVISOS_D: AvisoTexto[] = [
+  ...AVISOS_B.filter((a) => a.codigo !== 'INFO_AGUA_MAYORES'),
+  {
+    codigo: 'WARN_CICLO_AUSENTE',
+    severidad: 'warn',
+    titulo: 'Tu regla es una señal',
+    texto:
+      'Nos has dicho que tu regla es irregular o que no la tienes, y a la vez tu plan lleva déficit, poca grasa ' +
+      'corporal o un ritmo rápido. Esa combinación puede indicar baja disponibilidad energética (lo que se llama ' +
+      'RED-S): comer por debajo de lo que gastas durante meses altera las hormonas, el hueso y el propio ciclo. ' +
+      'Si llevas tres meses o más sin regla y no es por anticonceptivos ni por la menopausia, pide cita con tu ' +
+      'médico antes de seguir con el déficit.',
+  },
+  {
+    codigo: 'INFO_CICLO',
+    severidad: 'info',
+    titulo: 'Tu ciclo y tu plan',
+    texto:
+      'Tu gasto energético cambia poco a lo largo del ciclo, así que no ajustamos tus calorías por eso. Lo que sí ' +
+      'cambia es lo que marca la báscula: la semana antes de la regla es normal retener 1-2 kg de agua y tener ' +
+      'más hambre (unas 100-300 kcal). Pésate siempre en la misma fase del ciclo si quieres comparar, no te ' +
+      'asustes con el peso de esa semana, y si comes 100-200 kcal más esos días, compénsalo en el resto de la ' +
+      'semana sin cambiar el total. En los días de regla, cuida el hierro: carne roja, legumbre o verdura de ' +
+      'hoja acompañadas de algo de vitamina C.',
+  },
+]
+
+const INPUTS_D: Inputs = { ...INPUTS_B, edad: 41, menstruacion: 'irregular' }
+
+const RESULTADO_D: Resultado = {
+  ...RESULTADO_B,
+  avisos: [...RESULTADO_B.avisos.filter((c) => c !== 'INFO_AGUA_MAYORES'), 'WARN_CICLO_AUSENTE', 'INFO_CICLO'],
+}
+
+/** Dos pesajes dentro de la banda plana: la frase de balance es la de "en la banda". */
+const PESAJES_D: Pesaje[] = [
+  { fecha: '2026-09-07', kg: 58.4 },
+  { fecha: '2026-10-05', kg: 58.1 },
+]
+
+/** Muestra con tarjeta de ciclo, aviso de seguridad, proyección plana y pesajes. */
+export const MUESTRA_CICLO: DatosPdf = {
+  inputs: INPUTS_D,
+  resultado: RESULTADO_D,
+  ejemplos: EJEMPLOS_B,
+  avisos: AVISOS_D,
+  fecha: '2026-10-05',
+  pesajes: PESAJES_D,
 }

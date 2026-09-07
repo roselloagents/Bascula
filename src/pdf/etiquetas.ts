@@ -14,6 +14,9 @@ import type {
   Momento,
   ObjetivoEfectivo,
   Preferencia,
+  PreferenciaBase,
+  RecomposicionPrioridad,
+  Restriccion,
   Ritmo,
   Sexo,
   Somatotipo,
@@ -165,4 +168,83 @@ export const NOMBRE_FORMULA_CLASICA: Record<string, string> = {
   robinson: 'Robinson',
   miller: 'Miller',
   hamwi: 'Hamwi',
+}
+
+// ---------- v1.1: preferencias combinables (§4.2) y prioridad de recomposición ----------
+
+const BASE: Record<PreferenciaBase, string> = {
+  omnivoro: 'Omnívoro',
+  vegetariano: 'Vegetariano',
+  vegano: 'Vegano',
+}
+
+const RESTRICCION: Record<Restriccion, string> = {
+  sin_lactosa: 'sin lactosa',
+  sin_gluten: 'sin gluten',
+}
+
+const PRIORIDAD: Record<RecomposicionPrioridad, string> = {
+  perder: 'perder grasa',
+  equilibrado: '',
+  ganar: 'ganar músculo',
+}
+
+/**
+ * Traducción de la v1.0 a los tres campos de la v1.1 (`SPEC-calculo.md` §1.1). Solo se usa cuando
+ * el motor no ha rellenado `preferencia_base`: un `Resultado` viejo restaurado de `localStorage`.
+ */
+function traducePreferencia(p: Preferencia | null | undefined): {
+  base: PreferenciaBase
+  restricciones: Restriccion[]
+  low_carb: boolean
+} {
+  switch (p) {
+    case 'vegetariano':
+      return { base: 'vegetariano', restricciones: [], low_carb: false }
+    case 'vegano':
+      return { base: 'vegano', restricciones: [], low_carb: false }
+    case 'sin_lactosa':
+      return { base: 'omnivoro', restricciones: ['sin_lactosa'], low_carb: false }
+    case 'sin_gluten':
+      return { base: 'omnivoro', restricciones: ['sin_gluten'], low_carb: false }
+    case 'low_carb':
+      return { base: 'omnivoro', restricciones: [], low_carb: true }
+    default:
+      return { base: 'omnivoro', restricciones: [], low_carb: false }
+  }
+}
+
+/**
+ * Fila "Forma de comer" de §4.2: "{base}{, sin lactosa}{, sin gluten}{ · bajo en hidratos}".
+ * Sale siempre de `resultado`, nunca de `inputs.preferencia` (el paso 6.8 puede haber anulado el
+ * low-carb con diabetes, y la v1.1 permite combinaciones que `preferencia` no puede representar).
+ */
+export function formaDeComer(resultado: {
+  preferencia_base?: PreferenciaBase
+  restricciones?: Restriccion[]
+  low_carb?: boolean
+  preferencia_efectiva?: Preferencia
+}): string {
+  const traducido = traducePreferencia(resultado?.preferencia_efectiva)
+  const base = resultado?.preferencia_base ?? traducido.base
+  const restricciones = resultado?.preferencia_base
+    ? (resultado.restricciones ?? [])
+    : traducido.restricciones
+  const lowCarb = resultado?.preferencia_base ? resultado.low_carb === true : traducido.low_carb
+
+  const orden: Restriccion[] = ['sin_lactosa', 'sin_gluten']
+  const extras = orden.filter((r) => restricciones.includes(r)).map((r) => RESTRICCION[r])
+  const cuerpo = [BASE[base] ?? BASE.omnivoro, ...extras].join(', ')
+  return lowCarb ? `${cuerpo} · bajo en hidratos` : cuerpo
+}
+
+/** Matiz de la fila de objetivo con recomposición priorizada (§4.2). Cadena vacía si no aplica. */
+export function matizRecomposicion(resultado: {
+  objetivo_efectivo?: ObjetivoEfectivo
+  recomposicion_prioridad?: RecomposicionPrioridad
+}): string {
+  if (resultado?.objetivo_efectivo !== 'recomposicion') return ''
+  const p = resultado?.recomposicion_prioridad
+  if (!p || p === 'equilibrado') return ''
+  return PRIORIDAD[p] ?? ''
 }
