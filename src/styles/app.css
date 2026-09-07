@@ -437,13 +437,32 @@
 }
 
 /* §2.0 punto 11: el informe ocupa varias pantallas en móvil, así que la fila de acciones de
-   abajo queda fija mientras se hace scroll. */
+   abajo queda fija mientras se hace scroll.
+   Va en UNA fila de dos mitades: apilada ocupaba ~25 % del viewport de 375×812 de forma
+   permanente y tapaba el contenido (QA §2). Los botones se quedan en 48 px (`--toque`), así que
+   la barra mide 48 + 8 + 8 = 64 px más el safe-area. */
 .acciones-fijas {
   position: sticky;
   bottom: 0;
   z-index: 5;
-  padding: var(--e-6) 0 max(var(--e-8), env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--e-4);
+  align-items: end;
+  padding: var(--e-4) 0 max(var(--e-4), env(safe-area-inset-bottom));
   background: linear-gradient(transparent, var(--hueso) 28%);
+}
+
+.acciones-fijas > *,
+.acciones-fijas .exportar {
+  min-width: 0;
+  flex: none;
+}
+
+.acciones-fijas .btn {
+  width: 100%;
+  padding: 0 var(--e-4);
+  font-size: var(--t-sm);
 }
 
 @media (min-width: 40rem) {

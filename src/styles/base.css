@@ -265,10 +265,19 @@ input[inputmode='decimal'] {
   gap: var(--e-6);
 }
 
+/* Grupos de respuestas cortas (cribado, somatotipo). En móvil van en UNA columna a ancho
+   completo: con `auto-fit` a 375 px entraban dos por fila y el tercero quedaba huérfano en una
+   segunda fila a media anchura (QA §5). A partir de 34rem sí caben las tres. */
 .opciones-fila {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--e-6);
+}
+
+@media (min-width: 34rem) {
+  .opciones-fila {
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  }
 }
 
 .opcion-compacta {
@@ -373,6 +382,14 @@ input[inputmode='decimal'] {
 
 .campo-caja input:focus {
   outline: none;
+}
+
+/* El ejemplo se ve claramente como ejemplo: peso normal y tinta suave, para que nadie lo
+   confunda con un valor ya escrito (QA §1). */
+.campo-caja input::placeholder {
+  color: var(--tinta-suave);
+  font-weight: 400;
+  opacity: 1;
 }
 
 .campo-unidad {

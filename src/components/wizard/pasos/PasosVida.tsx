@@ -316,6 +316,7 @@ export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
             etiqueta="Peso al que quieres llegar"
             unidad="kg"
             autoFoco
+            placeholder="Ej. 68"
             valor={b.peso_objetivo}
             onCambio={(peso_objetivo) => set({ peso_objetivo })}
             error={errores.peso_objetivo}

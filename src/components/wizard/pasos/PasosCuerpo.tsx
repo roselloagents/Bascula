@@ -88,6 +88,7 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
           <CampoNumero
             etiqueta="¿Qué porcentaje de grasa tienes?"
             unidad="%"
+            placeholder="Ej. 22"
             valor={b.grasa.valor}
             onCambio={(valor) => set((previo) => ({ grasa: { ...previo.grasa, valor } }))}
             error={errores.valor}
@@ -131,6 +132,7 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
           <CampoNumero
             etiqueta="Cuello"
             unidad="cm"
+            placeholder="Ej. 38"
             valor={b.grasa.cuello_cm}
             onCambio={(cuello_cm) => set((previo) => ({ grasa: { ...previo.grasa, cuello_cm } }))}
             error={errores.cuello_cm}
@@ -140,6 +142,7 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
           <CampoNumero
             etiqueta="Cintura"
             unidad="cm"
+            placeholder="Ej. 88"
             valor={b.grasa.cintura_cm}
             onCambio={(cintura_cm) => set((previo) => ({ grasa: { ...previo.grasa, cintura_cm } }))}
             error={errores.cintura_cm}
@@ -150,6 +153,7 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
             <CampoNumero
               etiqueta="Cadera"
               unidad="cm"
+              placeholder="Ej. 100"
               valor={b.grasa.cadera_cm}
               onCambio={(cadera_cm) => set((previo) => ({ grasa: { ...previo.grasa, cadera_cm } }))}
               error={errores.cadera_cm}
@@ -211,7 +215,7 @@ const PREGUNTAS_SOMATOTIPO = [
   },
   {
     clave: 'q2' as const,
-    titulo: 'Históricamente, ¿te ha costado poco o mucho ganar grasa corporal cuando comes de más?',
+    titulo: '¿Con qué facilidad ganas grasa cuando comes de más?',
     opciones: [
       { valor: 'poca' as const, titulo: 'Poca facilidad' },
       { valor: 'moderada' as const, titulo: 'Facilidad moderada' },
@@ -220,7 +224,7 @@ const PREGUNTAS_SOMATOTIPO = [
   },
   {
     clave: 'q3' as const,
-    titulo: 'Históricamente, ¿te ha costado poco o mucho ganar músculo cuando entrenas fuerza?',
+    titulo: '¿Con qué facilidad ganas músculo cuando entrenas fuerza?',
     opciones: [
       { valor: 'poca' as const, titulo: 'Poca facilidad' },
       { valor: 'moderada' as const, titulo: 'Facilidad moderada' },

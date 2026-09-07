@@ -162,6 +162,12 @@ interface CampoNumeroProps {
   entero?: boolean
   autoFoco?: boolean
   marcado?: boolean
+  /**
+   * Texto de ejemplo que se ve mientras el campo está vacío. Los campos numéricos NUNCA arrancan
+   * con un valor escrito (QA §1): un "25" o un "180" ya puestos dejan pulsar "Siguiente" sin haber
+   * contestado y devuelven el plan de otra persona.
+   */
+  placeholder?: string
 }
 
 export function CampoNumero({
@@ -174,6 +180,7 @@ export function CampoNumero({
   entero = false,
   autoFoco = false,
   marcado = false,
+  placeholder,
 }: CampoNumeroProps) {
   const id = useId()
   const idError = `${id}-error`
@@ -192,6 +199,7 @@ export function CampoNumero({
           type="text"
           inputMode={entero ? 'numeric' : 'decimal'}
           autoComplete="off"
+          placeholder={placeholder}
           value={valor}
           aria-invalid={Boolean(errorVisible) || marcado}
           aria-describedby={errorVisible ? idError : undefined}

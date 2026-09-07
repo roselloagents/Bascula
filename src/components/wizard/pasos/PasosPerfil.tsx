@@ -43,6 +43,7 @@ export function PasoEdad({ b, set, errores, marcados }: PropsPaso) {
         unidad="años"
         entero
         autoFoco
+        placeholder="Ej. 35"
         valor={b.edad}
         onCambio={(edad) => set({ edad })}
         error={errores.edad}
@@ -87,6 +88,7 @@ export function PasoMedidas({ b, set, errores, marcados }: PropsPaso) {
           etiqueta="¿Cuánto mides?"
           unidad="cm"
           autoFoco
+          placeholder="Ej. 172"
           valor={b.altura_cm}
           onCambio={(altura_cm) => set({ altura_cm })}
           error={errores.altura_cm}
@@ -95,6 +97,7 @@ export function PasoMedidas({ b, set, errores, marcados }: PropsPaso) {
         <CampoNumero
           etiqueta="¿Cuánto pesas?"
           unidad="kg"
+          placeholder="Ej. 74"
           valor={b.peso_kg}
           onCambio={(peso_kg) => set({ peso_kg })}
           error={errores.peso_kg}
