@@ -60,6 +60,7 @@ import {
   notaDosPlatos,
   notaFallbackSencillo,
   notaFibra,
+  notaKcalDia,
   notaMacroDia,
   notaProteinaLejos,
 } from './textos'
@@ -80,6 +81,13 @@ const KCAL_TOMA_LIGERA = 260
 const TOLERANCIA_MACRO_DIA = 0.2
 /** Con `diabetes` el hidrato se vigila más de cerca: es el macro que ajusta la medicación. */
 const TOLERANCIA_HC_DIABETES = 0.1
+/**
+ * Desviación diaria de kcal a partir de la cual el menú lleva su nota. El cierre vigila el ±10 %
+ * POR TOMA, pero las desviaciones de cada toma se suman: el PDF llegaba a imprimir un "Total del
+ * día" un 9 % por encima del objetivo, a pocos centímetros del total del reparto por comidas, sin
+ * que nada lo explicara.
+ */
+const TOLERANCIA_KCAL_DIA = 0.05
 
 interface Contexto {
   /** Base, restricciones y banco de plantillas del usuario (§3.2, filtro combinable de la v1.1). */
@@ -673,6 +681,12 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
     Math.abs(totalesDelDia.fat - resultado.macros.grasa_g) / resultado.macros.grasa_g > TOLERANCIA_MACRO_DIA
   ) {
     notas.push(notaMacroDia('grasa', totalesDelDia.fat, resultado.macros.grasa_g, false))
+  }
+  if (
+    resultado.kcal > 0 &&
+    Math.abs(totalesDelDia.kcal - resultado.kcal) / resultado.kcal > TOLERANCIA_KCAL_DIA
+  ) {
+    notas.push(notaKcalDia(totalesDelDia.kcal, resultado.kcal))
   }
 
   const comidas = dia.comidas.map((c) => c.ejemplo)

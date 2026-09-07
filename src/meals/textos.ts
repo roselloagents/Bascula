@@ -17,6 +17,12 @@ export function numero(n: number, decimales = 0): string {
 }
 
 /**
+ * Desviación máxima admitida entre el macro del original y el del sustituto ya redondeado a una
+ * ración servible. Es el mismo ±15 % que usa el resto del módulo.
+ */
+const TOLERANCIA_ALTERNATIVA = 0.15
+
+/**
  * 2-3 sustituciones equivalentes en texto. La equivalencia se calcula sobre el macro que
  * define el papel del alimento en la comida (proteína, hidrato o grasa).
  */
@@ -50,11 +56,33 @@ export function alternativasComida(porciones: readonly Porcion[], candidatos: re
         c[macro] > 0 &&
         !(c.grupo === 'carbohidrato' && c.estado === 'crudo') &&
         nombreCorto(c) !== nombreCorto(p.alimento)
-      const sustituto =
-        candidatos.find((c) => servible(c) && c.grupo === p.alimento.grupo) ??
-        candidatos.find((c) => servible(c) && mismoRol(c))
+      // `redondearGramos` RECORTA la ración equivalente a los límites del alimento (§2.5), y ese
+      // recorte puede dejarla lejos del original: "cambia 7 g de tortitas de arroz por 50 g de
+      // arroz" (+147 % de hidratos) o "220 g de seitán por 300 g de lentejas" (-42 % de proteína).
+      // El copy promete lo contrario, así que el candidato que no cuadra se descarta y se prueba el
+      // siguiente; si ninguno cuadra, esa comida se queda sin esa alternativa. Misma guarda que
+      // §2.5 exige en las tablas de equivalencias.
+      const racionEquivalente = (c: Alimento): number | null => {
+        const g = redondearGramos(c, (aporte / c[macro]) * 100)
+        const real = (c[macro] * g) / 100
+        return Math.abs(real - aporte) <= TOLERANCIA_ALTERNATIVA * aporte ? g : null
+      }
+      let sustituto: Alimento | undefined
+      let gramos = 0
+      // Primero el mismo grupo; si ahí no cuadra ninguno, cualquiera que comparta rol.
+      for (const mismoGrupo of [true, false]) {
+        for (const c of candidatos) {
+          if (!servible(c)) continue
+          if (mismoGrupo ? c.grupo !== p.alimento.grupo : !mismoRol(c)) continue
+          const g = racionEquivalente(c)
+          if (g === null) continue
+          sustituto = c
+          gramos = g
+          break
+        }
+        if (sustituto) break
+      }
       if (!sustituto) continue
-      const gramos = redondearGramos(sustituto, (aporte / sustituto[macro]) * 100)
       usados.add(sustituto.id)
       textos.push(`Cambia ${p.gramos} g de ${nombreCorto(p.alimento)} por ${gramos} g de ${nombreCorto(sustituto)}.`)
     }
@@ -93,6 +121,16 @@ export function notaMacroDia(macro: 'hidratos' | 'grasa', real: number, objetivo
     ? ' Con diabetes esa diferencia importa: ajusta las raciones de hidratos del ejemplo a tu objetivo antes de usarlo, y consúltalo con tu equipo médico.'
     : ' El menú cierra sobre las calorías y la proteína, así que este macro puede moverse; ajusta la ración del acompañamiento si quieres afinarlo.'
   return `El menú de ejemplo suma ${numero(real)} g de ${macro} al día, ${direccion} de los ${numero(objetivo)} g de tu plan.${cola}`
+}
+
+/**
+ * Nota cuando el "Total del día" del menú se aleja de las calorías del plan. El generador cierra
+ * cada toma dentro del ±10 %, pero esas desviaciones se suman; el total del día se imprime a
+ * pocos centímetros del total del reparto por comidas y hasta ahora nada explicaba la diferencia.
+ */
+export function notaKcalDia(real: number, objetivo: number): string {
+  const direccion = real > objetivo ? 'por encima' : 'por debajo'
+  return `El menú de ejemplo suma ${numero(real)} kcal al día, ${direccion} de las ${numero(objetivo)} kcal de tu plan. El ejemplo cierra comida a comida y esas diferencias se suman: si quieres cuadrarlo, sube o baja la ración del acompañamiento de la comida más grande.`
 }
 
 /** Nota fija por condición médica sobre el bloque de menús (§3.1). */
