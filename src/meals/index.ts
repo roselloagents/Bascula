@@ -255,6 +255,39 @@ function porcionAPorcionUi(p: Porcion): AlimentoPorcion {
   }
 }
 
+/**
+ * Agrupa por alimento las porciones de una toma servida en varios platos (§3.3). La tabla de la
+ * pantalla y la del PDF no distinguen los platos, así que sin agrupar salían líneas idénticas
+ * repetidas dentro de la misma comida ("plátano 120 g / … / plátano 120 g"). Se suman los valores
+ * ya redondeados de cada porción, no los gramos en crudo, para que los totales de la comida no se
+ * muevan ni un kcal respecto de los que cierra el escalado.
+ */
+function agruparPorAlimento(porciones: readonly Porcion[]): AlimentoPorcion[] {
+  const orden: string[] = []
+  const suma = new Map<string, AlimentoPorcion>()
+  const alimentos = new Map<string, Alimento>()
+  for (const p of porciones) {
+    const ui = porcionAPorcionUi(p)
+    const previo = suma.get(ui.id)
+    if (!previo) {
+      orden.push(ui.id)
+      suma.set(ui.id, ui)
+      alimentos.set(ui.id, p.alimento)
+      continue
+    }
+    previo.gramos += ui.gramos
+    previo.kcal += ui.kcal
+    previo.prot = redondea1(previo.prot + ui.prot)
+    previo.carb = redondea1(previo.carb + ui.carb)
+    previo.fat = redondea1(previo.fat + ui.fat)
+  }
+  for (const id of orden) {
+    const ui = suma.get(id)!
+    ui.medida = textoMedida(alimentos.get(id)!, ui.gramos)
+  }
+  return orden.map((id) => suma.get(id)!)
+}
+
 /** `true` si la plantilla lleva verdura o fruta: solo entonces rotarlas cambia algo. */
 function llevaVegetal(p: Plantilla): boolean {
   return p.verdura !== null || p.fruta !== null
@@ -353,7 +386,9 @@ function construirComida(comida: Comida, ctx: Contexto, banco: readonly Plantill
     plantillas.push(...plato.plantillas)
   }
 
-  const alimentos = porciones.map(porcionAPorcionUi)
+  // Una toma de un solo plato ya viene con una línea por alimento; las de varios platos se
+  // agrupan para no repetir la misma línea tantas veces como platos (§3.3).
+  const alimentos = platos > 1 ? agruparPorAlimento(porciones) : porciones.map(porcionAPorcionUi)
   const totales: Macros = {
     kcal: alimentos.reduce((t, a) => t + a.kcal, 0),
     prot: redondea1(alimentos.reduce((t, a) => t + a.prot, 0)),

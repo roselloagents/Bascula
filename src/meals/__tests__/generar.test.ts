@@ -327,3 +327,27 @@ describe('generarEjemplos — cobertura del banco', () => {
     }
   })
 })
+
+describe('generarEjemplos — tomas repartidas en varios platos (§3.3)', () => {
+  it('la tabla de la comida no repite el mismo alimento una vez por plato', () => {
+    // Antes, una toma de 1.100 kcal servida en dos platos imprimía "plátano 120 g / huevo 55 g /
+    // avena 65 g" dos veces seguidas: la lista es plana y no distingue los platos.
+    let conVariosPlatos = 0
+    for (const sencillo of [false, true]) {
+      for (const preferencia of PREFERENCIAS) {
+        for (const plan of PLANES) {
+          const opciones: OpcionesPlan = { ...plan, preferencia }
+          const inputs = { ...inputsDe(opciones), menu_sencillo: sencillo }
+          const ejemplos = generarEjemplos(inputs, resultadoDe(opciones))
+          for (const c of ejemplos.entreno.comidas) {
+            const ids = c.alimentos.map((a) => a.id)
+            expect(new Set(ids).size, `${preferencia} ${plan.kcal} ${c.comida}: ${ids.join(' ')}`).toBe(ids.length)
+          }
+          if (ejemplos.entreno.notas.some((n) => n.includes('va repartido en'))) conVariosPlatos++
+        }
+      }
+    }
+    // Y el barrido de verdad pasa por el caso: si no, el test no comprobaría nada.
+    expect(conVariosPlatos).toBeGreaterThan(0)
+  })
+})
