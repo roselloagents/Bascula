@@ -11,13 +11,16 @@ export type * from './types'
 export function calcular(inputs: Inputs): Resultado                                // SPEC §2, pasos 0-17
 export function textosAvisos(resultado: Resultado, inputs: Inputs): AvisoTexto[]   // SPEC §4, placeholders sustituidos, warn antes que info
 export function textoError(codigo: string, inputs?: Inputs): AvisoTexto            // SPEC §4 (EXCL_* y ERR_INPUT_RANGO)
+export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resultado  // v1.1, SPEC Paso 18
 ```
+
+**`ajustarMacros` (v1.1).** Es el panel "Ajusta tus macros" de `SPEC-ux-comidas-pdf.md` §2.2b. Pura, determinista y **sin `Inputs`**: todo lo que necesita viaja en `Resultado.limites_ajuste`, que `calcular` rellena siempre (salvo con `'tca' ∈ condiciones`, donde queda `undefined` y `ajustarMacros` devuelve el `Resultado` tal cual). Nunca toca la proteína ni el peso objetivo; rehace la grasa, la fibra, el reparto por comidas, el cronograma y la proyección. Es **idempotente respecto al origen** —no lee `macros.grasa_g` ni `macros.hc_g` del resultado que recibe, sino los valores recomendados de `limites_ajuste`—, así que `ajustarMacros(ajustarMacros(R, a₁), a₂) === ajustarMacros(R, a₂)` y `ajustarMacros(R, {})` devuelve el plan recomendado bit a bit. Por eso la UI guarda en `localStorage` **solo el ajuste** (`bascula:ajuste:v1`), no el `Resultado` ajustado.
 
 - TypeScript puro, sin React ni dependencias. Determinista (mismos inputs → misma salida).
 - `Inputs` es un alias de `InputCalculo` y `Salida` un alias de `Resultado`: existen para no romper el código
   que ya los importaba, pero el nombre canónico es el de la spec.
 - La **implementación de referencia ejecutable** es `docs/verify-vectors.mjs`. Reproduce la spec paso a paso,
-  imprime los 14 vectores de la §5 y ejecuta un barrido de 106 724 perfiles contra 31 familias de invariantes
+  imprime los 16 vectores de la §5 y ejecuta un barrido de 115 033 perfiles contra 36 familias de invariantes
   de seguridad; debe terminar con 0 violaciones. Los tests del motor (`src/engine/__tests__/vectors.test.ts`)
   comparan contra los números publicados en la §5, y `node docs/verify-vectors.mjs --json 1` devuelve el
   `Resultado` completo del Caso 1 (es exactamente el `RESULTADO_EJEMPLO` del stub actual).
@@ -57,9 +60,10 @@ export function textoError(codigo: string, inputs?: Inputs): AvisoTexto         
   no se imprimen fechas exactas y el bloque principal es el primer tramo de 12 semanas (SPEC Paso 14).
 - `ffmi.categoria` es `null` cuando la banda de grasa es `alto` o `muy_alto` (SPEC Paso 15).
 - `Condicion` se amplía a `diabetes | renal | hepatica | tca | cardiaca | hipertension | tiroides |
-  bariatrica | glp1 | otra`, y `InputCalculo` gana `cribado_tca: 'positivo' | 'evitado' | 'negativo' | null`
-  (paso 5b del wizard; `positivo` y `evitado` añaden `'tca'` a `condiciones` en el paso 0). `'tca'` no se
-  serializa nunca en el informe ni en el PDF.
+  bariatrica | glp1 | otra`, y `InputCalculo` gana `cribado_tca: 'positivo' | 'evitado' | 'negativo' | null`.
+  **Desde la v1.1 la UI escribe siempre `null`** (el paso 5b del wizard ya no existe) y las reglas de
+  `'tca'` del motor son *reglas no expuestas* (`SPEC-calculo.md` §1.1): siguen siendo normativas y con
+  vectores, pero la interfaz no puede activarlas. `'tca'` no se serializa nunca en el informe ni en el PDF.
 - `AvisoTexto.titulo`: etiqueta corta (3-6 palabras) para el encabezado de la tarjeta de aviso en la UI.
 - **Ronda de cierre.** `Resultado` gana dos campos que solo existen para que los textos de la §4 digan
   el número que de verdad se aplicó: `macros.pct_cap` (la fracción de kcal del cap de proteína del
@@ -96,6 +100,14 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
   nunca la normalizada del Paso 0: así `'tca'` no llega a este módulo ni puede serializarse desde él.
   Con `renal` o `hepatica` **no genera menú** (`foods.json` no tiene potasio, fósforo ni sodio) y la UI
   muestra el texto de derivación de §3.1.
+- **v1.1 — filtro de alimentos combinable (lo único nuevo en `src/meals`).** El banco de plantillas lo
+  sigue eligiendo `resultado.preferencia_efectiva`, pero el filtro de cada `FoodQuery` pasa a ser la
+  **conjunción** de la base y de todas las restricciones: `pasaBase(a, resultado.preferencia_base) &&
+  resultado.restricciones.every(r => pasaRestriccion(a, r))` (`SPEC-ux-comidas-pdf.md` §3.2). Los tres
+  campos son opcionales en `Resultado`; si faltan, se deducen de `preferencia_efectiva` con la regla de
+  traducción de `SPEC-calculo.md` §1.1. `src/meals/filtros.ts` gana `pasaRestricciones`; **no cambia
+  ninguna firma exportada de `src/meals/index.ts`**, y el banco sencillo aplica la regla de sustitución
+  por variantes `_sl`, de filtrado y de relleno de §3.7.2. Ningún fallback relaja jamás una restricción.
 - Respeta **`resultado.preferencia_efectiva`**, no `inputs.preferencia` (seis bancos: omnívoro,
   vegetariano, vegano, sin lactosa, sin gluten, low-carb) y marca la toma peri-entreno con
   `resultado.comidas[i].peri`. Con `diabetes` + `low_carb` el motor ya ha anulado el low-carb (paso 6.8):
@@ -149,7 +161,13 @@ export function nombreFicheroPdf(datos: DatosPdf): string
   `textoError(resultado.excluido)` (más `resultado.errores` si es `ERR_INPUT_RANGO`).
 - No implementa ninguna fórmula: si un número no viene del motor, no se muestra.
 - Guarda las respuestas del cuestionario en `localStorage` (clave `bascula:inputs:v1`) y las restaura al cargar.
-  `cribado_tca` y `'tca'` no se persisten ni se serializan en el PDF.
+  `cribado_tca` y `'tca'` no se persisten ni se serializan en el PDF. Un borrador de la v1.0 que solo tenga
+  `preferencia` se restaura aplicando la **regla de traducción** de `SPEC-calculo.md` §1.1.
+- **v1.1.** Dos claves más, las dos solo de este dispositivo y ninguna con datos identificativos:
+  `bascula:ajuste:v1` con `{ kcal?: number, hc_g?: number }` (el ajuste manual, nunca el `Resultado`
+  ajustado: se recalcula con `ajustarMacros`) y `bascula:pesajes:v1` con `Pesaje[]` (el seguimiento de
+  §2.6c, que viaja al PDF en `DatosPdf.pesajes`). El ajuste se descarta cuando el usuario recalcula con
+  datos distintos: los límites del plan nuevo no tienen por qué parecerse a los del anterior.
 - Flujo y copy: `docs/SPEC-ux-comidas-pdf.md` §1-2. Diseño: `docs/DESIGN-brief.md`.
 
 ## Reglas de convivencia (varios agentes en paralelo en el mismo repo)
@@ -161,3 +179,24 @@ export function nombreFicheroPdf(datos: DatosPdf): string
   `vite` (puerto 5173) o `vite build`.
 - Los stubs actuales de `src/engine/index.ts`, `src/meals/index.ts` y `src/pdf/index.ts` se sustituyen por completo, pero
   conservando los nombres y firmas exportados.
+
+## Campos nuevos de la v1.1 (todos opcionales, nada rompe)
+
+`src/engine/types.ts` gana lo siguiente. **Ningún campo existente cambia de forma ni de tipo**, `Ejemplos`
+no cambia en absoluto y el código que no lea los campos nuevos sigue funcionando igual.
+
+| Dónde | Campo | Quién lo escribe | Quién lo lee |
+|---|---|---|---|
+| `InputCalculo` | `recomposicion_prioridad?`, `menstruacion?`, `preferencia_base?`, `restricciones?`, `low_carb?` | la UI (wizard, pasos 3b, 10 y 13) | el motor |
+| `Resultado` | `preferencia_base?`, `restricciones?`, `low_carb?` | el motor (paso 6.8) | `src/meals` (filtro), el PDF (§4.2) |
+| `Resultado` | `recomposicion_prioridad?` | el motor (paso 7) | el PDF (§4.2) |
+| `Resultado` | `proyeccion?: PuntoProyeccion[]` | el motor (paso 14b) | la UI (§2.6b, §2.6c) y el PDF (§4.5b) |
+| `Resultado` | `limites_ajuste?: LimitesAjuste` | el motor (paso 18) | `ajustarMacros` y el panel de §2.2b |
+| `Resultado` | `ajuste?: { kcal, hc }` | **solo `ajustarMacros`** | la UI y el PDF (marca "ajustado por ti") |
+| tipos nuevos | `PreferenciaBase`, `Restriccion`, `RecomposicionPrioridad`, `Menstruacion`, `PuntoProyeccion`, `AjusteMacros`, `LimitesAjuste`, `Pesaje` | — | — |
+| `DatosPdf` | `pesajes?: Pesaje[]` | la UI (desde `localStorage`) | el PDF (§4.5b) |
+
+**Reparto del trabajo (cuatro agentes en paralelo).** Motor: pasos 6.7bis, 7, 9, 14b, 17, 18 y `ajustarMacros`
+en `src/engine/**`. Comidas: solo el filtro combinable y el banco sencillo en `src/meals/**`. UI: pasos 3b,
+10 y 13 del wizard, panel §2.2b, tarjeta §2.2c y bloques §2.6b/§2.6c en `src/components/**`. PDF: marca de
+plan ajustado, tarjeta §4.3b y página §4.5b en `src/pdf/**`. Las fronteras de carpeta son las de siempre.

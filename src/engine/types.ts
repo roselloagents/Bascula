@@ -21,6 +21,14 @@ export type Objetivo = 'perder' | 'mantener' | 'ganar' | 'recomposicion' | 'no_s
 export type ObjetivoEfectivo = Exclude<Objetivo, 'no_se'>
 export type Ritmo = 'suave' | 'moderado' | 'agresivo'
 export type Preferencia = 'omnivoro' | 'vegetariano' | 'vegano' | 'sin_lactosa' | 'sin_gluten' | 'low_carb'
+/** Base dietética excluyente del paso 13 del wizard (SPEC §1 fila 19). */
+export type PreferenciaBase = 'omnivoro' | 'vegetariano' | 'vegano'
+/** Restricciones combinables (varias a la vez) del paso 13 del wizard (SPEC §1 fila 20). */
+export type Restriccion = 'sin_lactosa' | 'sin_gluten'
+/** Subpregunta del paso de objetivo cuando se elige `recomposicion` (SPEC §1 fila 22). */
+export type RecomposicionPrioridad = 'perder' | 'equilibrado' | 'ganar'
+/** Respuesta del paso "¿Cómo es tu regla?", solo mujeres (SPEC §1 fila 23). */
+export type Menstruacion = 'regular' | 'irregular' | 'ausente' | 'no_dice'
 export type Condicion =
   | 'diabetes'
   | 'renal'
@@ -83,6 +91,10 @@ export interface InputCalculo {
   clima_caluroso: boolean
   embarazo_lactancia: boolean
   condiciones: Condicion[]
+  /** **No lo expone la UI desde la v1.1**: el paso 5b del wizard desapareció y la conversión a
+   *  `InputCalculo` escribe siempre `null` (SPEC §1 fila 17). El motor conserva la regla —`positivo`
+   *  y `evitado` añaden `'tca'` a `condiciones` en el paso 0— porque `'tca'` sigue siendo una
+   *  `Condicion` válida y los vectores de la §5 la usan. */
   cribado_tca: CribadoTCA | null
   fecha_inicio: string // ISO 'YYYY-MM-DD'
   /** Paso 13 del wizard, "¿Quieres comidas sencillas?" (SPEC-ux-comidas-pdf §3.7). `false` por defecto.
@@ -90,6 +102,24 @@ export interface InputCalculo {
    *  Solo lo lee el generador de menús, que con `true` usa el banco sencillo (≤ 12 alimentos distintos
    *  en la semana y dos variantes por rol de comida que se alternan por día par/impar). */
   menu_sencillo?: boolean
+  // ---------- v1.1: campos nuevos, TODOS opcionales (ninguno cambia los 14 vectores) ----------
+  /** Subpregunta "¿Qué te importa más ahora?" del paso de objetivo, solo con `objetivo === 'recomposicion'`.
+   *  `undefined`/`null` equivale a `'equilibrado'`, que reproduce exactamente el comportamiento v1.0
+   *  (SPEC Paso 7, tabla 3.9). Se ignora si `objetivo_efectivo` acaba siendo otro. */
+  recomposicion_prioridad?: RecomposicionPrioridad | null
+  /** Paso "¿Cómo es tu regla?" (solo `sexo === 'mujer'`; en hombres se ignora). **No cambia ningún
+   *  número** salvo el ritmo agresivo, que pasa a moderado con `irregular`/`ausente` (SPEC Paso 6.7bis).
+   *  Produce `INFO_CICLO` y `WARN_CICLO_AUSENTE`. */
+  menstruacion?: Menstruacion | null
+  /** Base dietética excluyente del paso 13 (SPEC §1 fila 19). Cuando está presente **manda sobre
+   *  `preferencia`**, que deja de leerse; cuando falta, el paso 0 la deduce de `preferencia`. */
+  preferencia_base?: PreferenciaBase | null
+  /** Restricciones combinables del paso 13 (varias a la vez). Solo se leen si `preferencia_base`
+   *  está presente; si no, el paso 0 las deduce de `preferencia`. */
+  restricciones?: Restriccion[] | null
+  /** Interruptor "bajo en hidratos" del paso 13. Solo se lee si `preferencia_base` está presente;
+   *  si no, el paso 0 lo deduce de `preferencia === 'low_carb'`. */
+  low_carb?: boolean | null
 }
 
 /** Alias histórico usado por la UI, el generador de comidas y el PDF. */
@@ -236,6 +266,81 @@ export interface Resultado {
   comidas: Comida[]
   /** Códigos de la tabla §4, sin duplicados y con las reglas de supresión ya aplicadas. */
   avisos: string[]
+  // ---------- v1.1: campos nuevos, TODOS opcionales ----------
+  /** Base dietética efectiva tras la traducción del paso 0 (SPEC §1, "regla de traducción").
+   *  Es la que decide los multiplicadores de proteína (vegano ×1,15 / vegetariano ×1,10). */
+  preferencia_base?: PreferenciaBase
+  /** Restricciones efectivas tras la traducción del paso 0, sin duplicados y en orden canónico
+   *  (`sin_lactosa` antes que `sin_gluten`). El generador de menús filtra por TODAS ellas. */
+  restricciones?: Restriccion[]
+  /** Interruptor "bajo en hidratos" efectivo (el paso 6.8 lo anula con `diabetes`). */
+  low_carb?: boolean
+  /** Prioridad de recomposición realmente aplicada; `undefined` si `objetivo_efectivo !== 'recomposicion'`. */
+  recomposicion_prioridad?: RecomposicionPrioridad
+  /** Proyección semana a semana del peso esperado (SPEC Paso 14). `undefined` con `excluido`
+   *  o con `'tca' ∈ condiciones`. Sin cronograma es la proyección plana de ±1 kg. */
+  proyeccion?: PuntoProyeccion[]
+  /** Datos que necesita `ajustarMacros` (SPEC Paso 18) para no depender de `Inputs`.
+   *  **Invariante**: `ajustarMacros` lo copia tal cual, nunca lo recalcula. */
+  limites_ajuste?: LimitesAjuste
+  /** Presente **solo** en un `Resultado` devuelto por `ajustarMacros` (SPEC Paso 18): dice qué
+   *  palanca movió el usuario. Ausente ⇒ el plan es el recomendado por el motor. */
+  ajuste?: { kcal: boolean; hc: boolean }
+}
+
+/** Un punto de la curva de proyección de peso (SPEC Paso 14). Pesos en kg con 1 decimal. */
+export interface PuntoProyeccion {
+  /** Semanas desde `fecha_inicio`. La entrada 0 es el peso actual (los tres valores coinciden). */
+  semana: number
+  /** Extremo optimista de la banda: el peso más bajo esperable en `perder`, el más bajo en `ganar`. */
+  peso_min: number
+  /** Valor central de la curva (adaptación creciente). */
+  peso_esp: number
+  /** Extremo pesimista de la banda. `peso_min ≤ peso_esp ≤ peso_max` siempre. */
+  peso_max: number
+}
+
+/** Lo que el usuario mueve en el panel "Ajusta tus macros" (SPEC Paso 18, SPEC-ux §2.2b). */
+export interface AjusteMacros {
+  /** Calorías objetivo pedidas. Ausente ⇒ se conservan las recomendadas. */
+  kcal?: number
+  /** Hidratos en gramos pedidos. Ausente ⇒ se conservan los recomendados. */
+  hc_g?: number
+}
+
+/** Límites y constantes del ajuste manual, publicados por el motor (SPEC Paso 18). */
+export interface LimitesAjuste {
+  /** `kcal` del plan recomendado. Nunca cambia, aunque el resultado ya venga ajustado. */
+  kcal_recomendada: number
+  /** `macros.hc_g` del plan recomendado. Nunca cambia. */
+  hc_recomendado_g: number
+  /** Extremo inferior del control de calorías (múltiplo de 10): el suelo de seguridad del paso 7. */
+  kcal_min: number
+  /** Extremo superior (múltiplo de 10): el TDEE en `perder`, `1,20 · kcal_recomendada` en el resto. */
+  kcal_max: number
+  /** Salto del control de calorías en la interfaz. Siempre 50. */
+  kcal_paso: number
+  /** Mínimo del deslizador de hidratos. Siempre 30 g. */
+  hc_min_ui_g: number
+  /** Mínimo de hidratos del motor: 130 g, o 75 g con `low_carb` (SPEC Paso 10). */
+  hc_min_motor_g: number
+  /** Parte absoluta del suelo de grasa del paso 9: `(0,7 H / 0,8 M) · base_kg`. La otra parte
+   *  (`0,20 · kcal / 9`) depende de las calorías y se recalcula en cada ajuste. */
+  suelo_grasa_abs_g: number
+  /** Peso corporal del usuario, para rehacer `gkg` y la proyección sin leer `Inputs`. */
+  peso_kg: number
+  /** `fecha_inicio` del usuario, para rehacer el cronograma sin leer `Inputs`. */
+  fecha_inicio: string
+  /** Umbral de `INFO_MICRONUTRIENTES`: 1 800 kcal en hombres, 1 500 en mujeres. */
+  kcal_micronutrientes: number
+}
+
+/** Un pesaje del seguimiento local (SPEC-ux §2.6c). Vive solo en `localStorage`; el motor no lo lee. */
+export interface Pesaje {
+  /** ISO 'YYYY-MM-DD'. */
+  fecha: string
+  /** 30–300 kg, un decimal. */
+  kg: number
 }
 
 /** Alias histórico usado por la UI, el generador de comidas y el PDF. */
@@ -395,4 +500,7 @@ export interface DatosPdf {
   ejemplos: Ejemplos
   avisos: AvisoTexto[]
   fecha: string // ISO YYYY-MM-DD de generación
+  /** Pesajes del seguimiento local (SPEC-ux §2.6c y §4.5b). `undefined` o vacío ⇒ el PDF no
+   *  imprime el bloque de seguimiento. Nunca se envían a ningún servidor. */
+  pesajes?: Pesaje[]
 }

@@ -1,4 +1,4 @@
-# Báscula (RS Agents) — Especificación de UX, comidas y PDF v1.0
+# Báscula (RS Agents) — Especificación de UX, comidas y PDF v1.1
 
 Documento normativo complementario a `SPEC-calculo.md`. Cubre el cuestionario (wizard), la pantalla de resultados, el generador de ejemplos de comidas y la estructura del PDF exportable. Todo el copy está en español de España, tono cercano y honesto, sin paternalismo. Ningún mensaje afirma cosas que la ciencia no respalda (p. ej. nunca se dice que más comidas "aceleran el metabolismo", ni que el somatotipo determina tus macros).
 
@@ -14,7 +14,7 @@ Convención de referencias: `[Paso N]` remite al algoritmo de `SPEC-calculo.md`;
 - **Orden de fácil a difícil**, con las preguntas de corte de seguridad muy pronto (edad, embarazo/lactancia) para no hacer perder el tiempo a quien no puede usar la app.
 - **Nunca bloquear en silencio.** Si una respuesta desvía el flujo (exclusión, aviso, valor por defecto), se explica en la misma pantalla, con un tono de acompañamiento, nunca de rechazo.
 - **Todo paso es editable después** desde la pantalla de resultados ("Editar tus datos"), sin tener que repetir el wizard entero.
-- **Barra de progreso con total dinámico.** El denominador NO es una constante: se calcula con las respuestas ya dadas (`total = pasos_obligatorios + pasos_condicionales_que_aplican`) y se recalcula en cuanto una respuesta cambia la ramificación. Pasos obligatorios: 1, 2, 4, 5, 5b, 6, 8, 9, 10, 13 (10 pantallas). Condicionales: 3 (solo `sexo = 'mujer'`), 7 (solo si el usuario no lo salta; cuenta como 1 aunque tenga 4 preguntas), 11 (solo si `objetivo ∈ {perder, ganar, no_se}`), 12 (solo si `objetivo ∈ {perder, ganar, no_se}` **y** `cribado_tca ∉ {positivo, evitado}`). El texto accesible es "Paso X de {total}" con el total ya resuelto; mientras el objetivo sea desconocido se asume que 11 y 12 aplican, y el total se recalcula en cuanto se responde el paso 5b (si el cribado sale `positivo` o `evitado`, el 12 deja de contar: sin este recálculo esos usuarios terminaban el wizard en "Paso N-1 de N"). El paso 5b conserva su etiqueta interna pero se numera de forma correlativa de cara al usuario (es la pantalla 6 de la secuencia visible en un hombre).
+- **Barra de progreso con total dinámico.** El denominador NO es una constante: se calcula con las respuestas ya dadas (`total = pasos_obligatorios + pasos_condicionales_que_aplican`) y se recalcula en cuanto una respuesta cambia la ramificación. Pasos obligatorios: 1, 2, 4, 5, 6, 8, 9, 10, 13 (**9** pantallas). Condicionales: 3 y 3b (solo `sexo = 'mujer'`), 7 (solo si el usuario no lo salta; cuenta como 1 aunque tenga 4 preguntas), 11 (solo si `objetivo ∈ {perder, ganar, no_se}`), 12 (solo si `objetivo ∈ {perder, ganar, no_se}`). El texto accesible es "Paso X de {total}" con el total ya resuelto; mientras el objetivo sea desconocido se asume que 11 y 12 aplican. **La subpregunta de recomposición no es un paso**: vive dentro del paso 10 y aparece en la misma pantalla al elegir esa tarjeta, así que no toca el denominador (v1.1). El antiguo paso 5b ya no existe (decisión A), y con él desaparece el único caso en que el denominador cambiaba a mitad del wizard.
 - **Botón "Atrás" siempre visible** salvo en el paso 1. El botón "Siguiente" se deshabilita hasta que la pregunta tiene una respuesta válida (o hay un valor por defecto explícito y visible).
 - **Ayuda contextual** (icono "¿Por qué lo preguntamos?") en cada pantalla: un texto corto que explica para qué sirve el dato, sin tecnicismos. Nunca oculta información; es opcional de leer.
 
@@ -25,19 +25,26 @@ Convención de referencias: `[Paso N]` remite al algoritmo de `SPEC-calculo.md`;
 | 1 | Sexo | `sexo` | No |
 | 2 | Edad | `edad` | Sí: <18 o >75 → `EXCL_EDAD` |
 | 3 | Embarazo o lactancia (solo mujeres, sin filtro de edad) | `embarazo_lactancia` | Sí: true → `EXCL_EMBARAZO_LACTANCIA` |
+| 3b | **Regla** (solo mujeres, justo después del paso 3) | `menstruacion` | No (activa `INFO_CICLO` / `WARN_CICLO_AUSENTE`) |
 | 4 | Altura y peso | `altura_cm`, `peso_kg` | No |
 | 5 | Condiciones médicas | `condiciones` | No (activa avisos) |
-| 5b | Relación con la comida (cribado breve) | (no numérico; ver 1.2.5b) | No (activa `INFO_RITMO_SUAVE` vía `condiciones: ['tca']` si aplica) |
 | 6 | Porcentaje de grasa corporal | `grasa.*` | No |
 | 7 | Somatotipo (opcional) | `somatotipo` | No |
 | 8 | Actividad diaria | `actividad_diaria` | No |
 | 9 | Entrenamiento | `entrenamiento.*` | No |
-| 10 | Objetivo | `objetivo` | No |
+| 10 | Objetivo (+ subpregunta de prioridad si se elige recomposición) | `objetivo`, `recomposicion_prioridad` | No |
 | 11 | Ritmo (si aplica) | `ritmo` | No |
 | 12 | Peso objetivo (si aplica) | `peso_objetivo` | No |
-| 13 | Preferencia dietética, nº de comidas, clima y comidas sencillas | `preferencia`, `n_comidas`, `clima_caluroso`, `menu_sencillo` | No |
+| 13 | Preferencias alimentarias (base + restricciones + bajo en hidratos), nº de comidas, clima y comidas sencillas | `preferencia_base`, `restricciones`, `low_carb`, `preferencia`, `n_comidas`, `clima_caluroso`, `menu_sencillo` | No |
 
 Tras el paso 13: pantalla de "Calculando…" (proceso instantáneo, pero se muestra 600-900 ms de transición con un mensaje breve, p. ej. "Ajustando tus macros…") y salto directo a Resultados.
+
+**Cambios de la v1.1 en el mapa (decisiones A, C, D y E):**
+
+- **Fuera el paso 5b** ("Relación con la comida"). Bloqueaba a una persona real que marcó "sí" y no pudo llegar a su PDF. La conversión a `InputCalculo` escribe `cribado_tca: null` **siempre**, y con él desaparecen todas las ocultaciones que dependían de él: el %grasa, el peso objetivo, el cronograma y el bloque de referencias se muestran a todo el mundo. Lo único que queda es una línea fija en el disclaimer (§2.10). El motor conserva las reglas de `'tca'` como *reglas no expuestas* (`SPEC-calculo.md` §1.1), pero la UI ya no puede producir ese valor.
+- **Nuevo paso 3b**, "¿Cómo es tu regla?", justo detrás del de embarazo/lactancia y solo para mujeres.
+- **La subpregunta de recomposición vive dentro del paso 10**, no es una pantalla propia.
+- **El paso 13 pasa de "una preferencia" a base + restricciones + interruptor.**
 
 ---
 
@@ -99,6 +106,33 @@ No se pregunta a hombres ni se pregunta la edad fértil explícitamente: se mues
 
 ---
 
+### Paso 3b — Regla (condicional: solo si `sexo = 'mujer'`; v1.1, decisión D)
+
+**Pregunta:** "¿Cómo es tu regla?"
+
+**Opciones (tarjetas, ninguna preseleccionada):**
+
+| Opción en pantalla | Valor en `menstruacion` |
+|---|---|
+| "Regular — me viene más o menos cada mes" | `regular` |
+| "Irregular — se me adelanta, se me atrasa o se me salta" | `irregular` |
+| "No la tengo — menopausia, anticonceptivo continuo u otra causa" | `ausente` |
+| "Prefiero no decirlo" | `no_dice` |
+
+**Se puede saltar.** El botón "Prefiero no decirlo" es una opción de primera clase, con el mismo estilo visual que las otras tres. Si el usuario pulsa "Atrás" o "Siguiente" sin elegir nada, se envía `null` y el efecto es idéntico al de `no_dice`.
+
+**Ayuda contextual ("¿Por qué lo preguntamos?"):** "No cambia tus calorías ni tus macros: el gasto energético varía muy poco a lo largo del ciclo. Lo preguntamos por dos motivos. Uno, para explicarte por qué la báscula sube un par de kilos la semana antes de la regla sin que hayas hecho nada mal. Y dos, porque una regla irregular o ausente junto con un déficit puede ser una señal de que estás comiendo demasiado poco, y eso sí conviene mirarlo."
+
+**Consecuencias (todas explicadas después, en resultados, nunca en esta pantalla):**
+
+1. `regular` o `irregular` → tarjeta **"Tu ciclo y tu plan"** en resultados y en el PDF (`INFO_CICLO`, §2.2c).
+2. `irregular` o `ausente` **y** (objetivo `perder`, o %grasa en banda baja, o ritmo `agresivo`) → aviso `WARN_CICLO_AUSENTE` y, si el ritmo elegido era `agresivo`, el motor lo suaviza a `moderado` (`[Paso 6.7bis]`).
+3. `ausente` y `no_dice` no producen la tarjeta informativa: hablar de "pesarse en la misma fase del ciclo" a quien está en menopausia o con anticonceptivo continuo no le sirve de nada.
+
+**Nota de diseño:** ningún icono de alarma, ningún color de alerta, ninguna pregunta de seguimiento. La pantalla no cambia de tono según lo que se responda, y "No la tengo" incluye explícitamente la menopausia y el anticonceptivo continuo en el propio texto de la opción para que la respuesta más frecuente no se lea como un problema.
+
+---
+
 ### Paso 4 — Altura y peso
 
 **Preguntas (misma pantalla):**
@@ -156,40 +190,19 @@ saca el foco del campo, así que el error nunca llega a mostrarse.
 
 ---
 
-### Paso 5b — Relación con la comida (cribado breve, siempre visible)
+### Paso 5b — RETIRADO en la v1.1 (decisión A)
 
-**Dos preguntas en la misma pantalla** (dos ítems, no uno: un único ítem no validado tiene una sensibilidad claramente peor que un instrumento de varios ítems como el SCOFF, validado en español; dos ítems son el compromiso entre sensibilidad y longitud del wizard):
+El cribado breve de "relación con la comida" **ya no existe**. Se retira entero, con todo lo que colgaba de él:
 
-1. "¿Alguna vez la comida o el peso te han generado mucha ansiedad o preocupación?"
-2. "¿Dirías que la comida o el peso ocupan tu cabeza gran parte del día?"
+- La conversión a `InputCalculo` escribe **siempre** `cribado_tca: null`. Ningún camino de la interfaz puede producir `'positivo'` ni `'evitado'`, y por tanto tampoco `'tca'` en `condiciones`.
+- **Desaparecen las ocultaciones.** El %grasa (§2.1), el peso objetivo y el cronograma (§2.6), el bloque de referencias de la metodología (§2.9) y sus equivalentes del PDF (§4.2 y §4.5) se muestran a **todo el mundo**, sin guardas ni excepciones. Los párrafos que describían esas guardas se han eliminado de este documento, no reescrito.
+- **Vuelve el selector visual de siluetas** del paso 6.C para todos los usuarios.
+- **El paso 12 (peso objetivo) deja de tener la condición del cribado**: se muestra siempre que `objetivo ∈ {perder, ganar, no_se}`.
+- **Lo único que queda** es una línea fija en el disclaimer de la §2.10 y de la última página del PDF: *"Si la comida o el peso te generan ansiedad, puedes hablar gratis con ADANER (adaner.org) o con tu centro de salud."* No es condicional, no depende de ninguna respuesta y se muestra idéntica a todo el mundo.
 
-**Opciones de cada pregunta:** Sí / Prefiero no responder / No.
+**Por qué.** Una persona real marcó "sí" y se quedó sin poder llegar a su PDF: la protección, pensada para no hacer daño, acabó siendo el único muro de la aplicación. Báscula es una herramienta para el dueño y sus amigos, no un cribado clínico, y dos ítems no validados no dan para sostener una intervención que bloquea el producto entero.
 
-**Subtexto (normativo, sustituye a la antigua promesa de privacidad):** "Solo la usamos para ajustar el ritmo de tu plan. En tu informe verás una nota diciendo que hemos aplicado el ritmo más suave, pero **no aparece esta pregunta ni tu respuesta**."
-
-> La versión anterior prometía que la respuesta "es privada y no aparece en tu informe" y a la vez imprimía el antiguo `WARN_TCA` —un texto que explicitaba el motivo— en la página 2 del PDF. El PDF es un documento que el usuario imprime, comparte o deja en un ordenador familiar: la promesa se rompía. Se corrige por los dos lados: se rebaja lo que se promete (arriba) y se elimina de la salida cualquier rastro del cribado (abajo).
-
-**Ayuda contextual (enlace discreto, visible siempre, no solo si se marca "Sí"):** "Si en algún momento la comida o el peso te generan mucha ansiedad, no tienes que gestionarlo solo/a: puedes hablar gratis con ADANER (Asociación en Defensa de la Atención a la Anorexia y la Bulimia) o con tu centro de salud." Este enlace se repite igual en el pie de la pantalla de resultados y en el PDF, independientemente de la respuesta, precisamente para que su presencia no revele nada.
-
-**Lógica condicional (cribado precautorio):**
-
-| Respuestas | `cribado_tca` | Efecto |
-|---|---|---|
-| Al menos un `Sí` | `positivo` | Se añade `'tca'` a `condiciones` |
-| Ningún `Sí` y al menos un `Prefiero no responder` | `evitado` | Se añade `'tca'` a `condiciones` (**mismo trato que un `Sí`**) |
-| Dos `No` | `negativo` | No se añade nada |
-
-La evitación se trata como un positivo porque es la respuesta más probable de quien tiene un trastorno activo: dejarla sin efecto convertía la opción más protectora del usuario en la menos protegida. **Esto no se le dice con ese marco**: la pantalla no cambia de tono, no aparece ningún mensaje distinto y "Prefiero no responder" sigue siendo una opción de primera clase con el mismo estilo visual que las otras dos.
-
-**Consecuencias de `cribado_tca ∈ {positivo, evitado}`** (todas silenciosas, ninguna se anuncia como consecuencia de esta pantalla):
-
-1. `'tca' ∈ condiciones` → el motor fuerza `ritmo_ef = 'suave'` sea cual sea el objetivo (`[Paso 6.7]`) y excluye el cálculo si `IMC < 18,5` (`EXCL_TCA_RIESGO`, `[Paso 0]`).
-2. **Se salta el paso 6.C** (selector visual de siluetas) y se usa directamente `grasa.metodo = 'desconocido'`: comparar el propio cuerpo con siluetas es un desencadenante documentado. Al usuario se le presenta como una simplificación del flujo, no como una restricción (ver paso 6).
-3. **En resultados y en el PDF se ocultan el %grasa estimado y el peso objetivo** (bloques §2.1 tercera fila y §2.6), y en su lugar se muestran calorías, macros, agua, reparto por comidas y menús. El cronograma tampoco se muestra.
-4. **`'tca'` nunca se serializa**: no aparece en la tabla de datos de entrada del PDF (§4.2), ni en la lista de condiciones de ninguna pantalla, ni en el nombre de fichero, ni en ningún metadato del PDF.
-5. El motor **ya no emite `WARN_TCA`**: emite `INFO_RITMO_SUAVE`, un aviso de severidad `info` cuyo texto —el de la tabla §4 de `SPEC-calculo.md`, que es la única copia normativa y no se reproduce aquí— no menciona la causa ni habla de "ritmo" (R5-18 lo reescribió precisamente porque en `mantener` y `recomposicion` el motor ignora el ritmo, §1 campo 10, y §2.1 ni siquiera imprime el sufijo). La pantalla y el PDF lo imprimen **íntegro, como cualquier otro aviso**, en el grupo de notas informativas; ya no hace falta ninguna sustitución de texto en la capa de presentación. El enlace de ADANER ya es un pie fijo universal (§2.10), así que su presencia no distingue a este usuario de ningún otro.
-
-**Nota de diseño:** las preguntas se formulan una sola vez, en tono neutro, sin iconografía alarmante (no usar caras tristes ni colores de "alerta"). Colocarlas justo después de las condiciones médicas y antes de pedir el %grasa (que puede ser sensible para algunas personas) reduce la sorpresa.
+**Lo que NO se toca.** `SPEC-calculo.md` conserva íntegras las reglas del motor asociadas a `'tca'` —`EXCL_TCA_RIESGO`, `INFO_RITMO_SUAVE`, el filtro de avisos del paso 17 y la no publicación de `proyeccion` y `limites_ajuste`— como *reglas no expuestas*: siguen siendo normativas, siguen teniendo vectores (caso 2 de la §5) y siguen siendo alcanzables construyendo el input a mano. Si alguna vez vuelve a haber un camino de interfaz que produzca `'tca'`, funcionan sin tocar nada.
 
 ---
 
@@ -205,7 +218,7 @@ La evitación se trata como un positivo porque es la respuesta más probable de 
 
 **Ayuda contextual (siempre visible, no plegada):** "Ninguna fórmula sin aparato mide la grasa corporal con precisión absoluta: te daremos siempre un rango, no una cifra exacta. Cuanto mejor sea el dato de partida, más ajustado será tu plan."
 
-**Condicional por el cribado del paso 5b:** si `cribado_tca ∈ {positivo, evitado}`, la opción 3 ("No lo sé, ayúdame a estimarlo") **no se ofrece** y el bloque 6.C no existe en ese recorrido. La pantalla muestra solo las opciones 1, 2 y 4, sin ninguna explicación que delate el motivo; si el usuario no elige ninguna y pulsa "Siguiente", se aplica `grasa.metodo = 'desconocido'` (opción 4).
+**v1.1:** la condición que ocultaba la opción 3 ("No lo sé, ayúdame a estimarlo") y el bloque 6.C con `cribado_tca ∈ {positivo, evitado}` **queda retirada** con el paso 5b (decisión A). Las cuatro opciones se ofrecen siempre y a todo el mundo.
 
 #### 6.A Si "Sí, lo sé" (`conocido`)
 
@@ -344,7 +357,24 @@ Sin pantalla adicional: se usa directamente CUN-BAE. Microcopy de confirmación 
 - "No lo tengo claro, decídelo vosotros" → `objetivo = 'no_se'`
   - Ayuda inline: "Miraremos tu composición corporal y tu entrenamiento para proponerte lo más sensato. Podrás cambiarlo después."
 
-**Validación:** obligatorio, una opción.
+**Subpregunta de recomposición (v1.1, decisión C).** Al marcar la tarjeta de recomposición se despliega **en la misma pantalla**, justo debajo de ella, un segundo grupo de tres opciones. No es un paso nuevo y no cuenta en la barra de progreso.
+
+> **"¿Qué te importa más ahora?"**
+> - "Perder grasa" → `recomposicion_prioridad = 'perder'`
+> - "Las dos por igual" → `recomposicion_prioridad = 'equilibrado'` *(preseleccionada)*
+> - "Ganar músculo" → `recomposicion_prioridad = 'ganar'`
+
+**Ayuda contextual de la subpregunta:** "La recomposición es un equilibrio, y el equilibrio se puede inclinar. Si ahora te importa más perder grasa, bajamos algo más las calorías y te subimos la grasa a costa de los hidratos. Si te importa más ganar músculo, te dejamos comiendo en tu gasto, sin déficit. En los dos casos sigue siendo un proceso lento."
+
+**Por qué existe:** mucha gente elige "recomposición" queriendo decir "perder sin decirlo", y otra tanta queriendo decir justo lo contrario. La subpregunta desambigua sin obligar a nadie a etiquetarse.
+
+**Reglas:**
+- Solo se muestra con `objetivo = 'recomposicion'`. Si el usuario cambia de tarjeta, el valor se descarta y se envía `null`.
+- `'equilibrado'` viene preseleccionada porque es el comportamiento de la v1.0 y no cambia ningún número; a diferencia del ritmo (paso 11), aquí la opción por defecto es la conservadora y no elige el tamaño de ningún déficit por el usuario.
+- Cuando el objetivo lo resuelve el motor (`objetivo = 'no_se'` → `recomposicion`, o una reconversión de los pasos 6.3/6.4), el usuario **no ha visto** la subpregunta: se envía `null`, que el motor trata como `'equilibrado'`.
+- El efecto exacto (déficit y % de grasa) está en `SPEC-calculo.md` pasos 7 y 9, y se explica en resultados con `INFO_RECOMP_PRIORIDAD_PERDER` / `INFO_RECOMP_PRIORIDAD_GANAR`.
+
+**Validación:** obligatorio, una opción (la subpregunta siempre tiene valor por defecto, así que no bloquea "Siguiente").
 
 **Lógica condicional posterior (no visible en el wizard, ocurre en el motor, `[Paso 6]`):** el objetivo elegido puede reconvertirse automáticamente (p. ej. `perder` con IMC bajo → `mantener`; `perder` con grasa ya baja → `recomposicion`). Esto **no se pregunta de nuevo** en el wizard: se explica en resultados con el aviso correspondiente (`WARN_IMC_BAJO_NO_DEFICIT`, `WARN_YA_MAGRO`, etc.), nunca como un error del usuario.
 
@@ -363,15 +393,15 @@ Sin pantalla adicional: se usa directamente CUN-BAE. Microcopy de confirmación 
 
 **Ayuda contextual:** "El ritmo no es solo una preferencia: cuanta menos grasa tengas de partida, menos margen hay para ir rápido sin perder músculo. Ajustaremos el número final a un rango seguro para tu caso."
 
-**Nota si `'tca' ∈ condiciones`:** las tres opciones siguen visibles y con el mismo estilo (no se sanciona ni se delata la respuesta del paso 5b), pero si el usuario elige algo distinto de "suave" el motor lo fuerza a suave **sea cual sea el objetivo** (`[Paso 6.7]`, incondicional; coincide con la consecuencia 1 de §1.2.5b). No es solo prosa: en `ganar`, `ritmo_ef` selecciona la fila de la tabla 3.8 (novato suave 10 % frente a agresivo 20 %), así que forzarlo cambia también el plan de quien no está perdiendo peso. Bajo las opciones se muestra un texto que **no menciona el paso 5b ni la ansiedad**, porque el cribado también se activa con "Prefiero no responder" y nombrarlo revelaría el motivo: "Ajustaremos el ritmo final a lo que sea seguro para tu caso; puede que apliquemos el más suave aunque elijas otro." El mismo texto, palabra por palabra, se muestra a cualquier usuario cuyo ritmo pueda verse recortado por los suelos de seguridad, de modo que su presencia no distingue a nadie.
+**Nota fija bajo las opciones (se muestra siempre, a todo el mundo):** "Ajustaremos el ritmo final a lo que sea seguro para tu caso; puede que apliquemos el más suave aunque elijas otro." El motor puede recortar el ritmo elegido por varias vías —los suelos de seguridad del `[Paso 7]`, la edad ≥ 65 (`[Paso 6.7]`), una regla irregular o ausente (`[Paso 6.7bis]`, v1.1) o la condición `'tca'`—, y en todas se explica después con su aviso en resultados. El texto es el mismo palabra por palabra para todos los usuarios, así que su presencia no distingue a nadie.
 
 ---
 
-### Paso 12 — Peso objetivo (condicional: se omite si `objetivo ∈ {mantener, recomposicion}` o si `cribado_tca ∈ {positivo, evitado}`)
+### Paso 12 — Peso objetivo (condicional: se omite si `objetivo ∈ {mantener, recomposicion}`)
 
 Se omite por la misma razón que el paso 11: con `mantener` o `recomposicion` el motor descarta el peso objetivo (`[Paso 6.6]`, `INFO_OBJETIVO_IGNORADO`), así que pedirlo para después responder "no lo usamos" es pedir un dato por nada. Con `objetivo = 'no_se'` **sí se pregunta**, porque el objetivo efectivo todavía no está resuelto. `INFO_OBJETIVO_IGNORADO` queda reservado para el caso en que el objetivo se reconvierte después del cuestionario (el usuario dio un peso objetivo con `perder` y el motor lo pasó a `mantener` o `recomposicion`).
 
-Con `cribado_tca ∈ {positivo, evitado}` la pantalla también se omite y `peso_objetivo = null`: el resultado no muestra peso objetivo ni cronograma (paso 5b, consecuencia 3).
+**v1.1:** la segunda condición (`cribado_tca ∈ {positivo, evitado}`) **queda retirada** con el paso 5b (decisión A). La pantalla se muestra siempre que el objetivo la necesite.
 
 **Pregunta:** "¿Tienes un peso objetivo en mente?"
 
@@ -387,19 +417,28 @@ Con `cribado_tca ∈ {positivo, evitado}` la pantalla también se omite y `peso_
 
 ---
 
-### Paso 13 — Preferencia dietética, número de comidas y clima
+### Paso 13 — Preferencias alimentarias, número de comidas y clima
 
-**Pregunta 1:** "¿Sigues alguna preferencia alimentaria?"
+**Pregunta 1 (v1.1, decisión E — tres controles, no uno).** Hasta la v1.0 solo se podía elegir **una** opción, así que un vegano sin gluten tenía que renunciar a una de las dos. Ahora la pantalla tiene tres partes:
 
-**Opciones (una sola, tarjetas):**
-- Omnívoro (como de todo)
-- Vegetariano
-- Vegano
-- Sin lactosa
-- Sin gluten
-- Low-carb (bajo en carbohidratos)
+**1a. Base (tarjetas, una sola, obligatoria):** "¿Cómo comes?"
+- "Como de todo" → `preferencia_base = 'omnivoro'` *(preseleccionada)*
+- "Vegetariano" → `preferencia_base = 'vegetariano'`
+- "Vegano" → `preferencia_base = 'vegano'`
 
-**Ayuda contextual:** "Esto cambia los alimentos de tus menús de ejemplo. En vegano y vegetariano también subimos un poco la proteína total, porque las fuentes vegetales se aprovechan algo peor."
+**1b. Restricciones (casillas, varias a la vez, opcional):** "¿Evitas algo?"
+- "Sin lactosa" → añade `'sin_lactosa'` a `restricciones`
+- "Sin gluten" → añade `'sin_gluten'` a `restricciones`
+
+**1c. Interruptor (opcional, desactivado por defecto):** título "Bajo en hidratos", descripción "Menos pan, arroz y pasta; más grasa. Cambia de verdad tus macros, no solo el menú." → `low_carb`
+
+**Ayuda contextual (1a):** "La base cambia los alimentos de tus menús. En vegano y vegetariano además subimos un poco la proteína total, porque las fuentes vegetales se aprovechan algo peor."
+**Ayuda contextual (1b):** "Puedes marcar las dos. Solo cambian los alimentos que te proponemos: tus calorías y tus macros son exactamente los mismos."
+**Ayuda contextual (1c):** "Este sí cambia los números: te subimos la grasa al 45 % de las calorías y bajamos el mínimo de hidratos. Si tienes diabetes no lo aplicaremos y te lo explicaremos en el resultado."
+
+**Compatibilidad (normativa).** La conversión a `InputCalculo` envía **los tres campos nuevos y también el antiguo** `preferencia`, con el valor de la regla inversa de `SPEC-calculo.md` §1.1 (`low_carb` → `'low_carb'`; si no, la base; si la base es omnívora y hay restricciones, la primera de ellas en el orden `sin_gluten`, `sin_lactosa`). El motor ignora `preferencia` en cuanto ve `preferencia_base`, así que el valor enviado solo importa para el código antiguo que todavía lo lea. Un borrador de `localStorage` guardado con la v1.0 —que solo tiene `preferencia`— sigue funcionando: al restaurarlo, el wizard aplica la **regla de traducción** de la §1.1 y rellena los tres controles.
+
+**Aviso de diabetes.** Si el usuario ha marcado `diabetes` en el paso 5 y activa el interruptor, **no se bloquea aquí**: se deja marcar y el motor lo anula en el `[Paso 6.8]` con `WARN_LOWCARB_DIABETES`, que se muestra en resultados con su texto íntegro. Bloquearlo en el wizard obligaría a explicar el motivo en una pantalla que no es el sitio.
 
 **Pregunta 2:** "¿Cuántas comidas al día prefieres hacer?"
 
@@ -413,7 +452,7 @@ Con `cribado_tca ∈ {positivo, evitado}` la pantalla también se omite y `peso_
 
 **Pregunta 4 (interruptor, no tarjetas):** título "¿Quieres comidas sencillas?", descripción "Menos alimentos distintos, comidas que se repiten y una compra fácil. Ideal si no quieres pensar." → `menu_sencillo` (por defecto **desactivado**). Copy literal y reglas completas en §3.7.
 
-**Validación:** preferencia y nº de comidas obligatorios; clima por defecto `No`; comidas sencillas por defecto `No`.
+**Validación:** base y nº de comidas obligatorios; restricciones por defecto ninguna; bajo en hidratos por defecto `No`; clima por defecto `No`; comidas sencillas por defecto `No`.
 
 Al pulsar "Ver mi plan" se ejecuta el motor de cálculo y se navega a Resultados.
 
@@ -425,10 +464,14 @@ Al pulsar "Ver mi plan" se ejecuta el motor de cálculo y se navega a Resultados
 
 1. Cabecera con resumen (calorías + objetivo + ritmo)
 2. Macros (proteína, grasa, carbohidratos, fibra)
+2b. **"Ajusta tus macros"** (plegado por defecto, justo debajo de las tarjetas de macro) — v1.1
+2c. **"Tu ciclo y tu plan"** (solo si `INFO_CICLO` está presente) — v1.1
 3. Hidratación
 4. Reparto por comidas (tabla)
 5. Ejemplos de menú
 6. Peso objetivo y cronograma
+6b. **Proyección** (gráfica de peso semana a semana) — v1.1
+6c. **"Tu seguimiento en este móvil"** (pesajes locales) — v1.1
 7. Qué haría un nutricionista (consejos accionables)
 8. Avisos y notas de seguridad (si aplica)
 9. Metodología (transparencia: qué fórmula se ha usado y por qué)
@@ -451,7 +494,7 @@ Debajo, una fila de 3 datos secundarios (tamaño medio, no compiten con las kcal
 - % de grasa estimado: "{rango_min}-{rango_max}%" (nunca un decimal, nunca un único número puntual) con etiqueta de fiabilidad ("estimación orientativa" / "estimación con medidas" / "dato aportado por ti")
 - Gasto energético (TDEE): "{tdee} kcal/día es lo que estimamos que quemas"
 
-**Si `cribado_tca ∈ {positivo, evitado}`** (paso 5b): la fila baja a 2 datos —IMC y TDEE—, sin el %grasa, y no se muestra el bloque §2.6. La pantalla no explica la omisión.
+**v1.1:** la regla que bajaba la fila a 2 datos y ocultaba el bloque §2.6 con `cribado_tca ∈ {positivo, evitado}` **queda retirada** (decisión A). La fila lleva siempre sus tres datos y el bloque §2.6 se muestra siempre.
 
 **Microcopy fijo bajo estos 3 datos:** "A tu gasto estimado le hemos restado un 5% como margen de seguridad, porque casi todos sobrestimamos lo que nos movemos." y "Ninguna fórmula sin aparato mide la grasa corporal exacta: por eso te damos un rango, no una cifra cerrada."
 
@@ -469,6 +512,54 @@ Cuatro tarjetas (proteína, grasa, carbohidratos, fibra), cada una con: gramos/d
 Si `INFO_PROTEINA_CAPADA` está presente, añadir bajo la tarjeta de proteína: el texto de `INFO_PROTEINA_CAPADA` de la tabla §4 con su placeholder ya resuelto: "Hemos limitado la proteína para que no supere 2,5 g/kg ni el {35/30} % de tus calorías: por encima no hay beneficio demostrado." El `{35/30}` **no es literal**: el motor baja el tope al 30 % en dieta vegetal con `kcal < 1 800` (`[Paso 8]`), y escribir un 35 % fijo afirmaría un límite distinto del aplicado. Con `'renal' ∈ condiciones` este aviso no se emite (lo suprime `WARN_RENAL`): el límite que manda es el tope renal.
 
 Bajo las 4 tarjetas, línea de cierre técnico (texto pequeño, siempre visible): "Las calorías de tus macros pueden diferir hasta 10 kcal del objetivo por el redondeo a múltiplos de 5 gramos." y azúcares libres informativos: "Como referencia, limita los azúcares añadidos a menos de {azucares_libres_max_g} g/día."
+
+### 2.2b "Ajusta tus macros" (v1.1, decisión B)
+
+**Dónde va.** Bloque plegable (`<details>` o acordeón equivalente), **cerrado por defecto**, inmediatamente debajo de las cuatro tarjetas de macro y de su línea de cierre técnico. Encabezado: **"Ajusta tus macros"**, con el subtítulo *"¿Comes menos hidratos de los que te proponemos? Cámbialos aquí."*
+
+**Qué resuelve.** Una usuaria en recomposición y acostumbrada a comer pocos hidratos seguía viendo en su plan más hidratos de los que come en su vida. El plan recomendado se quedaba en la pantalla como un número imposible en vez de convertirse en algo que se pueda seguir.
+
+**Los dos controles.** Los dos leen sus límites de `resultado.limites_ajuste` (`[Paso 18]`); la pantalla **no calcula ningún límite por su cuenta**.
+
+| Control | Tipo | Rango | Paso |
+|---|---|---|---|
+| **Hidratos** | deslizador (`<input type="range">`) con el número editable al lado | `[hc_min_ui_g, hc_max]`, donde `hc_max = roundDown5((kcal − 4·P − 9·suelo_grasa)/4)` recalculado con las kcal que haya en ese momento | 5 g |
+| **Calorías** | dos botones "−50" y "+50" con el número en medio | `[kcal_min, kcal_max]` | `kcal_paso` = 50 kcal |
+
+Bajo los controles, y actualizándose **en vivo** (llamando a `ajustarMacros` en cada cambio, que es puro y determinista), se muestran los tres macros resultantes con el mismo formato que las tarjetas de arriba: `{P} g de proteína · {G} g de grasa · {HC} g de hidratos` y `{kcal} kcal`.
+
+**Copy exacto:**
+
+- Encabezado: "Ajusta tus macros"
+- Subtítulo: "¿Comes menos hidratos de los que te proponemos? Cámbialos aquí."
+- Etiqueta del deslizador: "Hidratos al día"
+- Etiqueta del control de calorías: "Calorías al día"
+- **Nota fija sobre la proteína (siempre visible, no plegable):** "La proteína no se toca: es la que protege tu músculo cuando comes menos, y es lo último que un nutricionista recorta. Lo que cambia es la grasa, que absorbe lo que le quites o le des a los hidratos."
+- Nota fija bajo los controles: "Al mover cualquiera de los dos recalculamos todo lo que depende de ellos: el reparto por comidas, el menú de ejemplo, la lista de la compra, el calendario y el PDF."
+- Botón secundario, **siempre visible dentro del bloque**: **"Volver a lo recomendado"**. Deshabilitado mientras no haya ajuste.
+- Cuando hay ajuste activo, distintivo permanente en la cabecera del bloque y junto a la cifra grande de calorías de §2.1: **"ajustado por ti"**.
+
+**Comportamiento normativo:**
+
+1. Mover solo las calorías **no cambia los hidratos** salvo que el nuevo `hc_max` los deje fuera de rango; en ese caso el deslizador se recorta solo hasta `hc_max` y la grasa absorbe el resto. Es la consecuencia de que la grasa sea "el resto" (`[Paso 18]`).
+2. **Nada se bloquea.** Si los hidratos caen por debajo del mínimo del motor, aparece el aviso `WARN_HC_BAJO_MINIMO` con su texto íntegro dentro del propio bloque (además de en §2.8), pero el deslizador sigue funcionando.
+3. Si el extremo inferior del deslizador es mayor que 30 g, es porque el **suelo de grasa** no da para más: se muestra la nota "Con estas calorías no puedes bajar más los hidratos sin quedarte por debajo de la grasa mínima. Baja también las calorías si quieres seguir bajándolos."
+4. Al soltar el control se **regeneran** el menú de ejemplo y la lista de la compra con el `Resultado` ajustado (`generarEjemplos(inputs, resultado_ajustado)`); son funciones puras, así que no hay estado que sincronizar.
+5. El PDF descargado con un ajuste activo lleva la marca "ajustado por ti" (§4.3).
+
+**Persistencia.** Se guarda en `localStorage`, junto al plan, **solo el ajuste**, nunca el `Resultado` ajustado: clave `bascula:ajuste:v1`, contenido `{ kcal?: number, hc_g?: number }`. Al cargar la pantalla se recalcula con `ajustarMacros(resultado, ajuste_guardado)`. Se puede hacer así porque `ajustarMacros` es idempotente respecto al origen (`[Paso 18]`), y evita guardar un objeto grande que quedaría desincronizado si el usuario edita sus datos. **Al pulsar "Volver a lo recomendado" se borra la clave** y se vuelve a pintar `resultado` tal cual. Si el usuario edita sus datos y recalcula, el ajuste guardado se **descarta**: los límites del plan nuevo pueden no tener nada que ver con los del anterior.
+
+**Accesibilidad.** El deslizador lleva `aria-valuetext` con el texto completo ("140 gramos de hidratos al día"), los botones de calorías son botones reales con `aria-label` ("Bajar 50 calorías" / "Subir 50 calorías"), y el resumen de macros bajo los controles vive en una región `aria-live="polite"` para que un lector de pantalla anuncie el resultado del cambio.
+
+### 2.2c Tarjeta "Tu ciclo y tu plan" (v1.1, decisión D)
+
+**Cuándo se muestra:** exactamente cuando `INFO_CICLO` está en `resultado.avisos` (es decir, `sexo = 'mujer'` y `menstruacion ∈ {regular, irregular}`). Va justo debajo del bloque de ajuste, antes de la hidratación.
+
+**Formato:** tarjeta informativa con estilo `INFO_*` (fondo neutro, sin color de alerta), encabezado **"Tu ciclo y tu plan"** y el texto **íntegro** de `INFO_CICLO` de la tabla §4 de `SPEC-calculo.md`. La pantalla no reescribe ese texto ni lo trocea.
+
+**Lo que la tarjeta NO hace:** no cambia ningún número, y el copy lo dice con todas las letras. No hay "modo ciclo", ni calorías distintas por fase, ni ningún control asociado.
+
+Si además está `WARN_CICLO_AUSENTE`, ese aviso **no va aquí**: va en §2.8 con el resto de los `WARN_*`, con su estilo de atención y su texto íntegro. Las dos cosas pueden coexistir y dicen cosas distintas: una explica la báscula, la otra es una señal de seguridad.
 
 ### 2.3 Hidratación
 
@@ -531,8 +622,6 @@ Va **justo debajo del bloque de ejemplos de menú y de sus equivalencias**, pleg
 
 ### 2.6 Peso objetivo y cronograma
 
-**El bloque completo se omite si `cribado_tca ∈ {positivo, evitado}`** (paso 5b): ni peso objetivo, ni hito, ni cronograma, ni sustituto explicativo. El resto de la pantalla (calorías, macros, agua, reparto y menús) se muestra igual.
-
 **Qué número se enseña (regla normativa, `peso_objetivo.mostrar_central`).** El motor devuelve `mostrar_central: boolean`. Cuando es `false` —fiabilidad `baja` del %grasa, que es el caso por defecto, o un peso objetivo corregido por `WARN_OBJETIVO_GRASA_MUY_BAJA`— **no se muestra ningún número grande**: solo la franja, "entre {rango[0]} y {rango[1]} kg", con el copy "tu masa magra es una estimación con varios kilos de margen, así que te damos una franja y no un número". El valor central sigue existiendo en la salida porque el cronograma necesita un punto de llegada, pero no se presenta como "tu objetivo". Esta regla vale igual en pantalla y en el PDF (§4.5).
 
 - Si `peso_objetivo.efectivo !== null` **y** `mostrar_central === true`: número grande "{peso_objetivo.efectivo} kg" con etiqueta "tu objetivo" y, si venía de "no lo sé", nota: "Te proponemos este peso según tu altura y tu %grasa actual; puedes cambiarlo cuando quieras."
@@ -546,6 +635,69 @@ Va **justo debajo del bloque de ejemplos de menú y de sus equivalencias**, pleg
   - Nota fija `INFO_ADAPTACION`, con su texto íntegro de la tabla §4 del motor.
 - Si `cronograma === null` **por corte** (`INFO_SIN_CRONOGRAMA_SIN_MARGEN`, `INFO_CRONOGRAMA_NO_ESTIMABLE` o `INFO_CRONOGRAMA_FUERA_DE_HORIZONTE`): se muestra el texto íntegro de ese aviso en lugar de la línea de tiempo, y **no** se muestra `INFO_ADAPTACION` (el motor ya lo suprime).
 - Si `cronograma === null` (mantener/recomposición): "Con este objetivo no hay un peso al que llegar en una fecha. Reevalúa medidas, fotos y rendimiento cada 8-12 semanas." `[INFO_SIN_CRONOGRAMA]`
+
+### 2.6b Proyección (v1.1, decisión F)
+
+Va inmediatamente debajo del bloque de peso objetivo y cronograma, con el encabezado **"Cómo debería ir la cosa"** y el subtítulo *"Semana a semana, con el margen que toca."* Se pinta desde `resultado.proyeccion` (`[Paso 14b]`) y **no se calcula nada aquí**.
+
+**La gráfica (SVG propio, sin librerías).**
+
+- **Ejes.** Horizontal: semanas, de 0 al último punto del array, con marcas cada 4 semanas y etiqueta "semana {n}". Vertical: kilos, con el rango `[min(peso_min) − 1, max(peso_max) + 1]` redondeado al kilo y 4-5 marcas; la etiqueta del eje es "kg" una sola vez, arriba.
+- **Banda.** Un `<path>` relleno con el color de acento al 15-20 % de opacidad, que va por `peso_max` de izquierda a derecha y vuelve por `peso_min`. Es la banda de "entre lo optimista y lo pesimista".
+- **Curva central.** `peso_esp`, línea de 2 px del color de acento, sin puntos salvo en los hitos.
+- **Hitos.** Círculos rellenos en las semanas **4, 8 y 12** (las que existan en el array), cada uno con su etiqueta `{peso_esp} kg` encima. Son literalmente las entradas con `semana ∈ {4, 8, 12}`: no hay ningún cálculo extra.
+- **Línea del objetivo.** Si `peso_objetivo.efectivo !== null`, una línea horizontal discontinua a esa altura con la etiqueta "objetivo {x} kg".
+- **Móvil primero.** `viewBox` fijo con `preserveAspectRatio="xMidYMid meet"` y `width: 100%`, altura entre 180 y 220 px. Nada de scroll horizontal: si no caben las etiquetas del eje X, se pintan una de cada dos.
+- **Temas.** Todos los colores salen de variables CSS; la gráfica se ve igual en claro y en oscuro.
+
+**Accesibilidad (obligatoria).** El `<svg>` lleva `role="img"` y un `aria-label` con el resumen ("Proyección de peso: de 78,0 kg en la semana 0 a entre 68,0 y 68,0 kg en la semana 22"). Además, **debajo de la gráfica y siempre presente en el DOM**, un `<details>` con el rótulo "Ver los números" que contiene la **tabla equivalente** con una fila por semana y las columnas *Semana · Mínimo · Esperado · Máximo*. La tabla no es un extra: es la versión accesible de la gráfica y tiene que llevar exactamente los mismos números.
+
+**Copy fijo bajo la gráfica** (la "Nota proyección" de `SPEC-calculo.md` §4, íntegra): "Esta curva es una estimación, no una promesa: sale de tu déficit actual y de un factor de adaptación que crece con el tiempo. Tu peso real va a oscilar por agua, sal e intestino; lo que importa es la tendencia de varias semanas, no el dato de un día."
+
+**Sin cronograma** (`INFO_PROYECCION_PLANA` presente): la gráfica se pinta igual, con la banda plana de ±1 kg, y el copy fijo se sustituye por el texto íntegro de `INFO_PROYECCION_PLANA`. No se oculta el bloque: una línea plana con banda es exactamente la información correcta.
+
+Si `resultado.proyeccion` es `undefined`, el bloque **no se pinta** (y tampoco §2.6c).
+
+### 2.6c "Tu seguimiento en este móvil" (v1.1, decisión F)
+
+Debajo de la proyección, plegado por defecto. Encabezado **"Tu seguimiento en este móvil"**, con un distintivo permanente y bien visible: **"Solo en este dispositivo"**.
+
+**Copy fijo del encabezado:** "Apunta tu peso cuando te peses y lo dibujamos sobre la curva. Se guarda solo en este navegador: no hay cuenta, no hay nube y nadie más lo ve. Si borras los datos del navegador o cambias de móvil, se pierde."
+
+**Formulario.** Dos campos en una fila y un botón:
+- "Fecha" → `<input type="date">`, por defecto hoy, no admite fechas anteriores a `fecha_inicio` ni posteriores a hoy.
+- "Peso (kg)" → `<input type="number" step="0.1" min="30" max="300">`.
+- Botón primario "Añadir pesaje". Deshabilitado hasta que los dos campos son válidos.
+- Si ya existe un pesaje en esa fecha, se **sustituye** (no se duplica) y se avisa con un texto breve: "Ya tenías un pesaje ese día; lo hemos actualizado."
+
+**Lista.** Los pesajes ordenados **del más reciente al más antiguo**, una fila por pesaje: `{fecha en formato d/m/aaaa} · {kg} kg` y un botón de borrar por fila (icono con `aria-label` "Borrar el pesaje del {fecha}"). Debajo, un botón secundario "Borrar todo el seguimiento" con confirmación.
+
+**Pintado sobre la proyección.** Los pesajes se dibujan como puntos sobre la misma gráfica de §2.6b, unidos por una línea fina de un color distinto al de la curva. La semana de cada pesaje es `s = floor((fecha_pesaje − fecha_inicio) / 7 días)`, acotada a `[0, última semana de proyeccion]`. La leyenda dice "tu peso real".
+
+**Frase de balance (normativa).** Se calcula **solo con el pesaje más reciente**, contra el punto `p = proyeccion[s]` de su semana:
+
+| Objetivo | Condición | Estado |
+|---|---|---|
+| `perder` | `peso < p.peso_min` | **por delante** |
+| `perder` | `p.peso_min ≤ peso ≤ p.peso_max` | **en la banda** |
+| `perder` | `peso > p.peso_max` | **por detrás** |
+| `ganar` | `peso > p.peso_max` | **por delante** |
+| `ganar` | `p.peso_min ≤ peso ≤ p.peso_max` | **en la banda** |
+| `ganar` | `peso < p.peso_min` | **por detrás** |
+| proyección plana | `p.peso_min ≤ peso ≤ p.peso_max` | **en la banda** |
+| proyección plana | fuera de esa franja | **fuera de la banda** |
+
+**Textos exactos (uno solo, el que corresponda):**
+
+- **por delante:** "Vas por delante de la previsión: {x} kg por debajo de lo que esperábamos para la semana {n}." (en `ganar`: "por encima"). Y a continuación, siempre: "Ojo con acelerar: ir más rápido de lo previsto suele costar músculo. Si el ritmo se mantiene así, recalcula."
+- **en la banda:** "Vas dentro de lo previsto para la semana {n}. No hay nada que cambiar."
+- **por detrás:** "Vas por detrás de la previsión: {x} kg por encima de lo que esperábamos para la semana {n}." (en `ganar`: "por debajo"). Y después: "Una semana no dice nada: el peso oscila por agua, sal e intestino. Si en tres o cuatro semanas seguidas sigue así, es que el gasto estimado no era el tuyo."
+- **fuera de la banda** (proyección plana): "Tu peso se ha movido más de un kilo respecto al de partida. En un plan de mantenimiento o de recomposición eso suele ser agua; si se mantiene tres o cuatro semanas, recalcula con tu peso real."
+- **Cierre fijo, siempre, debajo de cualquiera de las anteriores:** "Recalcula tu plan cada 4-6 semanas, o antes si has cambiado 5 kg."
+
+**Reglas de honestidad:** ninguna frase promete un resultado, ninguna felicita ni regaña, ninguna usa emojis ni signos de exclamación, y **con menos de dos pesajes no se muestra ninguna frase de balance**, solo la lista (un punto suelto no es una tendencia).
+
+**Almacenamiento.** Clave `bascula:pesajes:v1`, contenido `Pesaje[]` = `{ fecha: string; kg: number }[]`, ordenado por fecha ascendente al guardar. Es el mismo array que viaja en `DatosPdf.pesajes`. Nunca sale del dispositivo.
 
 ### 2.7 "Qué haría un nutricionista" (3-5 consejos accionables)
 
@@ -569,17 +721,15 @@ Todos los `avisos` devueltos por el motor (`WARN_*` y `INFO_*`) se listan aquí,
 - `WARN_*` → caja con borde/color de atención (ámbar, nunca rojo alarmante) y texto completo del mensaje (tabla 4 de `SPEC-calculo.md`).
 - `INFO_*` → nota más discreta (fondo neutro), mismo texto completo.
 
-La regla "todos, con su texto completo" es literal y **no admite excepciones de maquetación**: la lista que llega en `resultado.avisos` se pinta entera. La protección del cribado no vive aquí, vive en el motor.
+La regla "todos, con su texto completo" es literal y **no admite excepciones de maquetación**: la lista que llega en `resultado.avisos` se pinta entera.
 
-**Protección del cribado del paso 5b (normativo).** Con `cribado_tca ∈ {positivo, evitado}` → `'tca' ∈ condiciones` → el **motor no emite** (filtro del `[Paso 17]` de `SPEC-calculo.md`): `INFO_GRASA_ESTIMADA`, `INFO_PESO_YA_MINIMO`, `INFO_IMC_MUSCULADO`, `INFO_ADAPTACION`, `WARN_YA_MAGRO`, `WARN_YA_EN_OBJETIVO`, `WARN_OBJETIVO_MUY_LEJANO`, `WARN_CRONOGRAMA_LARGO`, `INFO_SIN_CRONOGRAMA`, `INFO_SIN_CRONOGRAMA_SIN_MARGEN`, `INFO_CRONOGRAMA_NO_ESTIMABLE` e `INFO_CRONOGRAMA_FUERA_DE_HORIZONTE`. Son avisos que enuncian literalmente el %grasa, el peso objetivo o el cronograma, precisamente los tres bloques que §2.1 y §2.6 ocultan a estos usuarios: sin el filtro, quien ha dado positivo en el cribado leía en la lista de avisos "tu porcentaje de grasa es una estimación con un error típico de ±5 puntos" (sin %grasa en pantalla), "tu objetivo supone perder más del 25 % de tu peso" (sin peso objetivo) o "el calendario es una estimación" (sin calendario). Al no emitirse, la UI no tiene nada que filtrar y la regla del listado íntegro sigue siendo cierta.
-
-`INFO_RITMO_SUAVE` **sí** se lista, íntegro y con estilo `INFO_*` como cualquier otra nota: su texto de la tabla §4 es neutro y no menciona el cribado. Lo que sí sigue siendo excepción de serialización: `'tca'` no se muestra en ninguna lista de condiciones, ni en pantalla ni en el PDF, ni se serializa en ningún sitio.
+**v1.1 — el filtro del `[Paso 17]` sigue en el motor, pero la UI ya no puede activarlo.** Retirado el paso 5b, ningún camino de la interfaz produce `'tca' ∈ condiciones`, así que en la práctica la lista de avisos que llega aquí es siempre la completa. El filtro del motor se mantiene como *regla no expuesta* (`SPEC-calculo.md` §1.1) y esta pantalla no tiene que saber nada de él: pinta `resultado.avisos` entera, sea cual sea. Sigue valiendo la regla de serialización: `'tca'` no se muestra en ninguna lista de condiciones ni en pantalla ni en el PDF.
 
 **Condición de prioridad visual (normativa, escrita una sola vez y referenciada desde §4.2).** Este bloque se muestra **antes** que los ejemplos de menú (no al final) cuando hay:
 
 > cualquier `WARN_*` de condición médica —`WARN_DIABETES`, `WARN_RENAL`, `WARN_HEPATICA`, `WARN_CARDIACA`, `WARN_HIPERTENSION`, `WARN_TIROIDES`, `WARN_BARIATRICA_GLP1`, `WARN_CONDICION_OTRA`—, **o** `WARN_IMC_35` / `WARN_IMC_40`, **o** `edad ≥ 65`.
 
-La lista es la de la tabla §4 de `SPEC-calculo.md` completa, no un subconjunto: al ampliar `Condicion` (issue 22) quedaron fuera `WARN_HIPERTENSION`, `WARN_TIROIDES`, `WARN_CONDICION_OTRA` y sobre todo `WARN_BARIATRICA_GLP1`, que es la condición con más riesgo de pérdida rápida y déficit proteico y la que motivó el suelo de 1,5 g/kg. `edad ≥ 65` estaba en §4.2 y no aquí, de modo que pantalla y PDF no eran la misma instantánea. `'tca'` **no** entra en esa condición: subir de prioridad visual el bloque solo cuando hay cribado positivo lo delataría.
+La lista es la de la tabla §4 de `SPEC-calculo.md` completa, no un subconjunto: al ampliar `Condicion` (issue 22) quedaron fuera `WARN_HIPERTENSION`, `WARN_TIROIDES`, `WARN_CONDICION_OTRA` y sobre todo `WARN_BARIATRICA_GLP1`, que es la condición con más riesgo de pérdida rápida y déficit proteico y la que motivó el suelo de 1,5 g/kg. `edad ≥ 65` estaba en §4.2 y no aquí, de modo que pantalla y PDF no eran la misma instantánea. `'tca'` **no** entra en esa condición.
 
 ### 2.9 Metodología (transparencia)
 
@@ -589,7 +739,7 @@ Bloque plegable (acordeón, cerrado por defecto) "¿Cómo hemos calculado esto?"
 - Si se usó somatotipo: "El somatotipo es una forma antigua de describir la silueta corporal, pero la ciencia actual no ha demostrado que sirva para calcular calorías o macros de forma precisa. Lo hemos usado solo como un ajuste ligero entre carbohidratos y grasa (nunca en tus calorías ni tu proteína)." `[INFO_SOMATOTIPO]`
 - Referencias informativas (visibles aquí salvo por la guarda de abajo, nunca como número principal): CUN-BAE, Deurenberg, US Navy (si aplica), FFMI y categoría, fórmulas de peso ideal clásicas (Devine/Robinson/Miller/Hamwi) etiquetadas explícitamente como "otras referencias, no un objetivo".
 
-**Guarda del cribado (normativa, misma frase que §4.5).** Si `cribado_tca ∈ {positivo, evitado}`, el bloque de referencias informativas **no se muestra**: ni el %grasa por CUN-BAE, Deurenberg o US Navy, ni el FFMI, ni las cuatro fórmulas clásicas de peso ideal. El acordeón conserva solo la ecuación de BMR usada, su valor, el TDEE bruto y el TDEE final, y la nota de somatotipo si aplica. Sin esta guarda la protección se anulaba a sí misma: §2.1 oculta el %grasa y §2.6 oculta el peso objetivo, y tres bloques más abajo se imprimían tres estimaciones de %grasa y cuatro pesos ideales del mismo usuario (caso 2 de la §5 de `SPEC-calculo.md`: CUN-BAE 29,1 %, Deurenberg 27,5 %, Navy 26,4 %, Devine 56,9 / Robinson 57,4 / Miller 59,8 / Hamwi 56,4 kg). El filtro del `[Paso 17]` del motor no puede evitarlo: no son avisos, son campos de `Resultado` que decide pintar la capa de presentación, así que **esta regla se comprueba con un test de presentación** (pantalla y PDF) que falla si algún número derivado del %grasa o del peso objetivo se renderiza con `'tca' ∈ condiciones`.
+**v1.1:** la guarda del cribado que ocultaba este bloque de referencias **queda retirada** (decisión A). El acordeón se muestra completo a todo el mundo, y con él el test de presentación que la acompañaba.
 
 ### 2.10 Disclaimer y ayuda
 
@@ -597,7 +747,11 @@ Texto fijo, siempre visible (no oculto en acordeón), en la parte inferior:
 
 > "Báscula te ofrece una orientación nutricional general basada en evidencia científica, no un consejo médico ni un plan personalizado por un profesional sanitario. Los resultados son estimaciones: tu cuerpo puede responder de forma distinta. Si tienes una condición médica, tomas medicación, estás embarazada o en periodo de lactancia, o tienes antecedentes de trastornos de conducta alimentaria, consulta con un/a médico o dietista-nutricionista colegiado/a antes de seguir estas recomendaciones."
 
-Enlace discreto permanente (mismo en todas las pantallas de resultados, no solo si se detectó riesgo): "¿La comida o el peso te generan ansiedad? Habla gratis con ADANER."
+**Línea de ayuda (v1.1, normativa y literal).** Retirado el cribado del paso 5b, esta línea es **todo lo que queda** de aquella funcionalidad, y por eso su texto es fijo y no se reescribe. Va como última línea del disclaimer, en el mismo tamaño que el resto (discreta, no destacada), con `adaner.org` como enlace:
+
+> "Si la comida o el peso te generan ansiedad, puedes hablar gratis con ADANER (adaner.org) o con tu centro de salud."
+
+Se muestra **siempre**, a todo el mundo, sin depender de ninguna respuesta, y aparece exactamente igual en la última página del PDF (§4.6).
 
 ---
 
@@ -679,13 +833,35 @@ FoodQuery = {
 
 Los filtros numéricos existen porque `grupo` no basta: "alimento denso en proteína" no es un grupo (el yogur griego 0 % es `lacteo` y los garbanzos cocidos son `proteina` con 27 g de HC/100 g). Un ancla de proteína realista se expresa como `{ rol: 'proteina', proteina_min: 10, ids_preferidos: [...] }`.
 
-**Filtro por preferencia (se aplica a TODAS las `FoodQuery` antes que ningún otro criterio):**
-- `vegetariano` → excluye los alimentos sin tag `vegetariano`.
-- `vegano` → excluye los alimentos sin tag `vegano`.
-- `sin_lactosa` → excluye `grupo = 'lacteo'` sin tag `sin_lactosa`. La base incluye las variantes españolas sin lactosa (leche, yogur griego 0 %, queso fresco batido 0 %, kéfir) y los quesos curados, naturalmente por debajo de 0,1 g de lactosa, todos con ese tag, de modo que la preferencia ya no vacía el grupo entero.
-- `sin_gluten` → excluye los alimentos sin tag `sin_gluten`.
-- `low_carb` → ver el banco propio más abajo.
-- `omnivoro` → sin exclusión.
+**Filtro de alimentos (v1.1, normativo — se aplica a TODAS las `FoodQuery` antes que ningún otro criterio).** Desde la decisión E el filtro es una **conjunción** de la base y de *todas* las restricciones, no un `switch` sobre un único valor:
+
+```
+pasaFiltro(alimento) = pasaBase(alimento, resultado.preferencia_base)
+                    && restricciones.every(r => pasaRestriccion(alimento, r))
+
+pasaBase(a, 'omnivoro')    = true
+pasaBase(a, 'vegetariano') = a.tags incluye 'vegetariano'
+pasaBase(a, 'vegano')      = a.tags incluye 'vegano'
+
+pasaRestriccion(a, 'sin_lactosa') = a.grupo !== 'lacteo' || a.tags incluye 'sin_lactosa'
+pasaRestriccion(a, 'sin_gluten')  = a.tags incluye 'sin_gluten'
+```
+
+La base de alimentos incluye las variantes españolas sin lactosa (leche, yogur griego 0 %, queso fresco batido 0 %, kéfir) y los quesos curados, naturalmente por debajo de 0,1 g de lactosa, todos con el tag `sin_lactosa`, de modo que la restricción no vacía el grupo entero.
+
+**De dónde salen los tres valores.** De `Resultado`, nunca de `Inputs`: `resultado.preferencia_base`, `resultado.restricciones` y `resultado.low_carb`, que el motor publica ya normalizados (`SPEC-calculo.md` §1.1 y Paso 6.8, donde `diabetes` anula el low-carb). Si un `Resultado` antiguo no los trae, se deducen de `resultado.preferencia_efectiva` con la regla de traducción de la §1.1 aplicada a ese valor.
+
+**El banco de plantillas** lo sigue eligiendo `resultado.preferencia_efectiva` (la "regla inversa" de `SPEC-calculo.md` §1.1), que es exactamente uno de los seis de la tabla de abajo. La diferencia con la v1.0 es que **el banco ya no es lo único que filtra**: un usuario vegano + sin gluten usa el banco `vegano` y, encima, el filtro de `sin_gluten`; uno omnívoro + sin lactosa + sin gluten usa el banco `sin_gluten` (la regla inversa lo prefiere porque cambia la estructura de las plantillas) y, encima, el filtro de `sin_lactosa`.
+
+- `low_carb` (el interruptor, no un banco excluyente) → además de elegir el banco LCB-*, activa la regla propia del ancla de carbohidrato opcional descrita más abajo.
+- **Variantes `*_sl`:** cuando `'sin_lactosa' ∈ restricciones`, si una `FoodQuery` resuelve a un lácteo cuya variante `_sl` existe en `foods.json`, **se usa la variante**. Fuera de esa restricción los ids `*_sl` siguen siendo reserva y no entran en la rotación (regla de la v1.0, ahora expresada sobre `restricciones` en vez de sobre la preferencia única).
+
+**Regla de fallback con restricciones combinadas (normativa).** Si una `FoodQuery` obligatoria se queda **sin ningún alimento válido** tras la conjunción, se degrada en este orden exacto y se anota el fallback en el log:
+
+1. Se prueba la **siguiente plantilla** del mismo `rol_comida` (es el motivo (a) de la regla de elección de más abajo).
+2. Agotado el rol, se prueban las plantillas del **rol contrario** (regla 3bis).
+3. Agotado el banco, se cae al banco **`omnivoro`** con el **mismo filtro completo** (base + todas las restricciones): el fallback nunca relaja una restricción del usuario.
+4. Si ni así hay candidatos —situación que la validación de `foods.json` debe hacer imposible—, se omite esa `FoodQuery` (nunca una comida vacía) y se anota. **Bajo ninguna circunstancia se sirve un alimento que incumpla la base o una restricción**: antes se entrega una comida con un ancla menos.
 
 **Los seis bancos (normativo).** Cada preferencia tiene su banco, con 2 plantillas por rol de comida como mínimo. Los identificadores son estables porque el PDF debe reproducir el menú de la pantalla.
 
@@ -698,7 +874,7 @@ Los filtros numéricos existen porque `grupo` no basta: "alimento denso en prote
 | `sin_gluten` | **SGL-DES-1** lácteo proteico + huevo + fruta (sin cereal) · **SGL-DES-2** huevo + patata + verdura | **SGL-PRI-1** = OMN-PRI-1 con arroz/quinoa · **SGL-PRI-2** = OMN-PRI-2 (patata/boniato) | **SGL-LIG-1** = OMN-LIG-1 (tortitas de arroz llevan tag `sin_gluten`) · **SGL-LIG-2** atún + fruta |
 | `low_carb` | **LCB-DES-1** huevo + fiambre magro + verdura + aguacate · **LCB-DES-2** lácteo proteico con tag `low_carb` (yogur griego, queso batido 0 %) + frutos secos + fruta roja (fresas) | **LCB-PRI-1** carne/pescado + verdura + AOVE (**sin ancla de carbohidrato**) · **LCB-PRI-2** carne/pescado + arroz de coliflor o pan proteico + verdura + AOVE | **LCB-LIG-1** queso batido + frutos secos · **LCB-LIG-2** huevo cocido + aceitunas |
 
-**Variantes «sin lactosa».** Los ids `*_sl` de `foods.json` existen para que el filtro `sin_lactosa` no vacíe el grupo de lácteos: **solo entran en la rotación con `preferencia_efectiva === 'sin_lactosa'`**; para el resto de preferencias quedan como reserva. Sin esta regla la rotación por `n_comidas + edad` servía a usuarios omnívoros un producto más caro sin ningún motivo en su perfil.
+**Variantes «sin lactosa».** Los ids `*_sl` de `foods.json` existen para que el filtro de lactosa no vacíe el grupo de lácteos: **solo entran en la rotación cuando `'sin_lactosa' ∈ resultado.restricciones`**; en el resto de casos quedan como reserva. Sin esta regla la rotación por `n_comidas + edad` servía a usuarios omnívoros un producto más caro sin ningún motivo en su perfil. (v1.1: la condición era `preferencia_efectiva === 'sin_lactosa'`, que dejaba fuera al vegetariano sin lactosa, cuyo banco es el `vegetariano`.)
 
 **Regla propia de `low_carb`:** el ancla de carbohidrato es **opcional**. Si `hc_pendiente < 20 g` tras la proteína, la verdura y la fruta, no se añade ancla de carbohidrato y en su lugar se sube la ración de verdura al doble de `racionTipica_g` (respetando el máximo de ración). Si `hc_pendiente ≥ 20 g`, se usa un alimento con tag `low_carb` del rol `carbohidrato` (`arroz_coliflor`, `pan_proteico`); si el ancla low-carb elegida no puede cubrir `hc_pendiente` **ni con su ración máxima** (el arroz de coliflor aporta 9 g de hidrato en 300 g y el pan proteico 18 g en 100 g), se permite un cereal normal y se rebaja la ración: se escala al hidrato pendiente, con sus límites de `clampRacion`. La lectura anterior —«si ninguno pasa los filtros»— era letra muerta, porque el arroz de coliflor pasa siempre: el menú entregaba 61 g de hidrato frente a los 170 g del plan (−64 %). La antigua regla ("prioriza alimentos con tag `low_carb`") era letra muerta: cuando se escribió no había ni un solo alimento con ese tag en el grupo.
 
@@ -933,6 +1109,19 @@ Con `menu_sencillo === true`, el generador sustituye la rotación de §3.2 por e
 
 Ninguna lista tiene más de 16 candidatos y ningún menú usa los 16: el tope duro de la regla 1 son los **12 alimentos distintos** que llegan a la lista de la compra. `patata_cocida` no es un candidato de `low_carb`: entra solo como vía de escape de §3.2, con el tope de una toma al día de la regla 3.
 
+**Restricciones combinadas en el banco sencillo (v1.1, normativo).** La tabla de arriba está indexada por `preferencia_efectiva` (el banco), que con la decisión E puede llevar solo una parte de lo que el usuario ha pedido. La lista de candidatos efectiva se construye así, en este orden:
+
+1. Se parte de la fila de `resultado.preferencia_efectiva`.
+2. **Sustitución por variante sin lactosa:** si `'sin_lactosa' ∈ restricciones`, cada id cuya variante `_sl` exista se cambia por ella (`queso_fresco_batido_0` → `queso_fresco_batido_0_sl`), conservando su posición en la lista.
+3. **Filtrado:** se retira todo candidato que no pase la conjunción base + todas las restricciones de §3.2.
+4. **Relleno si un rol se queda corto** (menos de **2** candidatos en `proteina` o en `carbohidrato`, o **0** en `grasa`, `verdura` o `fruta`), en este orden y parando en cuanto se llega al mínimo:
+   a. se añaden, por su orden, los candidatos de la fila **`omnivoro`** de la tabla que sí pasen el filtro;
+   b. si aún falta, se añaden alimentos de `foods.json` que pasen el filtro y el rol, ordenados por `id` (`localeCompare('es')`) para que siga siendo determinista, hasta llegar al mínimo;
+   c. si ni así se llega, **el modo sencillo se desactiva para ese usuario**: se genera el menú con la rotación normal de §3.2 (que sí tiene toda la base disponible), `Ejemplos.modo_sencillo` queda en `false` y se anota el fallback en el log. Nunca se sirve un alimento que incumpla la base o una restricción para salvar el modo sencillo.
+5. El **tope de 12 alimentos distintos** de la regla 1 se mantiene intacto en todos los casos, y su test también.
+
+Dos ejemplos que la implementación debe reproducir: `vegano + sin_gluten` deja el rol carbohidrato en `arroz_blanco_cocido` y `patata_cocida` (fuera `avena_copos` y `pan_integral`, sin tag `sin_gluten`), que son 2 y por tanto no dispara el relleno; `vegetariano + sin_lactosa` sustituye los dos lácteos por sus variantes (`queso_fresco_batido_0` → `queso_fresco_batido_0_sl` y `yogur_griego_0` → `yogur_griego_0_sl`, las dos existen en `foods.json`) y deja los cinco candidatos de proteína en pie, sin disparar ningún relleno.
+
 **Cada preferencia lleva dos anclas de proteína.** Las tomas grandes (mucha proteína en pocas kcal) no caben en una sola ancla sin pasarse de los límites de ración de §3.3, así que las plantillas principales y los desayunos declaran `ancla_proteina_2`, y al menos una de las dos es de **baja densidad energética** (kcal por gramo de proteína): la lenteja en `omnivoro`, `sin_lactosa` y `sin_gluten`; el queso fresco batido 0 % en `vegetariano`; el tofu y la soja texturizada en `vegano`; el huevo en `low_carb`. Con una sola ancla, las tomas de proteína alta se quedaban a treinta puntos porcentuales del objetivo.
 
 #### 3.7.3 Lista de la compra semanal (normativo)
@@ -1000,8 +1189,8 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
 ### 4.0 Principios
 
 - El PDF es una **instantánea fiel** de la pantalla de resultados en el momento de la descarga: mismos números, mismos avisos, mismo ejemplo de menú (el que estuviera activo, no uno aleatorio nuevo). "Fiel" es una obligación verificable: todo número visible en pantalla tiene que estar también en el PDF. Las páginas 3 y 5 recogen los bloques que la v1 dejaba fuera (azúcares libres, MLG, metodología ampliada, marca de objetivo reconvertido).
-- **Única excepción, y es en sentido contrario:** el PDF nunca contiene el cribado del paso 5b ni `'tca'` en ninguna lista, y con `'tca' ∈ condiciones` el motor tampoco emite los avisos que enunciarían el %grasa, el peso objetivo o el cronograma —los bloques que §2.1 y §2.6 ocultan— (lista cerrada en §2.8 y en el `[Paso 17]` de `SPEC-calculo.md`). El aviso que sí aparece es `INFO_RITMO_SUAVE`, con su texto íntegro, que no menciona la causa. No es un recorte de información del plan: es la contrapartida de lo que se le promete al usuario en la pantalla donde se le pregunta.
-- Formato A4, orientación vertical, tipografía legible (mínimo 10pt cuerpo de texto), **6-8 páginas**. El límite original (4-6) no era compatible con el contenido que las §4.2-§4.6 obligan a imprimir: los nueve vectores de la §5 salían en 6-8 páginas ya antes de añadir la tabla de equivalencias que exige la §4.4. Se han fundido la página de peso objetivo/consejos/referencias y la de avisos en un solo flujo (sin salto forzado) y se ha compactado el interlineado; el test de integración del exportador falla si algún vector pasa de 8 páginas. **Con la página de lista de la compra de §4.4b el rango pasa a 6-9 páginas y el test, a 9**: la lista es una página entera y no se puede fundir con los menús, porque está pensada para imprimirse suelta y llevarla al supermercado.
+- **Única excepción, y es en sentido contrario:** `'tca'` nunca aparece en ninguna lista de condiciones del PDF. Desde la v1.1 esa excepción es teórica —la interfaz ya no puede producir ese valor (decisión A)—, pero la regla de serialización se mantiene escrita.
+- Formato A4, orientación vertical, tipografía legible (mínimo 10pt cuerpo de texto), **6-8 páginas**. El límite original (4-6) no era compatible con el contenido que las §4.2-§4.6 obligan a imprimir: los nueve vectores de la §5 salían en 6-8 páginas ya antes de añadir la tabla de equivalencias que exige la §4.4. Se han fundido la página de peso objetivo/consejos/referencias y la de avisos en un solo flujo (sin salto forzado) y se ha compactado el interlineado; el test de integración del exportador falla si algún vector pasa de 8 páginas. **Con la página de lista de la compra de §4.4b el rango pasa a 6-9 páginas y el test, a 9**: la lista es una página entera y no se puede fundir con los menús, porque está pensada para imprimirse suelta y llevarla al supermercado. **Con la proyección y el seguimiento de la v1.1 (§4.5b) el rango pasa a 6-10 páginas y el test, a 10**: los dos bloques van en la misma página de peso objetivo y cronograma cuando caben, y en una página propia cuando no.
 - Cada bloque de contenido lleva su fuente/cita si aplica (p. ej. "Mifflin-St Jeor, 1990"), en letra pequeña al pie del bloque, no como nota académica invasiva.
 - El PDF nunca omite el disclaimer completo ni los avisos activos: no es una versión "resumida y sin avisos" del resultado.
 
@@ -1015,10 +1204,13 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
 
 ### 4.2 Página 2 — Resumen de datos y resultados
 
-- Tabla de datos de entrada: sexo, edad, altura, peso, **%grasa (rango + método) salvo la guarda de abajo**, actividad diaria, entrenamiento (tipo/días/duración/intensidad), objetivo, ritmo, preferencia dietética, nº de comidas.
-- Bloque de resultados clave (igual que la cabecera de la pantalla de resultados, sección 2.1): kcal, IMC + categoría, **%grasa rango salvo la guarda de abajo**, TDEE.
-- **Guarda del cribado (normativa, misma regla que §2.1 y §4.5).** Si `cribado_tca ∈ {positivo, evitado}`, la fila "%grasa (rango + método)" de la tabla de datos de entrada y el "%grasa rango" del bloque de resultados clave **se omiten**, igual que §2.1 los omite en pantalla: la tabla queda con sexo, edad, altura, peso, actividad, entrenamiento, objetivo, ritmo, preferencia y nº de comidas, y el bloque de resultados clave con kcal, IMC + categoría y TDEE. Sin esta guarda el PDF reimprimía en la página 2 exactamente el dato que la pantalla acababa de ocultar.
-- Si hay algún aviso de condición médica (`WARN_DIABETES`, `WARN_RENAL`, `WARN_HEPATICA`, `WARN_CARDIACA`, `WARN_HIPERTENSION`, `WARN_TIROIDES`, `WARN_BARIATRICA_GLP1`, `WARN_CONDICION_OTRA`), o `WARN_IMC_35` / `WARN_IMC_40`, o `edad ≥ 65`: sección destacada **"Avisos para tu caso"** en esta misma página, antes de seguir con el plan (según instrucción explícita de la investigación), con el texto completo de cada aviso relevante. Es **la misma condición, palabra por palabra, que la de prioridad visual de §2.8**, para que pantalla y PDF sigan siendo "la misma instantánea" que exige §4.0. `'tca'` **no** activa esta sección ni aparece en la tabla de datos de entrada (§1.2, paso 5b).
+- Tabla de datos de entrada: sexo, edad, altura, peso, %grasa (rango + método), actividad diaria, entrenamiento (tipo/días/duración/intensidad), objetivo, ritmo, **preferencias alimentarias** y nº de comidas.
+- **Preferencias alimentarias (v1.1).** Ya no es una sola fila con un valor: se imprime como "{base}{, sin lactosa}{, sin gluten}{ · bajo en hidratos}" a partir de `resultado.preferencia_base`, `resultado.restricciones` y `resultado.low_carb` — nunca de `inputs.preferencia`, que puede no reflejar lo que el usuario marcó. Ejemplo: "Vegano, sin gluten · bajo en hidratos".
+- **Prioridad de recomposición (v1.1).** Con `objetivo_efectivo === 'recomposicion'` y `recomposicion_prioridad !== 'equilibrado'`, la fila de objetivo lleva el matiz: "Recomposición · prioridad: perder grasa" o "· prioridad: ganar músculo".
+- **Regla (v1.1).** `menstruacion` **no se imprime nunca** en la tabla de datos de entrada. Sus consecuencias sí (la tarjeta de §4.3b y los avisos de la última página), pero el dato en sí es innecesario en un documento que el usuario imprime o comparte.
+- Bloque de resultados clave (igual que la cabecera de la pantalla de resultados, sección 2.1): kcal, IMC + categoría, %grasa rango, TDEE.
+- **v1.1:** la guarda del cribado que omitía el %grasa de esta página **queda retirada** (decisión A). La tabla y el bloque de resultados clave se imprimen completos siempre.
+- Si hay algún aviso de condición médica (`WARN_DIABETES`, `WARN_RENAL`, `WARN_HEPATICA`, `WARN_CARDIACA`, `WARN_HIPERTENSION`, `WARN_TIROIDES`, `WARN_BARIATRICA_GLP1`, `WARN_CONDICION_OTRA`), o `WARN_IMC_35` / `WARN_IMC_40`, o `edad ≥ 65`: sección destacada **"Avisos para tu caso"** en esta misma página, antes de seguir con el plan (según instrucción explícita de la investigación), con el texto completo de cada aviso relevante. Es **la misma condición, palabra por palabra, que la de prioridad visual de §2.8**, para que pantalla y PDF sigan siendo "la misma instantánea" que exige §4.0. `'tca'` **no** activa esta sección ni aparece en la tabla de datos de entrada (regla de serialización, §4.0).
 - Si el objetivo se reconvirtió (`INFO_OBJETIVO_RESUELTO` o cualquier `WARN_*` de reconversión), etiqueta "Ajustado automáticamente" junto al objetivo, con el texto del aviso debajo — la misma marca que muestra la pantalla en §2.1.
 
 ### 4.3 Página 3 — Macros y agua
@@ -1028,6 +1220,14 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
 - **Línea de azúcares libres** (estaba solo en pantalla): "Como referencia, limita los azúcares añadidos a menos de {azucares_libres_max_g} g/día."
 - Bloque de hidratación, idéntico al de §2.3: **la franja "entre {rango_min} y {rango_max} ml al día" como cifra principal** y "{agua_ml} ml de referencia, ≈ {vasos} vasos" como línea secundaria, más la "Nota agua" de `SPEC-calculo.md` §4 reproducida íntegra (incluidas la frase del 20–30 % de agua de los alimentos y la del sodio/electrolitos). Si el motor no da objetivo de agua (`renal` o `cardiaca`, `[Paso 12]`), en su lugar va el texto del aviso correspondiente, nunca una cifra.
 - Nota de metodología corta: fórmula de BMR usada y por qué (Mifflin-St Jeor / Katch-McArdle), con el número de TDEE bruto y el TDEE final tras el margen del 5%.
+
+**Marca de plan ajustado (v1.1, decisión B).** Si `resultado.ajuste` está presente, esta página lleva, **encima de las cuatro tarjetas de macro**, una banda bien visible: **"Plan ajustado por ti"**, y debajo, en letra normal, qué se movió: *"Has cambiado {los hidratos / las calorías / las calorías y los hidratos} respecto a lo que te propusimos. Lo que te propusimos era: {kcal_recomendada} kcal y {hc_recomendado_g} g de hidratos."* Los dos números salen de `resultado.limites_ajuste`. La misma marca aparece junto a las calorías de la portada (§4.1) y en el pie de cada página, para que un PDF ajustado no pueda confundirse con uno recomendado. El texto íntegro de `INFO_AJUSTE_MANUAL` va, como cualquier otro aviso, en la última página.
+
+La nota de cierre de kcal dice **"hasta 25 kcal"** en vez de "hasta 10 kcal" cuando `resultado.ajuste` está presente (`SPEC-calculo.md` §4, "Nota cierre kcal").
+
+### 4.3b Tarjeta "Tu ciclo y tu plan" (v1.1, decisión D)
+
+Si `INFO_CICLO` está entre los avisos, se imprime la tarjeta de §2.2c **en la página 3, debajo del bloque de hidratación**, con el mismo encabezado y el texto íntegro del aviso. Si no cabe, pasa entera a la página siguiente; nunca se parte ni se resume. `WARN_CICLO_AUSENTE`, si existe, va donde van todos los `WARN_*`: en la sección destacada de la página 2 (es un aviso de seguridad) **y** en el listado íntegro de la última página, como cualquier otro.
 
 ### 4.4 Página 4 — Reparto por comidas y ejemplos de menú
 
@@ -1047,21 +1247,33 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
 - Al pie, las tres notas fijas de `compra.notas`, íntegras y en orden.
 - **Nunca lleva precios** (§3.7): un precio impreso en un PDF que el usuario guarda meses envejece mucho peor que un gramaje.
 - Si no hay menú (`renal` o `hepatica`, §3.1) o `ejemplos.compra` es `undefined`, **la página no se imprime**; no se sustituye por ningún texto, porque §4.4 ya explica por qué no hay menú.
-- El límite de 6-8 páginas de §4.0 pasa a ser **6-9** con esta página: el test de integración del exportador falla si algún vector se pasa de 9.
+- El límite de 6-8 páginas de §4.0 pasa a ser **6-9** con esta página (y **6-10** con la proyección y el seguimiento de §4.5b): el test de integración del exportador falla si algún vector se pasa de 10.
 
 ### 4.5 Página 5 — Peso objetivo, cronograma y consejos
 
 - Si aplica: peso objetivo (sugerido o dado por el usuario), hito intermedio si existe, cronograma con rango de semanas y fechas, nota `INFO_ADAPTACION`. Se aplican **las mismas dos reglas de presentación que en pantalla (§2.6)**: con `peso_objetivo.mostrar_central === false` se imprime solo la franja "entre X e Y kg", sin número grande; y con `cronograma.precision_fecha === 'mes'` se imprimen mes y año en vez de fechas exactas, y el bloque principal es el primer tramo de 12 semanas (`tramo_12sem`), no el horizonte completo.
-- Si no aplica (mantener/recomposición): nota `INFO_SIN_CRONOGRAMA`. Si el bloque se omite por el cribado del paso 5b, no se imprime ni el peso objetivo ni ninguna nota que lo sustituya.
+- Si no aplica (mantener/recomposición): nota `INFO_SIN_CRONOGRAMA`.
 - Bloque "Qué haría un nutricionista": los 3-5 consejos seleccionados (sección 2.7), en formato de lista con viñetas.
-- **Bloque "Otras referencias" (nuevo, cierra el hueco de §4.0).** Reproduce la metodología ampliada de §2.9, que la v1 dejaba solo en pantalla: %grasa por CUN-BAE, Deurenberg y US Navy (las que apliquen), masa libre de grasa (`mlg`, que es la base del suelo de disponibilidad energética citado en `WARN_SUELO_CALORICO_EA`), FFMI con su categoría, y las cuatro fórmulas clásicas de peso ideal (Devine, Robinson, Miller, Hamwi). Encabezado obligatorio del bloque: "Otras referencias, no son un objetivo." Si el %grasa está oculto por el cribado del paso 5b, este bloque se omite entero.
+- **Bloque "Otras referencias" (nuevo, cierra el hueco de §4.0).** Reproduce la metodología ampliada de §2.9, que la v1 dejaba solo en pantalla: %grasa por CUN-BAE, Deurenberg y US Navy (las que apliquen), masa libre de grasa (`mlg`, que es la base del suelo de disponibilidad energética citado en `WARN_SUELO_CALORICO_EA`), FFMI con su categoría, y las cuatro fórmulas clásicas de peso ideal (Devine, Robinson, Miller, Hamwi). Encabezado obligatorio del bloque: "Otras referencias, no son un objetivo." (v1.1: la guarda del cribado que omitía este bloque queda retirada.)
+
+### 4.5b Proyección y seguimiento (v1.1, decisión F)
+
+Va **justo después** del cronograma de §4.5, en la misma página si cabe y en una página propia si no (con eso el límite de §4.0 sube a 10 páginas).
+
+- **Título:** "Cómo debería ir la cosa". Debajo, el subtítulo de §2.6b.
+- **La gráfica.** El mismo SVG de §2.6b, con la misma banda, la misma curva, los mismos hitos de 4, 8 y 12 semanas y la misma línea de objetivo. `@react-pdf/renderer` no admite SVG arbitrario del DOM, así que se dibuja con sus primitivas (`Svg`, `Path`, `Line`, `Circle`, `Text`) a partir de los mismos `resultado.proyeccion` y las mismas fórmulas de escala: no se recalcula ningún peso.
+- **Tabla equivalente, obligatoria.** Debajo de la gráfica, la tabla de *Semana · Mínimo · Esperado · Máximo* con **una fila por semana**, la misma que la pantalla esconde tras "Ver los números". En el PDF no se esconde: es un documento impreso y la tabla es lo que sobrevive a una fotocopia en blanco y negro.
+- **Copy fijo:** la "Nota proyección" de `SPEC-calculo.md` §4, íntegra; o el texto de `INFO_PROYECCION_PLANA` cuando la proyección es plana.
+- **Seguimiento.** Si `datos.pesajes` existe y tiene **al menos un** pesaje, se imprimen los puntos sobre la gráfica y, debajo, la lista de pesajes (*fecha · kg*) en orden cronológico. Con **dos o más** se imprime además la frase de balance de §2.6c, elegida con la misma tabla de reglas y con su cierre fijo. Con `datos.pesajes` vacío o ausente **no se imprime nada de esto**, ni un hueco ni una nota.
+- **Etiqueta obligatoria del bloque de seguimiento:** "Estos pesajes estaban guardados solo en tu móvil el {fecha de generación}. Este PDF es la única copia que sale de él."
+- Si `resultado.proyeccion` es `undefined`, la sección entera **no se imprime**.
 
 ### 4.6 Última página — Avisos completos y disclaimer
 
-- Listado completo de todos los avisos (`WARN_*` e `INFO_*`) activos, con su texto íntegro (no resumido), agrupados visualmente en "Avisos importantes" (WARN) y "Notas informativas" (INFO). Sin excepciones de texto ni de maquetación: el PDF pinta íntegra la lista de `resultado.avisos`. `INFO_RITMO_SUAVE` cae en el grupo de notas informativas por ser `info`, y su texto de la tabla §4 ya es neutro. La protección del cribado del paso 5b la aplica el motor, no el exportador: con `'tca' ∈ condiciones` no llegan aquí `INFO_GRASA_ESTIMADA`, `INFO_PESO_YA_MINIMO`, `INFO_IMC_MUSCULADO`, `INFO_ADAPTACION`, `WARN_YA_MAGRO`, `WARN_YA_EN_OBJETIVO`, `WARN_OBJETIVO_MUY_LEJANO`, `WARN_CRONOGRAMA_LARGO`, `INFO_SIN_CRONOGRAMA`, `INFO_SIN_CRONOGRAMA_SIN_MARGEN`, `INFO_CRONOGRAMA_NO_ESTIMABLE` e `INFO_CRONOGRAMA_FUERA_DE_HORIZONTE` (filtro del `[Paso 17]`, ver §2.8).
+- Listado completo de todos los avisos (`WARN_*` e `INFO_*`) activos, con su texto íntegro (no resumido), agrupados visualmente en "Avisos importantes" (WARN) y "Notas informativas" (INFO). Sin excepciones de texto ni de maquetación: el PDF pinta íntegra la lista de `resultado.avisos`. `INFO_RITMO_SUAVE` cae en el grupo de notas informativas por ser `info`. El exportador no filtra nada: cualquier protección vive en el motor (`[Paso 17]`, ver §2.8).
 - El aviso `WARN_MENU_PROTEINA_VEGETAL` y la nota de fibra, si el generador los ha emitido (§3.3), se listan aquí igual que el resto.
 - Disclaimer legal completo (texto íntegro de la sección 2.10 de este documento / sección 3 de la investigación).
-- Enlace de ayuda TCA/ADANER, siempre presente, no condicionado a haber marcado riesgo.
+- **Línea de ayuda (v1.1, literal y siempre presente):** "Si la comida o el peso te generan ansiedad, puedes hablar gratis con ADANER (adaner.org) o con tu centro de salud." Es la misma frase, palabra por palabra, que la §2.10 de la pantalla, y no depende de ninguna respuesta del cuestionario.
 - Pie: fecha de generación, versión del motor de cálculo (para poder reproducir el cálculo si el usuario vuelve más adelante con datos distintos).
 
 ---
@@ -1076,7 +1288,11 @@ Este documento no redefine ningún número, fórmula, suelo, techo ni tabla del 
 
 | Lo que usa este documento | Dónde vive en el motor |
 |---|---|
-| `cribado_tca` como entrada que alimenta `condiciones` | §0.3 e `InputCalculo`, §1 fila 17, normalizado en el Paso 0 |
+| `cribado_tca` (v1.1: ya no lo escribe la UI; regla no expuesta) | §0.3 e `InputCalculo`, §1 fila 17, normalizado en el Paso 0 |
+| `recomposicion_prioridad`, `menstruacion`, `preferencia_base`, `restricciones`, `low_carb` | §1 filas 19-23 y §1.1 (regla de traducción y regla inversa) |
+| `Resultado.proyeccion` | Paso 14b |
+| `Resultado.limites_ajuste`, `Resultado.ajuste` y `ajustarMacros` | Paso 18 |
+| `Resultado.preferencia_base` / `.restricciones` / `.low_carb` para el filtro de menús | Paso 6.8 y §1.1 |
 | `INFO_RITMO_SUAVE` (sustituye al antiguo `WARN_TCA`, texto ya neutro) | §4 y Paso 6.7 |
 | `WARN_CARDIACA` | §4 y Paso 8 |
 | `WARN_PROTEINA_TOMA_ALTA` y `WARN_PROTEINA_POR_TOMA` (sin la fórmula "con tantas comidas") | §4 y Paso 16 |
@@ -1162,3 +1378,18 @@ viven en `SPEC-calculo.md` o en `verify-vectors.mjs` se registran en el §7 de a
 | 12 | MINOR | **Aceptado (aplicado)** | §5 gana una fila diciendo que `condiciones` y `peso_kg` se leen de `InputCalculo`, no de `Resultado`, y §3.1 precisa que la lista de condiciones es la **cruda del usuario**, no la normalizada del Paso 0, para que `'tca'` no llegue nunca al módulo de menús. Mismo texto en `CONTRATO.md`. |
 | 2, 3, 9, 13, 14, 15, 16, 17 | — | Fuera de alcance | Su ubicación principal es `SPEC-calculo.md` / `verify-vectors.mjs`: ver el registro de la ronda 2 en `SPEC-calculo.md` §7. |
 
+
+---
+
+### v1.1 — decisiones A-F del feedback real de usuarios (2026-09-07)
+
+| # | Decisión | Dónde se implementa en este documento |
+|---|---|---|
+| A | Fuera el cribado del paso 5b | §1.0 (barra de progreso), §1.1 (mapa), §1.2 paso 5b (retirada y motivos), paso 6.C, paso 11, paso 12, §2.1, §2.6, §2.8, §2.9, §2.10 (línea de ADANER), §4.0, §4.2, §4.5, §4.6 |
+| B | Ajuste manual de macros | §2.0 (bloque 2b), **§2.2b** (panel completo: controles, copy, "Volver a lo recomendado", persistencia, accesibilidad), §4.1 y §4.3 (marca "ajustado por ti") |
+| C | Recomposición con prioridad | §1.1 (mapa), paso 10 (subpregunta dentro de la pantalla), §4.2 (matiz en la fila de objetivo) |
+| D | Regla | §1.1 (mapa), **paso 3b** (pantalla nueva), §2.0 (bloque 2c), **§2.2c** (tarjeta), §4.3b |
+| E | Preferencias combinables | §1.1 (mapa), **paso 13** (base + restricciones + interruptor y compatibilidad), **§3.2** (filtro como conjunción y regla de fallback), **§3.7.2** (banco sencillo con restricciones combinadas), §4.2 |
+| F | Proyección y seguimiento | §2.0 (bloques 6b y 6c), **§2.6b** (gráfica SVG y tabla accesible), **§2.6c** (pesajes locales y frase de balance), **§4.5b** |
+
+**Reglas de reparto entre documentos que siguen valiendo.** Este documento no define ningún número del motor: la proyección, los límites del ajuste, el déficit de recomposición y el efecto de la regla viven en `SPEC-calculo.md` (pasos 6.7bis, 7, 9, 14b y 18) y aquí solo se pintan. Lo único que este documento define por su cuenta sigue siendo el módulo de menús de la §3 — al que la v1.1 añade el filtro por restricciones combinadas y su regla de fallback, que tampoco son números del motor.

@@ -1,5 +1,7 @@
-// Verificador / implementacion de referencia de docs/SPEC-calculo.md (v1.1, revision adversaria 2026-09-07).
-// Implementacion LITERAL de la spec: pasos 0-17, tablas 3.x, avisos §4, reglas de supresion.
+// Verificador / implementacion de referencia de docs/SPEC-calculo.md (v1.1, decisiones A-F 2026-09-07).
+// Implementacion LITERAL de la spec: pasos 0-18, tablas 3.x, avisos §4, reglas de supresion.
+// v1.1: prioridad de recomposicion (C), regla (D), preferencias combinables (E), proyeccion (F)
+// y ajuste manual `ajustarMacros` (B, paso 18).
 //
 //   node docs/verify-vectors.mjs            -> vectores §5 + barrido de invariantes
 //   node docs/verify-vectors.mjs --json 1   -> Resultado completo del Caso 1 en JSON
@@ -65,8 +67,12 @@ const PERI = {
 const CRONO_CORTE = ['INFO_SIN_CRONOGRAMA','INFO_SIN_CRONOGRAMA_SIN_MARGEN','INFO_CRONOGRAMA_NO_ESTIMABLE','INFO_CRONOGRAMA_FUERA_DE_HORIZONTE'];
 const TCA_OCULTOS = ['INFO_GRASA_ESTIMADA','INFO_PESO_YA_MINIMO','INFO_IMC_MUSCULADO','INFO_ADAPTACION',
   'WARN_YA_MAGRO','WARN_YA_EN_OBJETIVO','WARN_OBJETIVO_MUY_LEJANO','WARN_CRONOGRAMA_LARGO',
-  'INFO_SIN_CRONOGRAMA','INFO_SIN_CRONOGRAMA_SIN_MARGEN','INFO_CRONOGRAMA_NO_ESTIMABLE','INFO_CRONOGRAMA_FUERA_DE_HORIZONTE'];
+  'INFO_SIN_CRONOGRAMA','INFO_SIN_CRONOGRAMA_SIN_MARGEN','INFO_CRONOGRAMA_NO_ESTIMABLE','INFO_CRONOGRAMA_FUERA_DE_HORIZONTE',
+  'INFO_PROYECCION_PLANA'];
+// familia del cronograma: el paso 18 la retira entera y la vuelve a emitir con las kcal ajustadas
+const CRONO_FAMILIA = ['INFO_ADAPTACION','WARN_CRONOGRAMA_LARGO', ...CRONO_CORTE, 'INFO_PROYECCION_PLANA'];
 const SUPRESION = [
+  ['WARN_KCAL_AJUSTE_ALTA', ['WARN_DEFICIT_MINIMO']],
   ['INFO_OBJETIVO_IGNORADO', ['WARN_OBJETIVO_INCOHERENTE']],
   ['WARN_IMC_BAJO_NO_DEFICIT', ['WARN_YA_MAGRO']],
   ['WARN_YA_EN_OBJETIVO', ['WARN_YA_MAGRO']],
@@ -76,6 +82,88 @@ const SUPRESION = [
   ['INFO_AGUA_NO_PRESCRITA', ['WARN_AGUA_ALTA','INFO_AGUA_MAYORES']],
   ...CRONO_CORTE.map((c) => [c, ['INFO_ADAPTACION','WARN_CRONOGRAMA_LARGO']]),
 ];
+
+// ---------------------------------------------------------------- proyeccion (Paso 14, F)
+const SEM_PROYECCION_MAX = 26;      // tope duro de la curva con cronograma
+const SEM_PROYECCION_PLANA = 12;    // semanas de la proyeccion plana (mantener / recomposicion)
+const BANDA_PLANA_KG = 1;           // +-1 kg de oscilacion normal
+const HC_MIN_AJUSTE = 30;           // suelo del deslizador de hidratos del paso 18 (§3.1)
+
+/** Curva con banda, consistente por construccion con [semanas[0], semanas[1]] del cronograma. */
+function proyeccionCurva(PC, gana, delta_kg, ritmo_kg_sem, factor_adapt, diet_breaks, sem_tope) {
+  const S = Math.min(sem_tope, SEM_PROYECCION_MAX);
+  const out = [];
+  for (let s = 0; s <= S; s++) {
+    // 1 semana a mantenimiento por cada 8 de dieta (MATADOR): 9 semanas de calendario por ciclo
+    const descansos = diet_breaks > 0 ? Math.min(diet_breaks, Math.floor(s / 9)) : 0;
+    const s_ef = Math.max(0, s - descansos);
+    const f = 1 + 0.25 * Math.min(s_ef / 26, 2);                  // adaptacion CRECIENTE
+    const rapido = Math.min(ritmo_kg_sem * s_ef, delta_kg);                          // regla lineal
+    const lento  = Math.min(ritmo_kg_sem * s_ef / factor_adapt, delta_kg);           // adaptacion del cronograma
+    const esp    = Math.min(ritmo_kg_sem * s_ef / Math.min(f, factor_adapt), delta_kg);
+    out.push(gana
+      ? { semana:s, peso_min:round1(PC + lento),  peso_esp:round1(PC + esp), peso_max:round1(PC + rapido) }
+      : { semana:s, peso_min:round1(PC - rapido), peso_esp:round1(PC - esp), peso_max:round1(PC - lento) });
+  }
+  return out;
+}
+
+/** Proyeccion plana: sin cronograma lo esperable es que el peso no cambie (+-1 kg de agua/sal). */
+function proyeccionPlana(PC) {
+  const out = [];
+  for (let s = 0; s <= SEM_PROYECCION_PLANA; s++) {
+    const b = s === 0 ? 0 : BANDA_PLANA_KG;
+    out.push({ semana:s, peso_min:round1(PC - b), peso_esp:round1(PC), peso_max:round1(PC + b) });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- Paso 14 (reutilizable)
+// Se extrae en una funcion porque el Paso 18 (ajuste manual) tiene que rehacerlo LITERALMENTE
+// con las kcal ajustadas: cualquier divergencia entre las dos copias seria un bug silencioso.
+function paso14(obje, PC, peso_obj_ef, TDEE, kcal, fecha_inicio, w) {
+  let cronograma = null;
+  let proyeccion = null;
+  if (obje === 'mantener' || obje === 'recomposicion' || peso_obj_ef === null) {
+    w('INFO_SIN_CRONOGRAMA');
+  } else {
+    const delta_kcal = obje === 'perder' ? TDEE - kcal : kcal - TDEE;
+    const delta_kg   = obje === 'perder' ? PC - peso_obj_ef : peso_obj_ef - PC;
+    if (delta_kg < 0.5) w('INFO_SIN_CRONOGRAMA_SIN_MARGEN');
+    else if (delta_kcal < 50) w('INFO_CRONOGRAMA_NO_ESTIMABLE');
+    else {
+      const ritmo_kg_sem = delta_kcal * 7 / 7700;
+      if (ritmo_kg_sem < 0.05) w('INFO_CRONOGRAMA_NO_ESTIMABLE');
+      else {
+        const ritmo_pct_sem = ritmo_kg_sem / PC * 100;
+        const sem_lineal = delta_kg / ritmo_kg_sem;
+        const factor_adapt = 1 + 0.25 * Math.min(sem_lineal / 26, 2);
+        const sem_min = Math.ceil(sem_lineal);
+        const sem_max = Math.ceil(sem_lineal * factor_adapt);
+        const diet_breaks = (obje === 'perder' && sem_lineal > 10) ? Math.floor(sem_lineal/8) : 0;
+        let semanas = [sem_min + diet_breaks, sem_max + diet_breaks];
+        const horizonte_max = (obje === 'ganar') ? 20 : 104;
+        if (semanas[0] > horizonte_max) w('INFO_CRONOGRAMA_FUERA_DE_HORIZONTE');
+        else {
+          if (semanas[1] > horizonte_max) { semanas = [semanas[0], horizonte_max]; w('WARN_CRONOGRAMA_LARGO'); }
+          const precision_fecha = (semanas[1] > 16) ? 'mes' : 'dia';
+          const tramo_12sem = (semanas[1] > 16)
+            ? [round05(ritmo_kg_sem * 12 / factor_adapt), round05(ritmo_kg_sem * 12)] : null;
+          if (semanas[1] > 52) w('WARN_CRONOGRAMA_LARGO');
+          cronograma = { ritmo_kg_sem, ritmo_pct_sem, delta_kg, semanas, diet_breaks,
+            fecha_min: addDays(fecha_inicio, 7*semanas[0]),
+            fecha_max: addDays(fecha_inicio, 7*semanas[1]),
+            precision_fecha, tramo_12sem };
+          w('INFO_ADAPTACION');
+          proyeccion = proyeccionCurva(PC, obje === 'ganar', delta_kg,
+            ritmo_kg_sem, factor_adapt, diet_breaks, semanas[1]);
+        }
+      }
+    }
+  }
+  if (proyeccion === null) { proyeccion = proyeccionPlana(PC); w('INFO_PROYECCION_PLANA'); }
+  return { cronograma, proyeccion };
+}
 
 function clasificarSomatotipo(s) {
   if (!s) return 'mesomorfo';
@@ -112,7 +200,40 @@ const DOM = {
   preferencia: ['omnivoro','vegetariano','vegano','sin_lactosa','sin_gluten','low_carb'],
   condicion: ['diabetes','renal','hepatica','tca','cardiaca','hipertension','tiroides','bariatrica','glp1','otra'],
   cribado_tca: ['positivo','evitado','negativo'],
+  // v1.1
+  recomposicion_prioridad: ['perder','equilibrado','ganar'],
+  menstruacion: ['regular','irregular','ausente','no_dice'],
+  preferencia_base: ['omnivoro','vegetariano','vegano'],
+  restriccion: ['sin_lactosa','sin_gluten'],
 };
+
+// §1 "regla de traduccion": normaliza el trio base/restricciones/low_carb desde cualquiera de los
+// dos formatos de entrada. Con `preferencia_base` presente, `preferencia` deja de leerse.
+function normalizarPreferencias(I) {
+  if (I.preferencia_base === undefined || I.preferencia_base === null) {
+    return {
+      pref_base: ['omnivoro','vegetariano','vegano'].includes(I.preferencia) ? I.preferencia : 'omnivoro',
+      restr: I.preferencia === 'sin_lactosa' ? ['sin_lactosa'] : I.preferencia === 'sin_gluten' ? ['sin_gluten'] : [],
+      low_carb: I.preferencia === 'low_carb',
+    };
+  }
+  const rr = Array.isArray(I.restricciones) ? I.restricciones : [];
+  return {
+    pref_base: I.preferencia_base,
+    restr: DOM.restriccion.filter((x) => rr.includes(x)),   // sin duplicados y en orden canonico
+    low_carb: I.low_carb === true,
+  };
+}
+
+// §1 "regla inversa": el banco de plantillas / `preferencia_efectiva` a partir del trio efectivo.
+function bancoDe(pref_base, restr, low_carb) {
+  if (low_carb) return 'low_carb';
+  if (pref_base === 'vegano') return 'vegano';
+  if (pref_base === 'vegetariano') return 'vegetariano';
+  if (restr.includes('sin_gluten')) return 'sin_gluten';
+  if (restr.includes('sin_lactosa')) return 'sin_lactosa';
+  return 'omnivoro';
+}
 
 function validar(I) {
   const e = [];
@@ -136,6 +257,14 @@ function validar(I) {
   if (!Array.isArray(I.condiciones) || I.condiciones.some(c => !DOM.condicion.includes(c))) e.push('condiciones');
   if (I.cribado_tca !== null && I.cribado_tca !== undefined && !DOM.cribado_tca.includes(I.cribado_tca)) e.push('cribado_tca');
   if (![2,3,4,5,6].includes(I.n_comidas)) e.push('n_comidas');
+  // --- v1.1: campos opcionales; ausente o null siempre es valido
+  const opc = (v, dom, campo) => { if (v !== undefined && v !== null && !dom.includes(v)) e.push(campo); };
+  opc(I.recomposicion_prioridad, DOM.recomposicion_prioridad, 'recomposicion_prioridad');
+  opc(I.menstruacion, DOM.menstruacion, 'menstruacion');
+  opc(I.preferencia_base, DOM.preferencia_base, 'preferencia_base');
+  if (I.restricciones !== undefined && I.restricciones !== null
+      && (!Array.isArray(I.restricciones) || I.restricciones.some((r) => !DOM.restriccion.includes(r)))) e.push('restricciones');
+  if (I.low_carb !== undefined && I.low_carb !== null && typeof I.low_carb !== 'boolean') e.push('low_carb');
   // --- enteros y fecha
   if (!Number.isInteger(I.edad)) e.push('edad');
   if (!Number.isInteger(T0.dias_semana)) e.push('entrenamiento.dias_semana');
@@ -184,6 +313,10 @@ function calcular(I) {
   // ---- Paso 0 — exclusiones (el cribado alimenta `condiciones` antes de nada)
   let condiciones = (I.condiciones || []).slice();
   if ((I.cribado_tca === 'positivo' || I.cribado_tca === 'evitado') && !condiciones.includes('tca')) condiciones.push('tca');
+  // normalizacion de preferencias (§1, regla de traduccion). Se hace aqui, antes de la primera
+  // exclusion, para que todo el documento pueda hablar de `pref_base` / `restr` / `low_carb`.
+  const { pref_base, restr, low_carb: low_carb_pedido } = normalizarPreferencias(I);
+  const menstruacion = I.sexo === 'mujer' ? (I.menstruacion ?? null) : null;   // en hombres se ignora
   const IMC = PC / h2;
   if (I.edad < 18 || I.edad > 75) return { excluido:'EXCL_EDAD' };
   if (I.embarazo_lactancia === true) return { excluido:'EXCL_EMBARAZO_LACTANCIA' };
@@ -293,11 +426,23 @@ function calcular(I) {
     if (ritmo_ef === 'agresivo') ritmo_ef = 'moderado';
     w('WARN_PERDIDA_MAYOR_65');
   }
+  // 6.7bis REGLA (solo mujeres): unico efecto numerico, el ritmo agresivo pasa a moderado.
+  // El aviso WARN_CICLO_AUSENTE se evalua en el paso 17, contra el objetivo efectivo FINAL.
+  if (menstruacion === 'irregular' || menstruacion === 'ausente') {
+    if (ritmo_ef === 'agresivo') ritmo_ef = 'moderado';
+  }
 
-  let pref = I.preferencia;
-  if (condiciones.includes('diabetes') && pref === 'low_carb') { pref = 'omnivoro'; w('WARN_LOWCARB_DIABETES'); }
+  // 6.8 preferencias: el interruptor low-carb es lo unico que la diabetes anula
+  let low_carb_ef = low_carb_pedido;
+  if (condiciones.includes('diabetes') && low_carb_ef) { low_carb_ef = false; w('WARN_LOWCARB_DIABETES'); }
+  const pref = bancoDe(pref_base, restr, low_carb_ef);          // = preferencia_efectiva
 
   let objetivo_efectivo = obj;
+  const recomp_prio = (I.recomposicion_prioridad ?? 'equilibrado');
+  // exencion de la regla de margen: quien pide recomposicion priorizando ganar musculo pide
+  // explicitamente CERO deficit; convertirlo en 'mantener' con WARN_SIN_MARGEN_DEFICIT seria
+  // contarle que "no podemos proponerte un deficit" cuando es justo lo que ha pedido.
+  const recomp_sin_deficit = (objetivo_efectivo === 'recomposicion' && recomp_prio === 'ganar');
 
   // ---- Paso 7
   let cap_pct = (banda === 'muy_alto') ? 0.30 : 0.25;
@@ -313,7 +458,10 @@ function calcular(I) {
     const sup_pct = perfil !== 'fuerza' ? 0.05 : SUP_T[exp][ritmo_ef];
     kcal_calc = TDEE + clamp(sup_pct * TDEE, 150, 500);
   } else if (objetivo_efectivo === 'recomposicion') {
-    kcal_calc = TDEE * (1 - RECOMP_T[banda]);
+    let d = RECOMP_T[banda];
+    if (recomp_prio === 'perder') { d = Math.min(d + 0.05, 0.15); w('INFO_RECOMP_PRIORIDAD_PERDER'); }
+    else if (recomp_prio === 'ganar') { d = 0; w('INFO_RECOMP_PRIORIDAD_GANAR'); }
+    kcal_calc = TDEE * (1 - d);
   } else kcal_calc = TDEE;
 
   if (IMC < 18.5) kcal_calc = Math.max(kcal_calc, TDEE);   // prohibicion dura de balance negativo
@@ -338,7 +486,7 @@ function calcular(I) {
   let kcal = suelo_activo ? roundUp10(kcal_calc) : round10(kcal_calc);
 
   // primera pasada de la regla de margen (los pasos 9 y 10 aun pueden subir kcal -> paso 10bis)
-  if ((objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion') && kcal >= TDEE - 50) {
+  if (!recomp_sin_deficit && (objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion') && kcal >= TDEE - 50) {
     objetivo_efectivo = 'mantener';
     kcal = round10(Math.max(TDEE, kcal));
     w('WARN_SIN_MARGEN_DEFICIT');
@@ -357,8 +505,8 @@ function calcular(I) {
   if ((objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion') && (banda === 'muy_bajo' || banda === 'bajo')) gkg += 0.2;
   if (I.edad >= 60) gkg = Math.max(gkg, perfil === 'fuerza' ? 1.6 : 1.2);
   if (condiciones.includes('bariatrica') || condiciones.includes('glp1')) gkg = Math.max(gkg, 1.5);
-  if (pref === 'vegano') gkg = gkg * 1.15;
-  if (pref === 'vegetariano') gkg = gkg * 1.10;
+  if (pref_base === 'vegano') gkg = gkg * 1.15;      // la BASE dietetica, no el banco
+  if (pref_base === 'vegetariano') gkg = gkg * 1.10;
   gkg = Math.min(gkg, IMC >= 30 ? 2.0 : 2.4);
   if (condiciones.includes('hepatica')) w('WARN_HEPATICA');
   if (condiciones.includes('diabetes')) w('WARN_DIABETES');
@@ -369,10 +517,11 @@ function calcular(I) {
   if (condiciones.includes('otra')) w('WARN_CONDICION_OTRA');
 
   const es_renal = condiciones.includes('renal');
-  const pctCap = () => ((pref === 'vegano' || pref === 'vegetariano') && kcal < 1800) ? 0.30 : 0.35;
+  const pctCap = () => ((pref_base === 'vegano' || pref_base === 'vegetariano') && kcal < 1800) ? 0.30 : 0.35;
   const capP = () => Math.min(2.5 * PC, pctCap() * kcal / 4);
 
   const P_raw = gkg * base;
+  const pct_cap = pctCap();          // el que de verdad se aplica en el paso 8 (§4, placeholder {35/30})
   let P_cap = capP();
   let P = Math.min(P_raw, P_cap);
   P = Math.max(P, 0.8 * PC);
@@ -396,12 +545,12 @@ function calcular(I) {
   let P_min = calcPmin();
 
   // ---- Paso 9
-  const pct_grasa = pref === 'low_carb' ? 0.45
+  const pct_grasa = low_carb_ef ? 0.45
     : objetivo_efectivo === 'perder' ? (ritmo_ef === 'agresivo' ? 0.25 : 0.28)
-    : objetivo_efectivo === 'recomposicion' ? 0.28
+    : objetivo_efectivo === 'recomposicion' ? (recomp_prio === 'perder' ? 0.33 : 0.28)
     : objetivo_efectivo === 'mantener' ? 0.32 : 0.27;
   const suelo_gkg = hombre ? 0.7 : 0.8;
-  const pctTecho = pref === 'low_carb' ? 0.50 : 0.40;
+  const pctTecho = low_carb_ef ? 0.50 : 0.40;
   const sueloG = () => Math.max(suelo_gkg * base, 0.20 * kcal / 9);
   const techoG = () => pctTecho * kcal / 9;
   let suelo_g = sueloG(), techo_g = techoG();
@@ -423,15 +572,15 @@ function calcular(I) {
   const soma = clasificarSomatotipo(I.somatotipo);
   const delta = 0.10 * (kcal - 4*P) / 9;
   let G1;
-  if (pref !== 'low_carb' && soma === 'endomorfo') { G1 = Math.min(G0 + delta, techo_g); w('INFO_SOMATOTIPO'); }
-  else if (pref !== 'low_carb' && soma === 'ectomorfo') { G1 = Math.max(G0 - delta, suelo_g); w('INFO_SOMATOTIPO'); }
+  if (!low_carb_ef && soma === 'endomorfo') { G1 = Math.min(G0 + delta, techo_g); w('INFO_SOMATOTIPO'); }
+  else if (!low_carb_ef && soma === 'ectomorfo') { G1 = Math.max(G0 - delta, suelo_g); w('INFO_SOMATOTIPO'); }
   else G1 = G0;
   let G = round5(G1);
   if (G < suelo_g) G = roundUp5(suelo_g);
   if (G > techo_g) G = roundDown5(techo_g);
 
   // ---- Paso 10
-  const HC_min = pref === 'low_carb' ? 75 : 130;
+  const HC_min = low_carb_ef ? 75 : 130;
   let HC;
   for (let it = 0; ; it++) {
     // Un bucle que no converge es un FALLO del motor, no una salida valida (§ paso 10):
@@ -454,7 +603,7 @@ function calcular(I) {
   const cierre_ok = Math.abs(kcal_cierre - kcal) <= 0.02 * kcal;
 
   // ---- Paso 10bis — segunda pasada de la regla de margen, contra las kcal ya cerradas
-  if ((objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion') && kcal >= TDEE - 50) {
+  if (!recomp_sin_deficit && (objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion') && kcal >= TDEE - 50) {
     objetivo_efectivo = 'mantener';
     w('WARN_SIN_MARGEN_DEFICIT');
   }
@@ -462,7 +611,7 @@ function calcular(I) {
 
   // ---- Paso 11
   const fibra_prop = 14 * kcal / 1000;
-  const suelo_fibra = pref === 'low_carb' ? Math.max(20, 10 * kcal / 1000) : Math.min(25, 0.15 * HC);
+  const suelo_fibra = low_carb_ef ? Math.max(20, 10 * kcal / 1000) : Math.min(25, 0.15 * HC);
   const fibra = Math.round(clamp(fibra_prop, suelo_fibra, 40));
   if (fibra < 25) w('INFO_FIBRA_AJUSTADA');
   const azucares_libres_max_g = 0.10 * kcal / 4;
@@ -574,42 +723,10 @@ function calcular(I) {
   }
 
   // ---- Paso 14
-  let cronograma = null;
-  if (objetivo_efectivo === 'mantener' || objetivo_efectivo === 'recomposicion' || peso_obj_ef === null) {
-    w('INFO_SIN_CRONOGRAMA');
-  } else {
-    const delta_kcal = objetivo_efectivo === 'perder' ? TDEE - kcal : kcal - TDEE;
-    const delta_kg   = objetivo_efectivo === 'perder' ? PC - peso_obj_ef : peso_obj_ef - PC;
-    if (delta_kg < 0.5) w('INFO_SIN_CRONOGRAMA_SIN_MARGEN');
-    else if (delta_kcal < 50) w('INFO_CRONOGRAMA_NO_ESTIMABLE');
-    else {
-      const ritmo_kg_sem = delta_kcal * 7 / 7700;
-      if (ritmo_kg_sem < 0.05) w('INFO_CRONOGRAMA_NO_ESTIMABLE');
-      else {
-        const ritmo_pct_sem = ritmo_kg_sem / PC * 100;
-        const sem_lineal = delta_kg / ritmo_kg_sem;
-        const factor_adapt = 1 + 0.25 * Math.min(sem_lineal / 26, 2);
-        const sem_min = Math.ceil(sem_lineal);
-        const sem_max = Math.ceil(sem_lineal * factor_adapt);
-        const diet_breaks = (objetivo_efectivo === 'perder' && sem_lineal > 10) ? Math.floor(sem_lineal/8) : 0;
-        let semanas = [sem_min + diet_breaks, sem_max + diet_breaks];
-        const horizonte_max = (objetivo_efectivo === 'ganar') ? 20 : 104;
-        if (semanas[0] > horizonte_max) w('INFO_CRONOGRAMA_FUERA_DE_HORIZONTE');
-        else {
-          if (semanas[1] > horizonte_max) { semanas = [semanas[0], horizonte_max]; w('WARN_CRONOGRAMA_LARGO'); }
-          const precision_fecha = (semanas[1] > 16) ? 'mes' : 'dia';
-          const tramo_12sem = (semanas[1] > 16)
-            ? [round05(ritmo_kg_sem * 12 / factor_adapt), round05(ritmo_kg_sem * 12)] : null;
-          if (semanas[1] > 52) w('WARN_CRONOGRAMA_LARGO');
-          cronograma = { ritmo_kg_sem, ritmo_pct_sem, delta_kg, semanas, diet_breaks,
-            fecha_min: addDays(I.fecha_inicio, 7*semanas[0]),
-            fecha_max: addDays(I.fecha_inicio, 7*semanas[1]),
-            precision_fecha, tramo_12sem };
-          w('INFO_ADAPTACION');
-        }
-      }
-    }
-  }
+  const _p14 = paso14(objetivo_efectivo, PC, peso_obj_ef, TDEE, kcal, I.fecha_inicio, w);
+  const cronograma = _p14.cronograma;
+  // regla no expuesta: con 'tca' no se publica proyeccion (la UX ocultaba peso y calendario)
+  const proyeccion = condiciones.includes('tca') ? undefined : _p14.proyeccion;
 
   // ---- Paso 15
   const FFMI = MLG / h2;
@@ -648,11 +765,17 @@ function calcular(I) {
   if (IMC >= 40) w('WARN_IMC_40');
   if (I.edad >= 60 && !es_renal) w('INFO_MAYOR_60');
   if (I.edad >= 60 && es_renal) w('INFO_MAYOR_60_RENAL');
-  if (pref === 'vegano') w('INFO_VEGANO');
+  if (pref_base === 'vegano') w('INFO_VEGANO');
   if (FFMI_norm >= (hombre?22:19) && IMC >= 25 && ['muy_bajo','bajo','medio'].includes(banda)) w('INFO_IMC_MUSCULADO');
   if (fiab === 'baja') w('INFO_GRASA_ESTIMADA');
   if (perfil !== 'sedentario' && dias * T.minutos_sesion / 60 > 10) w('INFO_ALTO_RENDIMIENTO');
   if (kcal < (hombre ? 1800 : 1500)) w('INFO_MICRONUTRIENTES');
+  // REGLA (D): la tarjeta informativa y el aviso de seguridad. Se evaluan aqui, contra el
+  // objetivo efectivo FINAL y contra el ritmo ELEGIDO (ritmo_ef ya puede venir suavizado por 6.7bis).
+  if (menstruacion === 'regular' || menstruacion === 'irregular') w('INFO_CICLO');
+  if ((menstruacion === 'irregular' || menstruacion === 'ausente')
+      && (objetivo_efectivo === 'perder' || banda === 'muy_bajo' || banda === 'bajo' || I.ritmo === 'agresivo'))
+    w('WARN_CICLO_AUSENTE');
 
   // reevaluacion contra objetivo_efectivo (los avisos del paso 6 vieron el objetivo intermedio)
   let avisos = A.slice();
@@ -667,6 +790,29 @@ function calcular(I) {
   // el %grasa, el peso objetivo o el cronograma, que la UX oculta con 'tca'
   if (condiciones.includes('tca')) avisos = avisos.filter(c => !TCA_OCULTOS.includes(c));
 
+  // ---- Paso 18 — limites del ajuste manual (se publican SIEMPRE, tambien sin ajuste).
+  // Con 'tca' no hay panel de ajuste: `limites_ajuste` queda undefined y `ajustarMacros` no hace nada.
+  const suelo_ea_aj = (banda === 'muy_alto' ? 25 : 30) * MLG + ejercicio_dia;
+  const suelo_aj = (objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion')
+    ? Math.max(suelo_sexo, BMR, suelo_ea_aj) : suelo_sexo;
+  let kcal_min_aj = roundUp10(suelo_aj);
+  let kcal_max_aj;
+  if (objetivo_efectivo === 'perder') kcal_max_aj = round10(TDEE);
+  else { kcal_min_aj = Math.max(kcal_min_aj, round10(0.80 * kcal)); kcal_max_aj = round10(1.20 * kcal); }
+  // el plan recomendado SIEMPRE cabe dentro de sus propios limites: el `round10` del paso 7 puede
+  // dejarlo hasta 5 kcal por debajo del suelo cuando el suelo no llego a activarse.
+  kcal_min_aj = Math.min(kcal_min_aj, kcal);
+  kcal_max_aj = Math.max(kcal_max_aj, kcal);
+  if (kcal_max_aj < kcal_min_aj) kcal_max_aj = kcal_min_aj;
+  const limites_ajuste = condiciones.includes('tca') ? undefined : {
+    kcal_recomendada: kcal, hc_recomendado_g: HC, grasa_recomendada_g: G,
+    kcal_min: kcal_min_aj, kcal_max: kcal_max_aj, kcal_paso: 50,
+    hc_min_ui_g: HC_MIN_AJUSTE, hc_min_motor_g: HC_min,
+    suelo_grasa_abs_g: suelo_gkg * base,
+    peso_kg: PC, fecha_inicio: I.fecha_inicio,
+    kcal_micronutrientes: hombre ? 1800 : 1500,
+  };
+
   return {
     imc: IMC, imc_categoria,
     grasa: { pct: grasa_pct, rango: grasa_rango, fiabilidad: fiab, metodo_efectivo: met_ef, banda,
@@ -680,7 +826,7 @@ function calcular(I) {
     macros: { proteina_g: P, grasa_g: G, hc_g: HC, fibra_g: fibra, azucares_libres_max_g,
               pct: { p: 4*P/kcal, g: 9*G/kcal, hc: 4*HC/kcal },
               gkg: { p: P/PC, g: G/PC, hc: HC/PC },
-              base_proteina: base_tipo, base_kg: base, somatotipo: soma },
+              base_proteina: base_tipo, base_kg: base, somatotipo: soma, pct_cap },
     agua,
     peso_objetivo: { efectivo: peso_obj_ef, sugerido: sugerido_central, mostrar_central,
                      rango: sugerido_rango, metodo: metodo_peso, hito_intermedio: hito,
@@ -689,9 +835,96 @@ function calcular(I) {
     ffmi: { valor: FFMI, normalizado: FFMI_norm, categoria: ffmi_cat },
     comidas,
     avisos,
+    // ---- v1.1
+    preferencia_base: pref_base, restricciones: restr, low_carb: low_carb_ef,
+    recomposicion_prioridad: objetivo_efectivo === 'recomposicion' ? recomp_prio : undefined,
+    proyeccion, limites_ajuste,
     // ---- campos de diagnostico del verificador (no forman parte de `Resultado`)
     _dbg: { met: MET, kcal_sesion, gkg, P_cap, suelo_g, techo_g, pesoA, cierre_ok, ejercicio_dia, MET },
   };
+}
+
+// ================================================================= Paso 18 — ajuste manual (B)
+// `ajustarMacros` NO lee `R.macros.grasa_g` ni `R.macros.hc_g`: parte siempre de los valores
+// recomendados que viajan en `limites_ajuste`, asi que es idempotente respecto al origen
+//   ajustarMacros(ajustarMacros(R, a1), a2) === ajustarMacros(R, a2)
+// y con `ajuste` vacio devuelve exactamente el plan recomendado.
+const AVISOS_AJUSTE = ['INFO_AJUSTE_MANUAL','WARN_HC_BAJO_MINIMO','WARN_KCAL_AJUSTE_ALTA'];
+
+function ajustarMacros(R, ajuste) {
+  if (!R || R.excluido || !R.limites_ajuste) return R;
+  const L = R.limites_ajuste;
+  const P = R.macros.proteina_g;                 // la PROTEINA no se toca nunca
+  const TDEE = R.tdee.valor, obje = R.objetivo_efectivo, PC = L.peso_kg;
+
+  // 1) calorias: multiplo de 10, dentro de [kcal_min, kcal_max]
+  const kcal_ped = (ajuste && ajuste.kcal !== undefined && ajuste.kcal !== null) ? ajuste.kcal : L.kcal_recomendada;
+  const kcal = clamp(round10(kcal_ped), L.kcal_min, L.kcal_max);
+
+  // 2) hidratos: multiplo de 5, entre 30 g y lo que deja el SUELO de grasa del paso 9
+  const suelo_g = Math.max(L.suelo_grasa_abs_g, 0.20 * kcal / 9);
+  // el redondeo a 5 g del paso 10 puede dejar `hc_recomendado_g` hasta 2,5 g por encima de la cota
+  // exacta: sin esta linea, "volver a lo recomendado" no devolvia el plan recomendado.
+  let hc_max = roundDown5((kcal - 4*P - 9*suelo_g) / 4);
+  if (kcal === L.kcal_recomendada) hc_max = Math.max(hc_max, L.hc_recomendado_g);
+  const hc_lo  = Math.min(L.hc_min_ui_g, hc_max);          // el suelo de grasa manda sobre los 30 g
+  const hc_ped = (ajuste && ajuste.hc_g !== undefined && ajuste.hc_g !== null) ? ajuste.hc_g : L.hc_recomendado_g;
+  const HC = clamp(round5(hc_ped), hc_lo, hc_max);
+
+  const cambia_kcal = kcal !== L.kcal_recomendada;
+  const cambia_hc   = HC   !== L.hc_recomendado_g;
+  const ajustado    = cambia_kcal || cambia_hc;
+
+  // 3) grasa = el resto. Sin ajuste se restituye EXACTAMENTE la del plan recomendado.
+  let G;
+  if (!ajustado) G = L.grasa_recomendada_g;
+  else { G = round5((kcal - 4*P - 4*HC) / 9); if (G < suelo_g) G = roundUp5(suelo_g); }
+  const kcal_cierre = 4*P + 4*HC + 9*G;
+  if (Math.abs(kcal_cierre - kcal) > 0.02 * kcal) throw new Error('paso 18: cierre kcal fuera del 2 %');
+
+  // avisos: se retira todo lo que el ajuste puede cambiar y se vuelve a evaluar
+  const REEVALUAR = [...AVISOS_AJUSTE, ...CRONO_FAMILIA, 'INFO_FIBRA_AJUSTADA', 'INFO_MICRONUTRIENTES', 'WARN_DEFICIT_MINIMO'];
+  let avisos = (R.avisos || []).filter(c => !REEVALUAR.includes(c));
+  const w = (c) => { if (!avisos.includes(c)) avisos.push(c); };
+
+  // paso 11 con las kcal y los HC ajustados
+  const fibra_prop = 14 * kcal / 1000;
+  const suelo_fibra = R.low_carb ? Math.max(20, 10 * kcal / 1000) : Math.min(25, 0.15 * HC);
+  const fibra = Math.round(clamp(fibra_prop, suelo_fibra, 40));
+  if (fibra < 25) w('INFO_FIBRA_AJUSTADA');
+  if (kcal < L.kcal_micronutrientes) w('INFO_MICRONUTRIENTES');
+
+  // paso 14 con las kcal ajustadas (misma funcion que usa `calcular`)
+  const { cronograma, proyeccion } = paso14(obje, PC, R.peso_objetivo.efectivo, TDEE, kcal, L.fecha_inicio, w);
+
+  // paso 16: mismos porcentajes y misma comida peri; la proteina por toma no cambia
+  const p = R.comidas.map(c => c.pct_kcal);
+  const i_peri = R.comidas.findIndex(c => c.peri);
+  const hcv = p.slice();
+  const argmax = (arr, skip) => { let bi=-1,bv=-Infinity; for(let i=0;i<arr.length;i++){ if(i===skip) continue; if(arr[i]>bv){bv=arr[i];bi=i;} } return bi; };
+  if (i_peri !== -1) { hcv[i_peri] += 5; hcv[argmax(p, i_peri)] -= 5; }
+  const principal = argmax(p, -1);
+  const repartir = (X, vec) => { const parts = vec.map(v => round5(X*v/100)); parts[principal] += X - parts.reduce((a,b)=>a+b,0); return parts; };
+  const P_i = repartir(P, p), G_i = repartir(G, p), HC_i = repartir(HC, hcv);
+  const comidas = R.comidas.map((c,i) => ({ ...c, proteina_g:P_i[i], grasa_g:G_i[i], hc_g:HC_i[i],
+    kcal: 4*P_i[i] + 9*G_i[i] + 4*HC_i[i] }));
+
+  // avisos propios del paso 18
+  if (ajustado) w('INFO_AJUSTE_MANUAL');
+  if (HC < L.hc_min_motor_g) w('WARN_HC_BAJO_MINIMO');
+  if (obje === 'perder' && TDEE - kcal < 100) w('WARN_KCAL_AJUSTE_ALTA');
+  if (obje === 'perder' && TDEE - kcal >= 50 && TDEE - kcal < 100) w('WARN_DEFICIT_MINIMO');
+
+  for (const [t, sup] of SUPRESION)
+    if (avisos.includes(t)) avisos = avisos.filter(c => !sup.includes(c));
+
+  const out = { ...R, kcal, kcal_cierre, comidas, cronograma, proyeccion, avisos,
+    macros: { ...R.macros, grasa_g:G, hc_g:HC, fibra_g:fibra, azucares_libres_max_g: 0.10*kcal/4,
+              pct: { p: 4*P/kcal, g: 9*G/kcal, hc: 4*HC/kcal },
+              gkg: { p: P/PC, g: G/PC, hc: HC/PC } },
+    ajuste: { kcal: cambia_kcal, hc: cambia_hc } };
+  if (!ajustado) delete out.ajuste;
+  return out;
 }
 
 // ================================================================= vectores §5
@@ -767,6 +1000,22 @@ const CASOS = [
     in:{ ...B, sexo:'mujer', edad:70, altura_cm:158, peso_kg:75, grasa:{metodo:'desconocido'},
       actividad_diaria:'ligero', entrenamiento:ent({tipo:'fuerza',dias_semana:2,minutos_sesion:40,intensidad:'baja',experiencia:'novato',momento:'manana'}),
       objetivo:'perder', ritmo:'agresivo', n_comidas:4 } },
+
+  // vectores nuevos de la v1.1
+  { n:'15', titulo:'proyeccion, regla irregular y preferencias combinables (D, E, F)',
+    in:{ ...B, sexo:'mujer', edad:34, altura_cm:168, peso_kg:78, grasa:{metodo:'desconocido'},
+      somatotipo:null, actividad_diaria:'ligero',
+      entrenamiento:ent({tipo:'fuerza',dias_semana:3,minutos_sesion:50,intensidad:'media',experiencia:'intermedio',momento:'tarde'}),
+      objetivo:'perder', ritmo:'agresivo', peso_objetivo:68, n_comidas:4,
+      preferencia_base:'omnivoro', restricciones:['sin_lactosa'], low_carb:false, menstruacion:'irregular' } },
+  { n:'16', titulo:'recomposicion con prioridad perder + ajuste manual (B, C)',
+    in:{ ...B, sexo:'mujer', edad:31, altura_cm:165, peso_kg:64, grasa:{metodo:'conocido',valor:27,fuente:'fiable'},
+      somatotipo:null, actividad_diaria:'ligero',
+      entrenamiento:ent({tipo:'fuerza',dias_semana:4,minutos_sesion:55,intensidad:'media',experiencia:'intermedio',momento:'tarde'}),
+      objetivo:'recomposicion', ritmo:'moderado', n_comidas:4,
+      preferencia_base:'omnivoro', restricciones:[], low_carb:false,
+      recomposicion_prioridad:'perder', menstruacion:'regular' },
+    ajuste:{ hc_g:120 } },
 ];
 
 // ---------------------------------------------------------------- modo --json
@@ -821,6 +1070,34 @@ for (const c of CASOS) {
   } else console.log(' crono null');
   console.log(' comidas ' + r.comidas.map(x=>`${x.nombre}@${x.hora}:${x.pct_kcal}% P${x.proteina_g} G${x.grasa_g} HC${x.hc_g} ${x.kcal}kcal${x.peri?' [peri]':''}`).join(' | '));
   console.log(' avisos ' + JSON.stringify(r.avisos.slice().sort()));
+  console.log(' pref base=' + r.preferencia_base + ' restr=' + JSON.stringify(r.restricciones)
+    + ' low_carb=' + r.low_carb + ' -> efectiva ' + r.preferencia_efectiva
+    + (r.recomposicion_prioridad ? ' | prioridad ' + r.recomposicion_prioridad : ''));
+  if (r.proyeccion) {
+    const hitos = r.proyeccion.filter(x => [0,4,8,12,26].includes(x.semana));
+    console.log(' proyeccion (' + r.proyeccion.length + ' puntos, hasta la semana ' + r.proyeccion[r.proyeccion.length-1].semana + ')');
+    console.log('   ' + hitos.map(x => `s${x.semana}: ${x.peso_min}/${x.peso_esp}/${x.peso_max}`).join(' | '));
+  } else console.log(' proyeccion undefined');
+  if (r.limites_ajuste) { const L = r.limites_ajuste;
+    console.log(` ajuste: kcal [${L.kcal_min}, ${L.kcal_max}] paso ${L.kcal_paso} | HC min UI ${L.hc_min_ui_g} motor ${L.hc_min_motor_g} | suelo grasa abs ${L.suelo_grasa_abs_g.toFixed(1)} g`);
+  }
+  if (c.ajuste) {
+    const ra = ajustarMacros(r, c.ajuste);
+    console.log(' AJUSTE ' + JSON.stringify(c.ajuste) + ' -> kcal ' + ra.kcal + ' cierre ' + ra.kcal_cierre
+      + ' | P ' + ra.macros.proteina_g + ' G ' + ra.macros.grasa_g + ' HC ' + ra.macros.hc_g + ' fibra ' + ra.macros.fibra_g
+      + ' | ajuste ' + JSON.stringify(ra.ajuste));
+    console.log('   comidas ' + ra.comidas.map(x=>`${x.nombre}:P${x.proteina_g} G${x.grasa_g} HC${x.hc_g} ${x.kcal}kcal`).join(' | '));
+    console.log('   avisos ' + JSON.stringify(ra.avisos.slice().sort()));
+    if (ra.cronograma) console.log('   crono ' + JSON.stringify(ra.cronograma.semanas) + ' ' + ra.cronograma.fecha_min + '..' + ra.cronograma.fecha_max);
+    // idempotencia respecto al origen y vuelta exacta a lo recomendado
+    const vuelta = ajustarMacros(ra, {});
+    if (vuelta.ajuste !== undefined || vuelta.kcal !== r.kcal || vuelta.macros.grasa_g !== r.macros.grasa_g
+        || vuelta.macros.hc_g !== r.macros.hc_g || vuelta.macros.fibra_g !== r.macros.fibra_g) {
+      fails++; bad.push(`Caso ${c.n}  "volver a lo recomendado" no restituye el plan original`);
+    }
+    const doble = ajustarMacros(ra, c.ajuste);
+    if (JSON.stringify(doble) !== JSON.stringify(ra)) { fails++; bad.push(`Caso ${c.n}  ajustarMacros no es idempotente`); }
+  }
   if (!d.cierre_ok) { fails++; bad.push(`Caso ${c.n}  cierre kcal fuera de tolerancia 2%`); }
   filas.push([c.n, r.kcal, m.proteina_g, m.grasa_g, m.hc_g, m.fibra_g,
     r.agua ? r.agua.ml : 'null',
@@ -855,6 +1132,12 @@ const ritmos=['suave','moderado','agresivo'];
 const prefs=['omnivoro','vegetariano','vegano','sin_lactosa','sin_gluten','low_carb'];
 const conds=[[],['renal'],['tca'],['diabetes','hepatica'],['renal','tca'],['cardiaca'],['hipertension','tiroides'],['bariatrica'],['glp1','otra']];
 const soms=[null,{q1:'fina',q2:'poca',q3:'poca',q4:'delgado'},{q1:'ancha',q2:'mucha',q3:'moderada',q4:'robusto'},{q1:'media',q2:'moderada',q3:'mucha',q4:'atletico'}];
+// v1.1: el barrido recorre los dos formatos de preferencia (antiguo y combinable) y los campos nuevos
+const bases=[null,'omnivoro','vegetariano','vegano'];
+const restrs=[[],['sin_lactosa'],['sin_gluten'],['sin_lactosa','sin_gluten']];
+const prios=[null,'perder','equilibrado','ganar'];
+const regla=[null,'regular','irregular','ausente','no_dice'];
+const ajustes=[null,{},{kcal:-9999},{kcal:9999},{hc_g:0},{hc_g:9999},{kcal:1800,hc_g:60},{hc_g:30},{kcal:2000}];
 
 const V = {};
 const viol = (k, ctx) => { (V[k] = V[k] || []).push(ctx); };
@@ -876,13 +1159,21 @@ for (let iter = 0; iter < 200000; iter++) {
     preferencia: pick(prefs), n_comidas: pick([2,3,4,5,6]), clima_caluroso: rnd()<0.3,
     embarazo_lactancia:false, condiciones: pick(conds), fecha_inicio:F, cribado_tca:null,
   };
+  const base_pick = pick(bases);
+  if (base_pick !== null) {                      // formato combinable; si no, formato antiguo
+    I.preferencia_base = base_pick;
+    I.restricciones = pick(restrs);
+    I.low_carb = rnd() < 0.25;
+  }
+  I.recomposicion_prioridad = pick(prios);
+  I.menstruacion = pick(regla);
   let r;
   try { r = calcular(I); } catch (e) { viol('EXCEPCION: ' + e.message, I); continue; }
   if (r.excluido) continue;
   n++;
   const m = r.macros, obje = r.objetivo_efectivo, deficit = (obje==='perder'||obje==='recomposicion');
   const hom = hombre, h2 = (I.altura_cm/100)**2;
-  const pref_ef = (I.condiciones.includes('diabetes') && I.preferencia === 'low_carb') ? 'omnivoro' : I.preferencia;
+  const pref_ef = r.preferencia_efectiva;          // el banco que publica el motor (regla inversa §1)
   const ctx = { ...I, kcal:r.kcal, P:m.proteina_g, G:m.grasa_g, HC:m.hc_g, obj:obje, banda:r.grasa.banda,
                 bmr:Math.round(r.bmr.valor), tdee:Math.round(r.tdee.valor) };
 
@@ -905,7 +1196,7 @@ for (let iter = 0; iter < 200000; iter++) {
   if (!I.condiciones.includes('renal') && m.proteina_g < 0.8*I.peso_kg - 0.001) viol('S5a P < 0.8 g/kg PC', ctx);
   if (m.proteina_g > 2.5*I.peso_kg + 0.001) viol('S5b P > 2.5 g/kg PC', ctx);
   // S5c techo por % kcal (solo exigible cuando el cap ha estado activo; el redondeo a 5 g admite 5 g de holgura)
-  if (!I.condiciones.includes('renal') && 4*m.proteina_g > (((pref_ef==='vegano'||pref_ef==='vegetariano')&&r.kcal<1800)?0.30:0.35)*r.kcal + 20.001
+  if (!I.condiciones.includes('renal') && 4*m.proteina_g > (((r.preferencia_base==='vegano'||r.preferencia_base==='vegetariano')&&r.kcal<1800)?0.30:0.35)*r.kcal + 20.001
       && m.proteina_g > 0.8*I.peso_kg + 5.001) viol('S5c P > techo % kcal', ctx);
   // S5d techo de g/kg de `base` (2.4 / 2.0)
   if (m.proteina_g > (I.peso_kg/h2 >= 30 ? 2.0 : 2.4) * m.base_kg + 5.001 && m.proteina_g > 0.8*I.peso_kg + 5.001)
@@ -914,18 +1205,18 @@ for (let iter = 0; iter < 200000; iter++) {
   if (I.condiciones.includes('renal') && m.proteina_g > 1.0*I.peso_kg + 0.001) viol('S6 renal P > 1.0 g/kg PC', ctx);
   // S7 grasa dentro de suelo/techo
   if (9*m.grasa_g < 0.20*r.kcal - 45.001) viol('S7a G < 20% kcal', ctx);
-  if (9*m.grasa_g > (pref_ef==='low_carb'?0.50:0.40)*r.kcal + 45.001) viol('S7b G > techo kcal', ctx);
+  if (9*m.grasa_g > (r.low_carb?0.50:0.40)*r.kcal + 45.001) viol('S7b G > techo kcal', ctx);
   // S7c la franja exacta del paso 9: suelo_g <= G <= techo_g, sin holgura de redondeo
   {
     const suelo_gkg = I.sexo === 'hombre' ? 0.7 : 0.8;
-    const pctTecho = pref_ef === 'low_carb' ? 0.50 : 0.40;
+    const pctTecho = r.low_carb ? 0.50 : 0.40;
     const suelo = Math.max(suelo_gkg * m.base_kg, 0.20 * r.kcal / 9);
     const techo = pctTecho * r.kcal / 9;
     if (m.grasa_g < suelo - 0.001) viol('S7c G < suelo_g', { ...ctx, G:m.grasa_g, suelo:suelo.toFixed(2) });
     if (m.grasa_g > techo + 0.001) viol('S7d G > techo_g', { ...ctx, G:m.grasa_g, techo:techo.toFixed(2) });
   }
   // S8 HC minimo
-  if (m.hc_g < (pref_ef==='low_carb'?75:130) - 2.501) viol('S8 HC < minimo', ctx);
+  if (m.hc_g < (r.low_carb?75:130) - 2.501) viol('S8 HC < minimo', ctx);
   // S9 cierre calorico dentro del 2%
   if (!r._dbg.cierre_ok) viol('S9 cierre kcal fuera de 2%', { ...ctx, cierre:r.kcal_cierre });
   // S10 TCA: ritmo siempre suave
@@ -1016,7 +1307,9 @@ for (let iter = 0; iter < 200000; iter++) {
   if ((I.altura_cm < 150 || I.altura_cm > 200) && r.peso_objetivo.referencias.clasicas !== null) viol('S23 clasicas fuera de 150-200 cm', ctx);
   // S24 un plan etiquetado `perder` tiene deficit real (paso 10bis): TDEE - kcal >= 50
   if (obje === 'perder' && r.tdee.valor - r.kcal < 50) viol('S24 perder sin margen de deficit', { ...ctx, def:(r.tdee.valor-r.kcal).toFixed(1) });
-  if (obje === 'recomposicion' && r.tdee.valor - r.kcal < 50) viol('S24b recomposicion sin margen de deficit', { ...ctx, def:(r.tdee.valor-r.kcal).toFixed(1) });
+  // S24b: la exencion de C ('recomposicion' con prioridad `ganar` = cero deficit por peticion expresa)
+  if (obje === 'recomposicion' && r.recomposicion_prioridad !== 'ganar' && r.tdee.valor - r.kcal < 50)
+    viol('S24b recomposicion sin margen de deficit', { ...ctx, def:(r.tdee.valor-r.kcal).toFixed(1) });
   // S24c WARN_OBJETIVO_MUY_LEJANO se evalua tambien cuando la meta la propone la app
   if (obje === 'perder' && r.peso_objetivo.efectivo !== null && !I.condiciones.includes('tca')
       && (I.peso_kg - r.peso_objetivo.efectivo)/I.peso_kg > 0.25 && !r.avisos.includes('WARN_OBJETIVO_MUY_LEJANO'))
@@ -1033,11 +1326,96 @@ for (let iter = 0; iter < 200000; iter++) {
     ...r.comidas.flatMap(c => [c.proteina_g, c.grasa_g, c.hc_g, c.kcal]),
   ];
   if (numeros.some(v => !Number.isFinite(v))) viol('S25 campo numerico NaN/no finito', ctx);
+
+  // ---------- v1.1 ----------
+  // S26 proyeccion (F): banda ordenada, arranca en el peso actual, monotona HACIA el objetivo
+  if (I.condiciones.includes('tca')) {
+    if (r.proyeccion !== undefined) viol('S26z proyeccion publicada con tca', ctx);
+  } else {
+    const pr = r.proyeccion;
+    if (!Array.isArray(pr) || pr.length < 2) viol('S26 proyeccion ausente o vacia', ctx);
+    else {
+      if (pr[0].peso_min !== round1(I.peso_kg) || pr[0].peso_esp !== round1(I.peso_kg) || pr[0].peso_max !== round1(I.peso_kg))
+        viol('S26a la semana 0 no es el peso actual', { ...ctx, p0:pr[0] });
+      for (let i = 0; i < pr.length; i++) {
+        const q = pr[i];
+        if (!(q.peso_min <= q.peso_esp + 1e-9 && q.peso_esp <= q.peso_max + 1e-9))
+          viol('S26b banda invertida', { ...ctx, q });
+        if (q.semana !== i) viol('S26c semanas no correlativas', { ...ctx, q, i });
+        if (![q.peso_min,q.peso_esp,q.peso_max].every(v => Number.isFinite(v) && v > 0))
+          viol('S26d punto de proyeccion no finito', { ...ctx, q });
+        if (i > 0) {                                        // monotonia hacia el objetivo
+          const a = pr[i-1];
+          const baja = r.cronograma && obje === 'perder', sube = r.cronograma && obje === 'ganar';
+          if (baja && (q.peso_esp > a.peso_esp + 1e-9 || q.peso_min > a.peso_min + 1e-9 || q.peso_max > a.peso_max + 1e-9))
+            viol('S26e proyeccion no monotona en perder', { ...ctx, a, q });
+          if (sube && (q.peso_esp < a.peso_esp - 1e-9 || q.peso_min < a.peso_min - 1e-9 || q.peso_max < a.peso_max - 1e-9))
+            viol('S26f proyeccion no monotona en ganar', { ...ctx, a, q });
+        }
+      }
+      // nunca se sobrepasa el objetivo, y con cronograma la curva no pasa de 26 semanas
+      if (pr.length - 1 > 26) viol('S26g proyeccion mas alla de la semana 26', ctx);
+      if (r.cronograma && r.peso_objetivo.efectivo !== null) {
+        const po = r.peso_objetivo.efectivo, ult = pr[pr.length-1];
+        if (obje === 'perder' && ult.peso_min < round1(po) - 0.051) viol('S26h proyeccion por debajo del objetivo', { ...ctx, ult, po });
+        if (obje === 'ganar'  && ult.peso_max > round1(po) + 0.051) viol('S26i proyeccion por encima del objetivo', { ...ctx, ult, po });
+      }
+      if (!r.cronograma && !r.avisos.includes('INFO_PROYECCION_PLANA')) viol('S26j proyeccion plana sin aviso', ctx);
+    }
+  }
+
+  // S27 ajuste manual (B): la proteina no se toca y la grasa nunca baja de su suelo
+  if (r.limites_ajuste) {
+    const L = r.limites_ajuste;
+    if (!(L.kcal_min <= L.kcal_max)) viol('S27 limites de kcal invertidos', { ...ctx, L });
+    if (L.kcal_min % 10 !== 0 || L.kcal_max % 10 !== 0) viol('S27a limites de kcal no multiplos de 10', { ...ctx, L });
+    if (L.kcal_min < (hom?1500:1200)) viol('S27b kcal_min por debajo del suelo por sexo', { ...ctx, L });
+    const aj = pick(ajustes);
+    if (aj !== null) {
+      let ra;
+      try { ra = ajustarMacros(r, aj); } catch (e) { viol('EXCEPCION ajustarMacros: ' + e.message, { ...ctx, aj }); ra = null; }
+      if (ra) {
+        const ma = ra.macros;
+        if (ma.proteina_g !== m.proteina_g) viol('S27c el ajuste ha tocado la proteina', { ...ctx, aj });
+        const suelo_aj = Math.max(L.suelo_grasa_abs_g, 0.20 * ra.kcal / 9);
+        if (ma.grasa_g < suelo_aj - 0.001) viol('S27d grasa ajustada por debajo del suelo', { ...ctx, aj, G:ma.grasa_g, suelo:suelo_aj.toFixed(2) });
+        if (ra.kcal < L.kcal_min || ra.kcal > L.kcal_max) viol('S27e kcal ajustadas fuera de limites', { ...ctx, aj, k:ra.kcal });
+        if (ma.hc_g < 0) viol('S27f HC ajustado negativo', { ...ctx, aj });
+        if (Math.abs(ra.kcal_cierre - ra.kcal) > 0.02 * ra.kcal) viol('S27g cierre del ajuste fuera del 2%', { ...ctx, aj });
+        const sPa = ra.comidas.reduce((a,x)=>a+x.proteina_g,0), sGa = ra.comidas.reduce((a,x)=>a+x.grasa_g,0), sHa = ra.comidas.reduce((a,x)=>a+x.hc_g,0);
+        if (sPa !== ma.proteina_g || sGa !== ma.grasa_g || sHa !== ma.hc_g) viol('S27h reparto ajustado no suma', { ...ctx, aj });
+        if (ra.comidas.some(x => x.proteina_g < 0 || x.grasa_g < 0 || x.hc_g < 0)) viol('S27i reparto ajustado con parte negativa', { ...ctx, aj });
+        if (ma.hc_g < L.hc_min_motor_g && !ra.avisos.includes('WARN_HC_BAJO_MINIMO')) viol('S27j falta WARN_HC_BAJO_MINIMO', { ...ctx, aj });
+        const ajustado = ra.ajuste !== undefined;
+        if (ajustado !== ra.avisos.includes('INFO_AJUSTE_MANUAL')) viol('S27k INFO_AJUSTE_MANUAL incoherente con `ajuste`', { ...ctx, aj });
+        // idempotencia respecto al origen
+        const doble = ajustarMacros(ra, aj);
+        if (JSON.stringify(doble.macros) !== JSON.stringify(ma) || doble.kcal !== ra.kcal)
+          viol('S27l ajustarMacros no es idempotente', { ...ctx, aj });
+        const vuelta = ajustarMacros(ra, {});
+        if (vuelta.ajuste !== undefined || vuelta.kcal !== r.kcal || vuelta.macros.grasa_g !== m.grasa_g || vuelta.macros.hc_g !== m.hc_g)
+          viol('S27m volver a lo recomendado no restituye el plan', { ...ctx, aj });
+      }
+    }
+  } else if (!I.condiciones.includes('tca')) viol('S27n falta limites_ajuste sin tca', ctx);
+
+  // S28 regla (D): la combinacion irregular/ausente nunca deja un ritmo agresivo
+  if (I.sexo === 'mujer' && (I.menstruacion === 'irregular' || I.menstruacion === 'ausente') && r.ritmo_efectivo === 'agresivo')
+    viol('S28 ritmo agresivo con regla irregular/ausente', ctx);
+  if (I.sexo === 'hombre' && (r.avisos.includes('INFO_CICLO') || r.avisos.includes('WARN_CICLO_AUSENTE')))
+    viol('S28b aviso de ciclo en un hombre', ctx);
+
+  // S29 preferencias combinables (E): la traduccion es total y coherente
+  if (!['omnivoro','vegetariano','vegano'].includes(r.preferencia_base)) viol('S29 preferencia_base invalida', ctx);
+  if (r.restricciones.some(x => !['sin_lactosa','sin_gluten'].includes(x))) viol('S29b restriccion invalida', ctx);
+  if (r.low_carb && I.condiciones.includes('diabetes')) viol('S29c low_carb no anulado con diabetes', ctx);
+  if (r.preferencia_efectiva !== bancoDe(r.preferencia_base, r.restricciones, r.low_carb))
+    viol('S29d preferencia_efectiva no es el banco de la regla inversa', ctx);
 }
 
 console.log('\n============ BARRIDO DE INVARIANTES (' + n + ' casos aleatorios) ============');
 const ks = Object.keys(V);
-if (!ks.length) console.log('OK: 0 violaciones — las 32 familias de invariantes se cumplen en los ' + n + ' casos.');
+if (!ks.length) console.log('OK: 0 violaciones — las 36 familias de invariantes se cumplen en los ' + n + ' casos.');
 else for (const kk of ks) {
   console.log(`\n!! ${kk}  (${V[kk].length} casos)`);
   console.log('   ejemplo: ' + JSON.stringify(V[kk][0]));
