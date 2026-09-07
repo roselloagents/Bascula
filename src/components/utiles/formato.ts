@@ -39,8 +39,15 @@ export function pctDeFraccion(fraccion: number): string {
   return `${num(Math.round(fraccion * 100))} %`
 }
 
-/** Lee un número escrito por una persona: acepta coma o punto decimal. */
-export function leerNumero(texto: string): number | null {
+/**
+ * Lee un número escrito por una persona: acepta coma o punto decimal.
+ *
+ * Acepta `unknown` a propósito: el borrador viene de `localStorage`, y un campo con el tipo
+ * equivocado (un número donde iba una cadena) hacía saltar `texto.trim is not a function` en pleno
+ * render y dejaba la página en blanco. Lo que no sea una cadena no es un número escrito: `null`.
+ */
+export function leerNumero(texto: unknown): number | null {
+  if (typeof texto !== 'string') return null
   const limpio = texto.trim().replace(/\s/g, '').replace(',', '.')
   if (limpio === '') return null
   if (!/^-?\d*\.?\d+$/.test(limpio)) return null

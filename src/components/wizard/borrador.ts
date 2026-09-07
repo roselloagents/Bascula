@@ -207,6 +207,96 @@ const BASES: PreferenciaBase[] = ['omnivoro', 'vegetariano', 'vegano']
 const MENSTRUACIONES: Menstruacion[] = ['regular', 'irregular', 'ausente', 'no_dice']
 const PRIORIDADES: RecomposicionPrioridad[] = ['perder', 'equilibrado', 'ganar']
 
+// ---- Validación de lo que sale de `localStorage` ------------------------
+// Nada de lo que hay ahí dentro es de fiar: lo escribió otra versión de la app (el esquema cambió
+// en la v1.1), otra pestaña, o un dedo curioso en la consola. Un solo campo con el tipo
+// equivocado —`peso_kg: 95` en vez de `'95'`— reventaba el render y dejaba la página en blanco
+// para siempre: sin botones, y cada recarga repitiéndolo. Cada campo se comprueba contra su tipo
+// y su dominio, y el que no cuadra vuelve a su valor inicial.
+
+const SEXOS: Sexo[] = ['hombre', 'mujer']
+const METODOS: MetodoGrasa[] = ['conocido', 'medidas', 'visual', 'desconocido']
+const FUENTES: FuenteGrasa[] = ['fiable', 'estimado']
+const VISUALES: CategoriaVisual[] = [
+  'muy_definido',
+  'definido',
+  'medio',
+  'muy_definida',
+  'tonificada',
+  'media',
+  'sobrepeso_visible',
+  'obesidad_visible',
+]
+const CONDICIONES: Condicion[] = [
+  'diabetes',
+  'renal',
+  'hepatica',
+  'tca',
+  'cardiaca',
+  'hipertension',
+  'tiroides',
+  'bariatrica',
+  'glp1',
+  'otra',
+]
+const ACTIVIDADES: ActividadDiaria[] = ['sedentario', 'ligero', 'moderado', 'alto', 'muy_alto']
+const TIPOS: Exclude<TipoEntrenamiento, 'ninguno'>[] = ['fuerza', 'cardio', 'mixto']
+const INTENSIDADES: Intensidad[] = ['baja', 'media', 'alta']
+const EXPERIENCIAS: Experiencia[] = ['novato', 'intermedio', 'avanzado']
+const MOMENTOS: Momento[] = ['manana', 'mediodia', 'tarde', 'noche']
+const OBJETIVOS: Objetivo[] = ['perder', 'mantener', 'ganar', 'recomposicion', 'no_se']
+const RITMOS: Ritmo[] = ['suave', 'moderado', 'agresivo']
+const N_COMIDAS: NComidas[] = [2, 3, 4, 5, 6]
+const SOMATOTIPO_ELEGIDO = ['saltar', 'responder'] as const
+const SOMA_Q1 = ['fina', 'media', 'ancha'] as const
+const SOMA_Q23 = ['poca', 'moderada', 'mucha'] as const
+const SOMA_Q4 = ['delgado', 'atletico', 'robusto'] as const
+
+/** El valor guardado si pertenece al dominio; si no, el inicial. */
+function opcion<T extends string>(valor: unknown, dominio: readonly T[], inicial: T | null): T | null {
+  return typeof valor === 'string' && (dominio as readonly string[]).includes(valor) ? (valor as T) : inicial
+}
+
+/** Los campos numéricos del cuestionario viajan como texto: un número de verdad rompe el render. */
+function texto(valor: unknown, inicial: string): string {
+  return typeof valor === 'string' ? valor : inicial
+}
+
+function booleano(valor: unknown, inicial: boolean): boolean {
+  return typeof valor === 'boolean' ? valor : inicial
+}
+
+/** Tres estados: `true`, `false` y "todavía sin contestar". */
+function booleanoOpcional(valor: unknown): boolean | null {
+  return typeof valor === 'boolean' ? valor : null
+}
+
+function entero(valor: unknown, inicial: number): number {
+  return typeof valor === 'number' && Number.isFinite(valor) ? valor : inicial
+}
+
+function objeto(valor: unknown): Record<string, unknown> {
+  return typeof valor === 'object' && valor !== null && !Array.isArray(valor)
+    ? (valor as Record<string, unknown>)
+    : {}
+}
+
+/** Las cuatro respuestas del somatotipo, cada una contra su propio dominio. Las que falten se
+ *  quedan fuera: el paso las trata como "sin contestar". */
+function somatotipoValido(valor: unknown): Partial<InputSomatotipo> {
+  const c = objeto(valor)
+  const salida: Partial<InputSomatotipo> = {}
+  const q1 = opcion(c.q1, SOMA_Q1, null)
+  const q2 = opcion(c.q2, SOMA_Q23, null)
+  const q3 = opcion(c.q3, SOMA_Q23, null)
+  const q4 = opcion(c.q4, SOMA_Q4, null)
+  if (q1) salida.q1 = q1
+  if (q2) salida.q2 = q2
+  if (q3) salida.q3 = q3
+  if (q4) salida.q4 = q4
+  return salida
+}
+
 export function cargarBorrador(): Borrador {
   const base = borradorInicial()
   try {
@@ -217,19 +307,57 @@ export function cargarBorrador(): Borrador {
     const menstruacion = datos.menstruacion as Menstruacion | undefined
     // Campos de la v1.0 que ya no existen: se leen (para traducir la preferencia) y se tiran,
     // para no volver a guardarlos en el borrador nuevo.
-    const heredado = { ...datos }
-    delete heredado.cribado
-    delete heredado.preferencia
+    // Campo a campo, contra su tipo y su dominio: lo que no cuadra vuelve al valor inicial. Los
+    // campos de la v1.0 (`cribado`, `preferencia`) no se copian; la preferencia se traduce aparte.
+    const g = objeto(datos.grasa)
+    const e = objeto(datos.entrenamiento)
     return {
       ...base,
-      ...heredado,
-      grasa: { ...base.grasa, ...(datos.grasa ?? {}) },
-      somatotipo: { ...(datos.somatotipo ?? {}) },
-      entrenamiento: { ...base.entrenamiento, ...(datos.entrenamiento ?? {}) },
-      condiciones: Array.isArray(datos.condiciones) ? datos.condiciones : [],
+      sexo: opcion(datos.sexo, SEXOS, base.sexo),
+      edad: texto(datos.edad, base.edad),
+      embarazo_lactancia: booleanoOpcional(datos.embarazo_lactancia),
       menstruacion: menstruacion && MENSTRUACIONES.includes(menstruacion) ? menstruacion : null,
+      altura_cm: texto(datos.altura_cm, base.altura_cm),
+      peso_kg: texto(datos.peso_kg, base.peso_kg),
+      condiciones: Array.isArray(datos.condiciones)
+        ? CONDICIONES.filter((c) => (datos.condiciones as unknown[]).includes(c))
+        : base.condiciones,
+      sinCondiciones: booleano(datos.sinCondiciones, base.sinCondiciones),
+      grasa: {
+        metodo: opcion(g.metodo, METODOS, base.grasa.metodo),
+        valor: texto(g.valor, base.grasa.valor),
+        fuente: opcion(g.fuente, FUENTES, base.grasa.fuente),
+        cuello_cm: texto(g.cuello_cm, base.grasa.cuello_cm),
+        cintura_cm: texto(g.cintura_cm, base.grasa.cintura_cm),
+        cadera_cm: texto(g.cadera_cm, base.grasa.cadera_cm),
+        categoria: opcion(g.categoria, VISUALES, base.grasa.categoria),
+      },
+      somatotipoElegido: opcion(datos.somatotipoElegido, SOMATOTIPO_ELEGIDO, base.somatotipoElegido),
+      somatotipo: somatotipoValido(datos.somatotipo),
+      actividad_diaria: opcion(datos.actividad_diaria, ACTIVIDADES, base.actividad_diaria),
+      entrena: booleanoOpcional(datos.entrena),
+      entrenamiento: {
+        tipo: opcion(e.tipo, TIPOS, base.entrenamiento.tipo),
+        dias_semana: entero(e.dias_semana, base.entrenamiento.dias_semana),
+        minutos_sesion: entero(e.minutos_sesion, base.entrenamiento.minutos_sesion),
+        intensidad: opcion(e.intensidad, INTENSIDADES, base.entrenamiento.intensidad),
+        experiencia: opcion(e.experiencia, EXPERIENCIAS, base.entrenamiento.experiencia),
+        momento: opcion(e.momento, MOMENTOS, base.entrenamiento.momento),
+        momentoRespondido: booleano(e.momentoRespondido, base.entrenamiento.momentoRespondido),
+      },
+      objetivo: opcion(datos.objetivo, OBJETIVOS, base.objetivo),
       recomposicion_prioridad:
         prioridad && PRIORIDADES.includes(prioridad) ? prioridad : 'equilibrado',
+      ritmo: opcion(datos.ritmo, RITMOS, base.ritmo),
+      quierePesoObjetivo: booleanoOpcional(datos.quierePesoObjetivo),
+      peso_objetivo: texto(datos.peso_objetivo, base.peso_objetivo),
+      n_comidas: N_COMIDAS.includes(datos.n_comidas as NComidas)
+        ? (datos.n_comidas as NComidas)
+        : base.n_comidas,
+      clima_caluroso: booleano(datos.clima_caluroso, base.clima_caluroso),
+      menu_sencillo: booleano(datos.menu_sencillo, base.menu_sencillo),
+      fecha_inicio: texto(datos.fecha_inicio, base.fecha_inicio),
+      peso_inicio: texto(datos.peso_inicio, base.peso_inicio),
       ...normalizarPreferencias(datos),
     }
   } catch {
@@ -285,6 +413,12 @@ export function cargarSesion(): Sesion {
  * recalcular aunque el usuario no hubiera tocado ni un dato (SPEC-ux §2.2b: el ajuste solo se
  * pierde al recalcular con datos **distintos**).
  */
+/**
+ * Guarda el paso visible. `planGenerado` vuelve a `false` a propósito: significa "lo último que
+ * el usuario tenía delante era su plan", y en cuanto se monta el cuestionario deja de ser cierto,
+ * así que la siguiente recarga devuelve al paso donde estaba y no al último. Lo que NO se pierde
+ * es `firmaPlan`: por ella se sabe que el plan guardado sigue correspondiendo a estas respuestas.
+ */
 export function guardarPasoSesion(paso: PasoId): void {
   guardarSesion({ paso, planGenerado: false, firmaPlan: cargarSesion().firmaPlan })
 }
@@ -328,6 +462,19 @@ export function pasosVisibles(borrador: Borrador): PasoId[] {
 export interface EstadoPaso {
   completo: boolean
   errores: Record<string, string>
+  /**
+   * Qué queda por contestar en los pasos con varias subpreguntas en la misma pantalla. Sin esto,
+   * el botón "Siguiente" se quedaba apagado sin ningún mensaje y sin ningún campo marcado: en
+   * 375 px la subpregunta que falta suele estar fuera de la vista.
+   */
+  falta?: string
+}
+
+/** "la intensidad, tu experiencia y el momento del día". */
+function listaFalta(partes: string[]): string | undefined {
+  if (partes.length === 0) return undefined
+  if (partes.length === 1) return partes[0]
+  return `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`
 }
 
 function enRango(texto: string, min: number, max: number): 'vacio' | 'fuera' | 'ok' {
@@ -382,7 +529,10 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
           errores.valor =
             'Revisa el dato: un porcentaje de grasa fuera de 3-70 % no es habitual. Si no estás seguro/a, elige que lo estimemos nosotros.'
         }
-        return { completo: pct === 'ok' && b.grasa.fuente !== null, errores }
+        const faltan: string[] = []
+        if (pct === 'vacio') faltan.push('tu porcentaje de grasa')
+        if (b.grasa.fuente === null) faltan.push('cómo lo mediste')
+        return { completo: pct === 'ok' && b.grasa.fuente !== null, errores, falta: listaFalta(faltan) }
       }
       if (b.grasa.metodo === 'medidas') {
         const cuello = enRango(b.grasa.cuello_cm, 25, 60)
@@ -403,9 +553,14 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
       if (b.somatotipoElegido === 'saltar') return { completo: true, errores }
       if (b.somatotipoElegido === 'responder') {
         const s = b.somatotipo
-        return { completo: Boolean(s.q1 && s.q2 && s.q3 && s.q4), errores }
+        const faltan: string[] = []
+        if (!s.q1) faltan.push('tu estructura ósea')
+        if (!s.q2) faltan.push('lo fácil que ganas grasa')
+        if (!s.q3) faltan.push('lo fácil que ganas músculo')
+        if (!s.q4) faltan.push('cómo eres sin entrenar')
+        return { completo: faltan.length === 0, errores, falta: listaFalta(faltan) }
       }
-      return { completo: false, errores }
+      return { completo: false, errores, falta: 'elegir si contestas o te saltas estas preguntas' }
     }
 
     case 'actividad':
@@ -413,10 +568,16 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
 
     case 'entrenamiento': {
       if (b.entrena === false) return { completo: true, errores }
-      if (b.entrena === null) return { completo: false, errores }
+      if (b.entrena === null) return { completo: false, errores, falta: 'decirnos si entrenas' }
       const e = b.entrenamiento
-      const completo = Boolean(e.tipo && e.intensidad && e.experiencia && e.momentoRespondido)
-      return { completo, errores }
+      const faltan: string[] = []
+      if (!e.tipo) faltan.push('qué tipo de entrenamiento haces')
+      if (!e.intensidad) faltan.push('la intensidad')
+      if (!e.experiencia) faltan.push('cuánto tiempo llevas entrenando')
+      // Se lee como opcional ("si nos lo dices...") pero no lo es: "No tengo preferencia" también
+      // es una respuesta, y hasta que no se marca una el botón no se enciende.
+      if (!e.momentoRespondido) faltan.push('si prefieres entrenar en algún momento del día')
+      return { completo: faltan.length === 0, errores, falta: listaFalta(faltan) }
     }
 
     case 'objetivo':

@@ -218,3 +218,76 @@ describe('sesión: paso actual y huella del plan', () => {
   })
 })
 
+
+// Un borrador con la forma equivocada (otra versión de la app, otra pestaña, la consola) no puede
+// llegar al render: `peso_kg: 95` en vez de `'95'` reventaba `leerNumero` y dejaba la página en
+// blanco de forma permanente, porque cada recarga volvía a leer el mismo dato roto.
+describe('borrador corrupto', () => {
+  beforeEach(() => almacen.clear())
+
+  it('los campos de texto con el tipo equivocado vuelven a su valor inicial', () => {
+    almacen.set(
+      CLAVE_ALMACEN,
+      JSON.stringify({ sexo: 'mujer', peso_kg: 95, altura_cm: null, edad: { n: 30 }, peso_objetivo: [] }),
+    )
+    const b = cargarBorrador()
+    expect(b.sexo).toBe('mujer')
+    expect(b.peso_kg).toBe('')
+    expect(b.altura_cm).toBe('')
+    expect(b.edad).toBe('')
+    expect(b.peso_objetivo).toBe('')
+  })
+
+  it('los valores fuera de dominio vuelven a su valor inicial', () => {
+    almacen.set(
+      CLAVE_ALMACEN,
+      JSON.stringify({
+        sexo: 'otro',
+        objetivo: 'adelgazar',
+        ritmo: 'brutal',
+        actividad_diaria: 42,
+        n_comidas: 9,
+        condiciones: ['renal', 'inventada', 7],
+        somatotipoElegido: 'quizas',
+      }),
+    )
+    const b = cargarBorrador()
+    expect(b.sexo).toBeNull()
+    expect(b.objetivo).toBeNull()
+    expect(b.ritmo).toBeNull()
+    expect(b.actividad_diaria).toBeNull()
+    expect(b.n_comidas).toBe(borradorInicial().n_comidas)
+    expect(b.condiciones).toEqual(['renal'])
+    expect(b.somatotipoElegido).toBeNull()
+  })
+
+  it('los objetos anidados con basura no se cuelan', () => {
+    almacen.set(
+      CLAVE_ALMACEN,
+      JSON.stringify({
+        grasa: { metodo: 'conocido', valor: 22, fuente: 'inventada', categoria: 'gordo' },
+        entrenamiento: { tipo: 'crossfit', dias_semana: 'tres', minutos_sesion: 45, momento: 'siesta' },
+        somatotipo: { q1: 'fina', q2: 'gigante', q4: 'atletico' },
+      }),
+    )
+    const b = cargarBorrador()
+    const inicial = borradorInicial()
+    expect(b.grasa.metodo).toBe('conocido')
+    expect(b.grasa.valor).toBe('')
+    expect(b.grasa.fuente).toBeNull()
+    expect(b.grasa.categoria).toBeNull()
+    expect(b.entrenamiento.tipo).toBeNull()
+    expect(b.entrenamiento.dias_semana).toBe(inicial.entrenamiento.dias_semana)
+    expect(b.entrenamiento.minutos_sesion).toBe(45)
+    expect(b.entrenamiento.momento).toBeNull()
+    expect(b.somatotipo).toEqual({ q1: 'fina', q4: 'atletico' })
+  })
+
+  it('un borrador que no es un objeto no rompe nada', () => {
+    for (const crudo of ['null', '[]', '"hola"', '17', '{']) {
+      almacen.set(CLAVE_ALMACEN, crudo)
+      expect(() => cargarBorrador()).not.toThrow()
+      expect(cargarBorrador().sexo).toBeNull()
+    }
+  })
+})
