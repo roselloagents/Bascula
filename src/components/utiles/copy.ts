@@ -69,6 +69,10 @@ export const NOTA_MENU =
 export const NOTA_VERDURA_FRUTA =
   'Las verduras y las frutas son intercambiables entre sí sin recalcular nada.'
 
+/** [SPEC] SPEC-ux §3.7.2: en modo sencillo el menú es fijo, así que no se ofrece otro ejemplo. */
+export const NOTA_SENCILLO_SIN_OTRO_EJEMPLO =
+  'Has pedido comidas sencillas, así que este menú es fijo: son siempre los mismos platos, alternando dos versiones de cada comida. Si quieres más variedad, vuelve al cuestionario y desactiva "comidas sencillas".'
+
 // ---- Frases explicativas de cada macro (SPEC-ux §2.2) --------------------
 
 export const FRASES_MACRO = {

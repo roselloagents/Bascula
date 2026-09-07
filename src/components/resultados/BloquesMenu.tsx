@@ -2,9 +2,10 @@
 
 import type { Ejemplos, InputCalculo } from '../../engine/types'
 import { Plegable } from '../ui/Controles'
-import { IconoBombilla, IconoPesa } from '../ui/Iconos'
-import { NOTA_MENU, NOTA_VERDURA_FRUTA } from '../utiles/copy'
+import { IconoBombilla, IconoMarca, IconoPesa } from '../ui/Iconos'
+import { NOTA_MENU, NOTA_SENCILLO_SIN_OTRO_EJEMPLO, NOTA_VERDURA_FRUTA } from '../utiles/copy'
 import { entero } from '../utiles/formato'
+import { textoModoSencillo } from './compra'
 import { Seccion } from './comun'
 
 /** [SPEC] SPEC-ux §3.1: texto que sustituye a los menús con condición renal o hepática. */
@@ -46,6 +47,15 @@ export function BloqueMenus({ inputs, ejemplos, onOtroEjemplo }: PropsMenu) {
       titulo="Un día de ejemplo"
       descripcion="Los gramajes ya están escalados a tus macros. Pesa en crudo salvo que ponga otra cosa."
     >
+      {/* Distintivo de modo sencillo (§3.7): el número sale de la lista de la compra, que ya lo
+          trae contado (`alimentos_distintos`); la pantalla no cuenta alimentos por su cuenta. */}
+      {ejemplos.modo_sencillo ? (
+        <p className="distintivo-sencillo">
+          <IconoMarca tam={14} />
+          {textoModoSencillo(ejemplos.compra?.alimentos_distintos)}
+        </p>
+      ) : null}
+
       {inputs.condiciones.includes('diabetes') ? <p className="nota nota-recuadro">{NOTA_DIABETES}</p> : null}
       {inputs.condiciones.includes('cardiaca') ? <p className="nota nota-recuadro">{NOTA_CARDIACA}</p> : null}
 
@@ -99,7 +109,12 @@ export function BloqueMenus({ inputs, ejemplos, onOtroEjemplo }: PropsMenu) {
       <p className="nota">{NOTA_MENU}</p>
       <p className="nota">{NOTA_VERDURA_FRUTA}</p>
 
-      {onOtroEjemplo ? (
+      {/* "Ver otro ejemplo" cambia de plantilla dentro del mismo plan (§2.5), pero en modo
+          sencillo el generador siempre devuelve el mismo par de días (§3.7.2): el botón no haría
+          nada y se leería como un fallo. Se sustituye por la explicación y la salida. */}
+      {ejemplos.modo_sencillo ? (
+        <p className="nota">{NOTA_SENCILLO_SIN_OTRO_EJEMPLO}</p>
+      ) : onOtroEjemplo ? (
         <div className="acciones-menu">
           <button type="button" className="btn btn-secundario" onClick={onOtroEjemplo}>
             Ver otro ejemplo

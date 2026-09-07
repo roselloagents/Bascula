@@ -8,6 +8,7 @@ import { AVISOS_PRIORITARIOS } from '../utiles/copy'
 import { hoyIso } from '../utiles/formato'
 import { BloqueAgua, BloqueComidas, BloqueMacros, Cabecera } from './BloquesPlan'
 import { BloqueConsejos, BloqueEquivalencias, BloqueMenus } from './BloquesMenu'
+import { BloqueCompra } from './BloqueCompra'
 import { BloqueAvisos, BloqueDisclaimer, BloqueMetodologia, BloquePeso } from './BloquesCierre'
 import { BotonPdf } from './ExportarPdf'
 
@@ -67,6 +68,7 @@ export function Resultados({ inputs, resultado, ejemplos, avisos, onEditar, onOt
 
       <BloqueMenus inputs={inputs} ejemplos={ejemplos} onOtroEjemplo={onOtroEjemplo} />
       <BloqueEquivalencias inputs={inputs} ejemplos={ejemplos} />
+      <BloqueCompra ejemplos={ejemplos} />
 
       {!protegido ? (
         <BloquePeso inputs={inputs} resultado={resultado} avisos={avisos} />

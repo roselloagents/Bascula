@@ -649,9 +649,204 @@ li[data-macro='carbo'] .leyenda-punto {
   color: var(--verde);
 }
 
+/* ---- Lista de la compra (§2.5b) -------------------------------------- */
+
+.distintivo-sencillo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-4);
+  padding: var(--e-2) var(--e-6);
+  border: 1px solid var(--verde-borde);
+  border-radius: 999px;
+  background: var(--verde-velo);
+  color: var(--verde);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  justify-self: start;
+}
+
+.distintivo-ancho {
+  border-radius: var(--r-md);
+  padding: var(--e-6) var(--e-8);
+}
+
+.compra-resumen {
+  display: flex;
+  align-items: baseline;
+  gap: var(--e-6);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.compra-resumen-cifra {
+  font-family: var(--display);
+  font-size: var(--t-lg);
+  font-weight: 700;
+  color: var(--verde);
+}
+
+.compra-secciones {
+  display: grid;
+  gap: var(--e-12);
+}
+
+.compra-seccion-titulo {
+  margin-bottom: var(--e-6);
+  padding-bottom: var(--e-2);
+  border-bottom: 1px solid var(--linea-fuerte);
+  font-size: var(--t-base);
+  color: var(--tinta-suave);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tabla-compra {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+  text-align: left;
+}
+
+/* Móvil primero: la tabla es una pila de tarjetas, sin scroll horizontal. */
+.tabla-compra thead {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.tabla-compra tr {
+  display: grid;
+  gap: var(--e-4);
+  padding: var(--e-8);
+  margin-bottom: var(--e-6);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+  background: var(--papel);
+}
+
+.tabla-compra th,
+.tabla-compra td {
+  display: block;
+  padding: 0;
+  font-weight: 400;
+}
+
+.tabla-compra td[data-etiqueta]::before {
+  content: attr(data-etiqueta);
+  display: block;
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.compra-producto {
+  display: block;
+  font-family: var(--display);
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+.compra-alimento {
+  display: block;
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+}
+
+.compra-consejo {
+  display: block;
+  margin-top: var(--e-2);
+  color: var(--tinta-media);
+  font-size: var(--t-xs);
+  line-height: 1.4;
+}
+
+.compra-dato {
+  display: block;
+  font-weight: 600;
+}
+
+.compra-secundario {
+  display: block;
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+}
+
+.compra-notas {
+  display: grid;
+  gap: var(--e-2);
+  margin: var(--e-8) 0 0;
+  padding-left: var(--e-12);
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+}
+
 /* ---- Escritorio ------------------------------------------------------ */
 
 @media (min-width: 40rem) {
+  .tabla-compra tr {
+    display: table-row;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-bottom: 1px solid var(--linea);
+    background: none;
+  }
+
+  .tabla-compra th,
+  .tabla-compra td {
+    display: table-cell;
+    padding: var(--e-6) var(--e-6) var(--e-6) 0;
+    vertical-align: top;
+  }
+
+  .tabla-compra thead {
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
+  }
+
+  .tabla-compra thead th {
+    padding-bottom: var(--e-4);
+    border-bottom: 1px solid var(--linea-fuerte);
+    color: var(--tinta-suave);
+    font-size: var(--t-xs);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .tabla-compra td[data-etiqueta]::before {
+    content: none;
+  }
+
+  /* Reparto fijo de las cuatro columnas: sin él, el producto se comprime y "1,26 kg en la
+     semana" o "te dura 13 días" parten en dos líneas cada uno. */
+  .tabla-compra thead th:nth-child(1) {
+    width: 40%;
+  }
+
+  .tabla-compra thead th:nth-child(2) {
+    width: 19%;
+  }
+
+  .tabla-compra thead th:nth-child(3) {
+    width: 26%;
+  }
+
+  .tabla-compra thead th:nth-child(4) {
+    width: 15%;
+  }
+
+  .tabla-compra td:last-child .compra-dato {
+    white-space: nowrap;
+  }
+
   .macros-cabecera {
     grid-template-columns: auto 1fr;
     gap: var(--e-16);
