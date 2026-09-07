@@ -114,6 +114,13 @@ No se pregunta a hombres ni se pregunta la edad fértil explícitamente: se mues
 - Peso fuera de 35-300 kg → "Revisa tu peso: parece fuera de un rango que podamos calcular con seguridad." `[ERR_INPUT_RANGO]`
 - Ambos obligatorios.
 
+**Cuándo se pinta el error de rango (normativo, vale para todos los campos numéricos).** Mientras se escribe no se enseña nada:
+tecleando "178" el usuario veía un error rojo tras el "1" y tras el "17". El error aparece **al perder el foco**, cuando el motor
+marca el campo (`ERR_INPUT_RANGO`) o, además, **en cuanto el número escrito supera el techo del rango**, porque a partir de ahí
+ningún dígito más puede volverlo válido. Sin esta tercera condición, quien escribe 300 cm de altura se queda con "Siguiente"
+en gris, `aria-invalid="false"` y ninguna explicación; y en móvil pulsar el botón deshabilitado —el gesto natural— ni siquiera
+saca el foco del campo, así que el error nunca llega a mostrarse.
+
 **Microcopy adicional:** debajo del input de peso, texto pequeño: "Puedes actualizarlo cuando quieras: recalcularemos tu plan con tu peso real."
 
 ---
@@ -349,8 +356,10 @@ Sin pantalla adicional: se usa directamente CUN-BAE. Microcopy de confirmación 
 
 **Opciones:**
 - "Suave — el cambio será más lento, pero más fácil de mantener" → `ritmo = 'suave'`
-- "Moderado — un equilibrio entre velocidad y comodidad" → `ritmo = 'moderado'` (preseleccionado por defecto)
+- "Moderado — un equilibrio entre velocidad y comodidad" → `ritmo = 'moderado'`
 - "Agresivo — más rápido, pero exige más disciplina y hambre" → `ritmo = 'agresivo'`
+
+**Ninguna opción viene marcada** y "Siguiente" está deshabilitado hasta que se elige una (QA §1). "Moderado" estuvo preseleccionado y no debía estarlo: a diferencia del número de comidas, del clima o de los deslizadores del entrenamiento —valores medios que no cambian el plan de forma sustantiva—, el ritmo elige el tamaño del déficit y con él el cronograma entero, así que dejarlo marcado permitía atravesar el paso sin responderlo y llevarse el plan de otra persona. `moderado` sigue siendo el valor que recibe el motor cuando el paso **no se muestra** (objetivos que no usan ritmo): eso lo resuelve la conversión a `InputCalculo`, no el estado del formulario.
 
 **Ayuda contextual:** "El ritmo no es solo una preferencia: cuanta menos grasa tengas de partida, menos margen hay para ir rápido sin perder músculo. Ajustaremos el número final a un rango seguro para tu caso."
 
@@ -700,6 +709,7 @@ Los filtros numéricos existen porque `grupo` no basta: "alimento denso en prote
 1. Las comidas se recorren en el orden de `resultado.comidas` (que es el de la tabla 3.13: Desayuno, Media mañana, Comida, Merienda, Cena, Recena).
 2. Para cada comida se toma la **siguiente plantilla no usada aún ese día** dentro de su `rol_comida`, empezando por el índice 0. Se descarta y se pasa a la siguiente cuando (a) alguna de sus `FoodQuery` obligatorias se queda sin ningún alimento válido tras los filtros de preferencia, o (b) el cierre de kcal de §3.3 no converge dentro del ±10 % con ella.
 3. Si se agotan las plantillas del rol antes de agotar las comidas de ese rol, la rotación vuelve al índice 0 (rotación circular): con `n_comidas = 6` hay tres comidas ligeras y solo dos plantillas `LIG`, así que la tercera repite la primera.
+3bis. Agotado el propio rol, **la lista se cierra con las plantillas del rol contrario**: una comida principal o un desayuno terminan en las `LIG` (una toma demasiado pequeña para su rol) y una comida ligera, en las `PRI` (una toma demasiado grande para el suyo). El caso que lo obliga: en un plan de 3.500 kcal repartido en cuatro tomas, la merienda pide 615 kcal, y ninguna plantilla ligera —yogur o queso batido más fruta, con el lácteo ya topeándose en 250 g— baja del 11 % de desviación. Con la escalada, la merienda se resuelve con una plantilla principal y cierra en el −5,9 %.
 4. "Ver otro ejemplo" desplaza el índice de arranque del día en +1 (módulo el número de plantillas válidas del rol) y vuelve a aplicar la regla, de modo que el menú alternativo también es determinista y reproducible en el PDF.
 
 Sin esta regla escrita, la lectura literal de la versión anterior ("la primera plantilla del banco cuyas `FoodQuery` tengan al menos un alimento válido") daba **la misma plantilla a la Comida y a la Cena** de todos los días, y los tres vectores de §3.6 —que este documento declara vectores de prueba reproducibles por un test— no eran derivables de la especificación. Con la regla de arriba: el Ejemplo A da Comida = OMN-PRI-1 y Cena = OMN-PRI-2; el B, VEG-PRI-1 y VEG-PRI-2; y el C salta OMN-PRI-2 en la cena por el motivo (b) —no converge dentro del ±10 %— y usa OMN-PRI-3.
@@ -761,7 +771,8 @@ función escalarComida(objetivo, alimentos):
 | Proteína con rol también de carbohidrato (legumbres cocidas) | `grupo = 'proteina'` y `roles` incluye `carbohidrato` | 50 g | 300 g |
 | Proteína deshidratada (soja texturizada, proteína en polvo) | `grupo = 'proteina'` y `estado = 'seco'` | 15 g | 60 g |
 | Queso curado | `grupo = 'lacteo'`, `roles` incluye `proteina` y `grasa ≥ 20 g/100 g` | 20 g | 80 g |
-| Lácteos y bebidas vegetales | `grupo = 'lacteo'`, `roles` incluye `proteina` o `complemento`, y `grasa < 20 g/100 g` | 100 g | 300 g |
+| Lácteo proteico (yogur, requesón, queso batido, cottage) | `grupo = 'lacteo'`, `roles` incluye `proteina` y `grasa < 20 g/100 g` | 100 g | 250 g |
+| Bebidas lácteas y vegetales (leche, kéfir, bebida de soja) | `grupo = 'lacteo'` y `roles` incluye `complemento`, sin rol `proteina` | 100 g | 300 g |
 | Carbohidrato cocido (arroz, pasta, patata, quinoa, cuscús) | `grupo = 'carbohidrato'` y `estado = 'cocido'` | 50 g | 300 g |
 | Carbohidrato seco (copos de avena) | `grupo = 'carbohidrato'` y `estado = 'seco'` | 30 g | 100 g |
 | Carbohidrato listo (pan, tortitas) | `grupo = 'carbohidrato'` y `estado = 'listo'` | 15 g | 100 g |
@@ -772,6 +783,8 @@ función escalarComida(objetivo, alimentos):
 | Aceitunas | `id = 'aceitunas'` | 10 g | 40 g |
 | Aguacate | `id = 'aguacate'` | 50 g | 150 g |
 | Verdura y fruta | `grupo ∈ {verdura, fruta}` | `racionTipica_g` (o el doble en low-carb sin ancla de HC) | |
+
+**Por qué el lácteo proteico se corta en 250 g.** La fila era una sola, con 300 g para todo, y el cierre de kcal empujaba el gramaje hasta el tope: el desayuno del perfil de la QA salía con **280 g de queso fresco batido 0 %** y una variante con **300 g de requesón**, que es exactamente la mitad no corregida del punto §7 de la QA (la otra mitad, las cinco claras, se arregló con `TOPE_UNIDADES`). 250 g es la tarrina entera de queso batido o de requesón del supermercado: el límite deja de ser un número y pasa a ser un formato que se compra. Las bebidas se quedan en 300 g porque un vaso grande de leche o de bebida de soja no tiene ese problema, y por eso la fila se parte en dos.
 
 **Por qué el predicado y no el nombre.** La tabla se declaraba "indexada por (grupo, estado, rol)" pero sus filas estaban escritas por nombre de producto, y una de ellas colisionaba: `mantequilla` tiene `grupo: 'lacteo'`, `roles: ['grasa']` y `racionTipica_g: 10`, de modo que por la clave declarada le correspondía "Lácteos y bebidas vegetales" (mínimo **100 g** = 717 kcal y 81 g de grasa, más grasa que el objetivo de un día entero en los casos 8 y 14 de la §5) y por su nombre, "Aceite y mantequilla" (5-25 g). La validación de §3.0 ("que todo alimento tenga al menos una fila aplicable") pasaba igualmente porque había dos, no cero. Con los predicados de arriba la mantequilla cae solo en "Grasas puras" (`grasa = 81`), y el queso manchego curado —el otro lácteo con la misma ambigüedad, al que la fila genérica permitía **300 g**— tiene ahora su propia fila. Es el mismo tipo de defecto que R5-12 corrigió en la tabla de equivalencias restringiendo por `grupo`.
 
@@ -840,12 +853,12 @@ Objetivo por comida (motor): Desayuno 45P/20G/50HC (560 kcal) · Comida 55P/20G/
 
 | Comida | Alimentos y gramaje | P / G / HC | kcal | Δ kcal |
 |---|---|---|---|---|
-| Desayuno | Plátano 120 g · Queso fresco batido 0% 270 g · Clara de huevo 165 g · Pan integral 30 g · Almendras 35 g | 51,5 / 19,6 / 58,3 | 592 | +5,7 % |
-| Comida | Tomate 180 g · Ternera magra (solomillo) 250 g · Pasta cocida 150 g · AOVE 5 g | 62,8 / 19,3 / 53,5 | 643 | +3,7 % |
+| Desayuno | Plátano 120 g · Queso fresco batido 0% 250 g · Clara de huevo 132 g · Pan integral 30 g · Almendras 35 g | 46,2 / 19,6 / 57,3 | 566 | +1,1 % |
+| Comida | Tomate 180 g · Pechuga de pavo 220 g · Pasta cocida 150 g · AOVE 15 g | 63,1 / 19,0 / 53,5 | 639 | +3,1 % |
 | Merienda | Pera 170 g · Requesón 230 g · Pan blanco 30 g | 28,6 / 9,9 / 48,3 | 402 | +8,6 % |
 | Cena | Lechuga 90 g · Merluza 250 g · Clara de huevo 99 g · Patata cocida 280 g · AOVE 20 g | 60,0 / 22,2 / 59,3 | 670 | +4,7 % |
 
-Total del día: 202,9 P / 71,0 G / 219,4 HC, 2.307 kcal (objetivo del motor 2.190 kcal, +5,3 %). Fibra del menú: 26,7 g, por encima del umbral `0,70 · 31 = 21,7 g`. Ninguna nota.
+Total del día: 197,9 P / 70,7 G / 218,4 HC, 2.277 kcal (objetivo del motor 2.190 kcal, +4,0 %). Fibra del menú: 26,7 g, por encima del umbral `0,70 · 31 = 21,7 g`. Ninguna nota.
 
 Nota de producto: la Merienda ilustra por qué las comidas ligeras necesitan una segunda fuente. El requesón solo no llega ni a las kcal ni al hidrato; la fruta de la plantilla lo cierra. El algoritmo lo resuelve sin intervención: la fruta se coloca en el paso 0 y el ancla de HC se calcula ya con su aporte descontado.
 
@@ -855,11 +868,11 @@ Objetivo por comida: Desayuno 35P/15G/70HC (555 kcal, peri-entreno) · Comida 45
 
 | Comida | Alimentos y gramaje | P / G / HC | kcal | Δ kcal |
 |---|---|---|---|---|
-| Desayuno | Kiwi 150 g · Requesón 260 g · Pan integral 90 g | 39,3 / 13,9 / 67,2 | 569 | +2,5 % |
-| Comida | Calabacín 180 g · Queso cottage 300 g · Huevo entero 55 g · Quinoa cocida 180 g | 50,3 / 22,9 / 54,2 | 631 | +9,7 % |
+| Desayuno | Kiwi 150 g · Requesón 250 g · Pan integral 90 g | 38,2 / 13,5 / 66,9 | 559 | +0,7 % |
+| Comida | Calabacín 180 g · Queso cottage 250 g · Huevo entero 55 g · Quinoa cocida 220 g | 46,6 / 21,6 / 60,9 | 630 | +9,6 % |
 | Cena | Berenjena 180 g · Garbanzos cocidos 240 g · Huevo entero 55 g · Avena en copos 30 g | 34,5 / 14,8 / 94,2 | 650 | +4,8 % |
 
-Total del día: 124,1 P / 51,6 G / 215,6 HC, 1.850 kcal (objetivo 1.740 kcal, +6,3 %). Fibra del menú: 44,3 g.
+Total del día: 119,3 P / 49,9 G / 222,0 HC, 1.839 kcal (objetivo 1.740 kcal, +5,7 %). Fibra del menú: 45,4 g.
 
 Observación: la cena se pasa un 35 % del objetivo de hidrato porque los garbanzos arrastran hidrato junto con la proteína y el tope cruzado del paso 1 ya limita su ración a 240 g. La tolerancia del módulo es sobre kcal y proteína, no sobre cada macro por separado; la desviación **diaria** de hidrato de este menú (+5 %) queda por debajo del umbral que dispara la nota del día.
 
@@ -869,11 +882,13 @@ Objetivo por comida: Desayuno 50P/25G/40HC (585 kcal) · Comida 55P/25G/50HC (64
 
 | Comida | Alimentos y gramaje | P / G / HC | kcal | Δ kcal |
 |---|---|---|---|---|
-| Desayuno | Naranja 180 g · Queso cottage 300 g · Clara de huevo 132 g · Pan integral 30 g · Semillas de lino molidas 20 g | 55,7 / 22,7 / 50,8 | 629 | +7,5 % |
-| Comida | Berenjena 180 g · Cerdo, lomo 250 g · Pasta cocida 130 g · AOVE 10 g | 61,8 / 26,6 / 51,1 | 707 | +9,6 % |
+| Desayuno | Naranja 180 g · Queso cottage 250 g · Clara de huevo 132 g · Pan integral 30 g · Semillas de lino molidas 30 g | 52,0 / 24,8 / 52,0 | 633 | +8,2 % |
+| Comida | Berenjena 180 g · Muslo de pollo 250 g · Pasta cocida 130 g · AOVE 15 g | 59,3 / 26,1 / 51,1 | 692 | +7,3 % |
 | Cena | Champiñones 130 g · Merluza 250 g · Clara de huevo 66 g · Arroz blanco cocido 160 g · AOVE 25 g | 58,1 / 27,5 / 49,6 | 681 | −1,3 % |
 
-Total del día: 175,6 P / 76,8 G / 151,5 HC, 2.017 kcal (objetivo 1.910 kcal, +5,6 %). Fibra del menú: 21,5 g, por encima del umbral `0,70 · 27 = 18,9 g`, así que este menú ya **no** dispara la nota de fibra (la versión anterior de esta tabla se quedaba a 0,025 g del umbral: era el vector más frágil de los tres).
+Total del día: 169,4 P / 78,4 G / 152,7 HC, 2.006 kcal (objetivo 1.910 kcal, +5,0 %). Fibra del menú: 24,2 g, por encima del umbral `0,70 · 27 = 18,9 g`, así que este menú no dispara la nota de fibra (con 20 g de lino en vez de 30 el vector se quedaba a 2,6 g del umbral: era el más frágil de los tres).
+
+**Última regeneración.** Al bajar a 250 g el máximo de ración del lácteo proteico (la mitad no corregida de la QA §7), al cerrar las claras en cuatro unidades, al mandar el solomillo al final de la lista de carne magra y al añadir la escalada de rol de §3.2 (regla 3bis). Los tres menús los fija `src/meals/__tests__/vectores36.test.ts`.
 
 **Diferencias con la versión anterior de estas tablas.** Se regeneran por cuatro cambios de la ronda de cierre, todos con su issue: los máximos de ración vuelven a ser duros (nada de ampliarlos por número de platos), las variantes «sin lactosa» salen de la rotación de las demás preferencias, los alimentos contables tienen topes de plausibilidad, y las alternativas de cada comida se filtran por preferencia. Las tablas anteriores tampoco eran reproducibles con el código: citaban plantillas y gramajes que el algoritmo no producía.
 

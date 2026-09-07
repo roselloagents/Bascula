@@ -313,11 +313,13 @@ function construirPlato(
   const disponibles = plantillasDe(banco, rol)
   const noUsadas = disponibles.filter((p) => !usadas.has(p.id))
   // Rotación circular: si se agotaron las plantillas del rol, se vuelve a empezar (§3.2).
-  // Las plantillas ligeras cierran la lista: son el último recurso de una toma que no cabe
-  // en ninguna plantilla de su propio rol (desayunos y comidas muy pequeños).
+  // Y al final de la lista, el rol contrario como último recurso: las ligeras para una toma
+  // que no cabe en ninguna plantilla de su rol por pequeña, y las principales para el caso
+  // simétrico, una "ligera" que en realidad no lo es (una merienda de 600 kcal en un plan de
+  // 3.500 no cabe en yogur + fruta, y las plantillas ligeras se quedaban un 12 % cortas).
   const orden = [
     ...(noUsadas.length > 0 ? [...noUsadas, ...disponibles] : disponibles),
-    ...(rol === 'ligera' ? [] : plantillasDe(banco, 'ligera')),
+    ...plantillasDe(banco, rol === 'ligera' ? 'principal' : 'ligera'),
   ]
 
   let mejor: { porciones: Porcion[]; plantillas: string[] } | null = null

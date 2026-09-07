@@ -15,16 +15,17 @@ interface MenuEsperado {
 
 /**
  * Generados con el algoritmo de §3.3 sobre `foods.json`, nunca escritos a mano. Última
- * regeneración: al bajar el tope de claras de 5 a 4 unidades y mandar el solomillo al final de
- * `CARNE_MAGRA` y de `CARNE_O_PESCADO` (QA §7).
+ * regeneración: al bajar a 250 g el máximo de ración del lácteo proteico —la otra mitad de la
+ * QA §7, que hasta ahora solo tenía corregidas las claras— y al dejar que una toma "ligera"
+ * demasiado grande caiga en las plantillas principales.
  */
 const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra: number }> = {
   '1': {
     menus: [
       {
         comida: 'Desayuno',
-        alimentos: ['platano 120', 'queso_fresco_batido_0 300', 'clara_huevo 132', 'pan_integral 30', 'almendras 35'],
-        kcal: 588,
+        alimentos: ['platano 120', 'queso_fresco_batido_0 250', 'clara_huevo 132', 'pan_integral 30', 'almendras 35'],
+        kcal: 566,
       },
       {
         comida: 'Comida',
@@ -42,20 +43,20 @@ const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra:
         kcal: 670,
       },
     ],
-    kcalDia: 2299,
+    kcalDia: 2277,
     fibra: 26.745,
   },
   '2': {
     menus: [
       {
         comida: 'Desayuno',
-        alimentos: ['kiwi 150', 'requeson 260', 'pan_integral 90'],
-        kcal: 569,
+        alimentos: ['kiwi 150', 'requeson 250', 'pan_integral 90'],
+        kcal: 559,
       },
       {
         comida: 'Comida',
-        alimentos: ['calabacin 180', 'queso_cottage 300', 'huevo_entero 55', 'quinoa_cocida 180'],
-        kcal: 631,
+        alimentos: ['calabacin 180', 'queso_cottage 250', 'huevo_entero 55', 'quinoa_cocida 220'],
+        kcal: 630,
       },
       {
         comida: 'Cena',
@@ -63,15 +64,15 @@ const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra:
         kcal: 650,
       },
     ],
-    kcalDia: 1850,
-    fibra: 44.28,
+    kcalDia: 1839,
+    fibra: 45.4,
   },
   '3': {
     menus: [
       {
         comida: 'Desayuno',
-        alimentos: ['naranja 180', 'queso_cottage 300', 'clara_huevo 132', 'pan_integral 30', 'semillas_lino 20'],
-        kcal: 629,
+        alimentos: ['naranja 180', 'queso_cottage 250', 'clara_huevo 132', 'pan_integral 30', 'semillas_lino 30'],
+        kcal: 633,
       },
       {
         comida: 'Comida',
@@ -84,8 +85,8 @@ const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra:
         kcal: 681,
       },
     ],
-    kcalDia: 2002,
-    fibra: 21.5,
+    kcalDia: 2006,
+    fibra: 24.2,
   },
 }
 

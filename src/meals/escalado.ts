@@ -57,7 +57,12 @@ export function filaRacion(a: Alimento): LimiteRacion {
   if (a.grupo === 'proteina' && rol('carbohidrato')) return { min: 50, max: 300 }
   if (a.grupo === 'proteina') return { min: 50, max: 250 }
   if (a.grupo === 'lacteo' && rol('proteina') && a.grasa >= 20) return { min: 20, max: 80 }
-  if (a.grupo === 'lacteo' && (rol('proteina') || rol('complemento'))) return { min: 100, max: 300 }
+  // El lácteo proteico se separa de la bebida: 300 g de queso batido o de requesón en una sola
+  // toma no es una ración de casa (QA §7), y con un solo tope el cierre de kcal empujaba el
+  // gramaje hasta ahí. 250 g es la tarrina entera, que sí lo es. Las bebidas mantienen 300 g:
+  // un vaso grande de leche o de bebida de soja no tiene ese problema.
+  if (a.grupo === 'lacteo' && rol('proteina')) return { min: 100, max: 250 }
+  if (a.grupo === 'lacteo' && rol('complemento')) return { min: 100, max: 300 }
   if (a.grupo === 'carbohidrato' && a.estado === 'cocido') return { min: 50, max: 300 }
   if (a.grupo === 'carbohidrato' && a.estado === 'seco') return { min: 30, max: 100 }
   if (a.grupo === 'carbohidrato' && a.estado === 'listo') return { min: 15, max: 100 }
