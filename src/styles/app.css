@@ -1,0 +1,388 @@
+/* =====================================================================
+   Báscula — armazón de la aplicación, cuestionario y pantallas de derivación
+   ===================================================================== */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* ---- Marca ----------------------------------------------------------- */
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: var(--e-6);
+  width: min(100% - 2 * var(--e-8), var(--ancho));
+  margin-inline: auto;
+  padding: var(--e-12) 0 var(--e-8);
+  color: var(--verde);
+}
+
+.marca-nombre {
+  font-family: var(--display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.015em;
+}
+
+.marca-claim {
+  color: var(--tinta-suave);
+  font-size: var(--t-sm);
+  line-height: 1.3;
+}
+
+.contenido {
+  flex: 1;
+  width: min(100% - 2 * var(--e-8), var(--ancho));
+  margin-inline: auto;
+  padding-bottom: var(--e-24);
+}
+
+.pie {
+  width: min(100% - 2 * var(--e-8), var(--ancho));
+  margin-inline: auto;
+  padding: var(--e-12) 0 var(--e-16);
+  border-top: 1px solid var(--linea);
+  color: var(--tinta-suave);
+  font-size: var(--t-sm);
+}
+
+/* ---- Progreso: una regla de báscula ---------------------------------- */
+
+.progreso {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: var(--e-6) 0 var(--e-4);
+  background: linear-gradient(var(--hueso) 78%, transparent);
+}
+
+.progreso-regla {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 18px;
+}
+
+.progreso-regla span {
+  flex: 1;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--linea-fuerte);
+  transition: height 260ms var(--salida), background-color 260ms var(--salida);
+}
+
+.progreso-regla span[data-hecho='true'] {
+  height: 16px;
+  background: var(--verde);
+}
+
+.progreso-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-8);
+  margin-top: var(--e-2);
+}
+
+.progreso-texto {
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ---- Pantalla de paso ------------------------------------------------ */
+
+.paso {
+  outline: none;
+  animation: entra var(--dur) var(--salida) both;
+}
+
+@keyframes entra {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paso {
+    animation: none;
+  }
+}
+
+.pantalla {
+  display: grid;
+  gap: var(--e-12);
+  padding: var(--e-8) 0 var(--e-16);
+}
+
+.pantalla-cabecera {
+  display: grid;
+  gap: var(--e-6);
+}
+
+.pantalla-titulo {
+  font-size: var(--t-xl);
+}
+
+.pantalla-intro {
+  color: var(--tinta-media);
+  font-size: var(--t-base);
+}
+
+.pantalla-cuerpo {
+  display: grid;
+  gap: var(--e-12);
+}
+
+.sub-bloque {
+  display: grid;
+  gap: var(--e-12);
+  padding-top: var(--e-8);
+  border-top: 1px solid var(--linea);
+}
+
+.pareja-campos {
+  display: grid;
+  gap: var(--e-12);
+}
+
+/* ---- Barra de navegación (siempre visible) --------------------------- */
+
+.barra-navegacion {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--e-6);
+  padding: var(--e-6) 0 max(var(--e-8), env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--hueso) 28%);
+}
+
+.barra-navegacion[data-solo='true'] {
+  grid-template-columns: 1fr;
+}
+
+.barra-navegacion .btn-principal {
+  width: 100%;
+}
+
+/* ---- Siluetas -------------------------------------------------------- */
+
+.silueta {
+  display: block;
+}
+
+.opcion-ilustrada .opcion-figura {
+  width: 46px;
+}
+
+.trio-siluetas {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--e-6);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.trio-siluetas li {
+  display: grid;
+  justify-items: center;
+  gap: var(--e-2);
+  padding: var(--e-8) var(--e-4);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+  background: var(--papel);
+  color: var(--tinta-suave);
+  text-align: center;
+}
+
+.trio-siluetas li[data-destacado='true'] {
+  border-color: var(--verde);
+  background: var(--verde-velo);
+  color: var(--verde);
+}
+
+.trio-nombre {
+  font-family: var(--display);
+  font-weight: 600;
+  color: var(--tinta);
+  font-size: var(--t-sm);
+}
+
+.trio-rasgos {
+  color: var(--tinta-media);
+  font-size: var(--t-xs);
+  line-height: 1.35;
+}
+
+.figura-medidas {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  padding: var(--e-8);
+  background: var(--papel);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+}
+
+/* ---- Pantalla de cálculo --------------------------------------------- */
+
+.calculando {
+  display: grid;
+  gap: var(--e-8);
+  place-items: center;
+  padding: var(--e-32) 0;
+  text-align: center;
+  color: var(--tinta-media);
+}
+
+.calculando-barra {
+  width: 180px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--linea-fuerte);
+  overflow: hidden;
+  position: relative;
+}
+
+.calculando-barra::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--verde);
+  animation: recorre 1.1s var(--salida) infinite;
+}
+
+@keyframes recorre {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calculando-barra::after {
+    animation: none;
+    width: 100%;
+  }
+}
+
+/* ---- Pantallas de derivación ----------------------------------------- */
+
+.excluido {
+  display: grid;
+  gap: var(--e-12);
+  padding: var(--e-16) 0;
+  max-width: 34rem;
+}
+
+.excluido h2 {
+  font-size: var(--t-xl);
+}
+
+.excluido-texto {
+  font-size: var(--t-md);
+  color: var(--tinta-media);
+}
+
+.excluido-campos {
+  display: grid;
+  gap: var(--e-2);
+  padding: var(--e-8) var(--e-8) var(--e-8) var(--e-16);
+  background: var(--error-velo);
+  border: 1px solid var(--error-borde);
+  border-radius: var(--r-md);
+  font-weight: 600;
+}
+
+.acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-6);
+}
+
+.acciones .btn {
+  flex: 1 1 12rem;
+}
+
+@media (min-width: 40rem) {
+  .pareja-campos {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .marca,
+  .contenido,
+  .pie {
+    width: min(100% - 2 * var(--e-16), var(--ancho));
+  }
+}
+
+/* ---- Índice de preguntas (solo con el cuestionario ya contestado) ------ */
+
+.indice-pasos {
+  margin-top: var(--e-8);
+}
+
+.indice-lista {
+  display: grid;
+  gap: var(--e-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.indice-boton {
+  display: flex;
+  align-items: center;
+  gap: var(--e-6);
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--e-4);
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  text-align: left;
+  font-size: var(--t-sm);
+  font-weight: 500;
+}
+
+.indice-boton:hover {
+  background: var(--verde-velo);
+  color: var(--verde);
+}
+
+.indice-boton[data-actual='true'] {
+  color: var(--verde);
+  font-weight: 700;
+}
+
+.indice-numero {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--hueso-hundido);
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-weight: 700;
+}
+
+.indice-boton[data-actual='true'] .indice-numero {
+  background: var(--verde);
+  color: var(--papel);
+}

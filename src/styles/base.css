@@ -1,0 +1,543 @@
+/* =====================================================================
+   Báscula — base: reinicio, tipografía, controles compartidos
+   ===================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--hueso);
+  color: var(--tinta);
+  font-family: var(--texto);
+  font-size: var(--t-base);
+  line-height: 1.55;
+  font-synthesis-weight: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+  max-width: 68ch;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* Cifras siempre tabulares: las columnas no bailan al cambiar de valor. */
+.cifra,
+table,
+input[inputmode='numeric'],
+input[inputmode='decimal'] {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+:focus-visible {
+  outline: 3px solid var(--verde);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+::selection {
+  background: var(--verde-velo);
+}
+
+/* ---- Botones ------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--e-4);
+  min-height: var(--toque);
+  padding: 0 var(--e-12);
+  border-radius: var(--r-md);
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: var(--t-base);
+  letter-spacing: 0.005em;
+  text-decoration: none;
+  transition: background-color 160ms var(--salida), border-color 160ms var(--salida),
+    color 160ms var(--salida), transform 160ms var(--salida);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn[disabled] {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
+.btn-principal {
+  background: var(--verde);
+  color: var(--papel);
+}
+
+.btn-principal:hover:not([disabled]) {
+  background: var(--verde-oscuro);
+}
+
+.btn-secundario {
+  background: transparent;
+  border-color: var(--linea-fuerte);
+  color: var(--tinta);
+}
+
+.btn-secundario:hover:not([disabled]) {
+  border-color: var(--verde);
+  color: var(--verde);
+}
+
+.btn-plano {
+  background: none;
+  border: none;
+  min-height: 44px;
+  padding: 0 var(--e-4);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.btn-plano:hover {
+  color: var(--verde);
+}
+
+/* ---- Tarjeta de opción (radio/checkbox grande) ---------------------- */
+
+.opcion {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: var(--e-8);
+  width: 100%;
+  min-height: var(--toque);
+  padding: var(--e-8) var(--e-8) var(--e-8) var(--e-12);
+  text-align: left;
+  background: var(--papel);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: border-color 150ms var(--salida), background-color 150ms var(--salida);
+}
+
+.opcion:hover {
+  border-color: var(--linea-fuerte);
+  background: color-mix(in oklch, var(--papel) 80%, var(--verde-velo));
+}
+
+.opcion:has(input:focus-visible) {
+  outline: 3px solid var(--verde);
+  outline-offset: 2px;
+}
+
+.opcion[data-sel='true'] {
+  border-color: var(--verde);
+  background: var(--verde-velo);
+  box-shadow: inset 0 0 0 1px var(--verde);
+}
+
+.opcion-cuerpo {
+  display: block;
+  min-width: 0;
+}
+
+.opcion-ilustrada .opcion-cuerpo {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--e-8);
+}
+
+.opcion-figura {
+  display: grid;
+  place-items: center;
+  color: var(--tinta-media);
+}
+
+.opcion[data-sel='true'] .opcion-figura {
+  color: var(--verde);
+}
+
+.opcion-titulo {
+  display: block;
+  font-weight: 600;
+  font-size: var(--t-md);
+  line-height: 1.3;
+}
+
+.opcion-detalle {
+  display: block;
+  margin-top: 2px;
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+  line-height: 1.45;
+  max-width: 46ch;
+}
+
+.opcion-marca {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 2px;
+  border: 1.5px solid var(--linea-fuerte);
+  border-radius: 999px;
+  color: var(--papel);
+  flex: none;
+}
+
+.opcion-marca.cuadro {
+  border-radius: var(--r-sm);
+}
+
+.opcion[data-sel='true'] .opcion-marca {
+  background: var(--verde);
+  border-color: var(--verde);
+}
+
+.opcion-marca svg {
+  opacity: 0;
+  transition: opacity 140ms var(--salida);
+}
+
+.opcion[data-sel='true'] .opcion-marca svg {
+  opacity: 1;
+}
+
+.opciones {
+  display: grid;
+  gap: var(--e-6);
+}
+
+.opciones-fila {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--e-6);
+}
+
+.opcion-compacta {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+  padding: var(--e-8) var(--e-6);
+}
+
+.opcion-compacta .opcion-marca {
+  display: none;
+}
+
+/* ---- Campos numéricos ---------------------------------------------- */
+
+.campo {
+  display: grid;
+  gap: var(--e-4);
+}
+
+.campo-etiqueta {
+  font-weight: 600;
+  font-size: var(--t-md);
+}
+
+.campo-caja {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  background: var(--papel);
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--r-md);
+  padding-right: var(--e-12);
+  transition: border-color 150ms var(--salida);
+}
+
+.campo-caja:focus-within {
+  border-color: var(--verde);
+}
+
+.campo-caja.erroneo {
+  border-color: var(--error);
+  background: var(--error-velo);
+}
+
+.campo-caja input {
+  flex: 1;
+  min-width: 0;
+  min-height: 56px;
+  padding: 0 var(--e-8);
+  border: none;
+  background: none;
+  font-size: 1.5rem;
+  font-weight: 600;
+  font-family: var(--display);
+}
+
+.campo-caja input:focus {
+  outline: none;
+}
+
+.campo-unidad {
+  color: var(--tinta-suave);
+  font-size: var(--t-md);
+  font-weight: 500;
+}
+
+.campo-pista {
+  color: var(--tinta-suave);
+  font-size: var(--t-sm);
+}
+
+.campo-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--e-4);
+  color: var(--error);
+  font-size: var(--t-sm);
+  font-weight: 500;
+}
+
+/* ---- Ayuda contextual ----------------------------------------------- */
+
+.ayuda {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ayuda-boton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-4);
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--verde);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+
+.ayuda-texto {
+  margin-top: var(--e-2);
+  padding: var(--e-8) var(--e-8);
+  background: var(--hueso-hundido);
+  border-radius: var(--r-md);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+/* ---- Nota fija (rigor científico, siempre visible) ------------------ */
+
+.nota {
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+.nota-recuadro {
+  padding: var(--e-8);
+  background: var(--hueso-hundido);
+  border-radius: var(--r-md);
+}
+
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- Grupos de preguntas -------------------------------------------- */
+
+.grupo {
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.grupo-titulo {
+  padding: 0;
+  font-family: var(--display);
+  font-size: var(--t-md);
+  font-weight: 600;
+  line-height: 1.3;
+  margin-bottom: var(--e-6);
+}
+
+.grupo-descripcion {
+  margin: calc(var(--e-6) * -1) 0 var(--e-6);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+/* ---- Deslizador ------------------------------------------------------ */
+
+.deslizador {
+  display: grid;
+  gap: var(--e-4);
+}
+
+.deslizador-cabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e-8);
+  font-weight: 600;
+  font-size: var(--t-md);
+}
+
+.deslizador-valor {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  color: var(--verde);
+}
+
+.deslizador input[type='range'] {
+  width: 100%;
+  height: 44px;
+  appearance: none;
+  background: none;
+  margin: 0;
+}
+
+.deslizador input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--linea-fuerte);
+}
+
+.deslizador input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--linea-fuerte);
+}
+
+.deslizador input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  margin-top: -12px;
+  border-radius: 999px;
+  background: var(--verde);
+  border: 3px solid var(--papel);
+  box-shadow: 0 0 0 1px var(--verde);
+}
+
+.deslizador input[type='range']::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--verde);
+  border: 3px solid var(--papel);
+  box-shadow: 0 0 0 1px var(--verde);
+}
+
+/* ---- Plegable -------------------------------------------------------- */
+
+.plegable {
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+  background: var(--papel);
+  overflow: hidden;
+}
+
+.plegable-boton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-8);
+  width: 100%;
+  min-height: var(--toque);
+  padding: var(--e-6) var(--e-8);
+  border: none;
+  background: none;
+  font-family: var(--display);
+  font-size: var(--t-md);
+  font-weight: 600;
+  text-align: left;
+}
+
+.plegable-boton svg {
+  flex: none;
+  color: var(--tinta-suave);
+  transition: transform 200ms var(--salida);
+}
+
+.plegable[data-abierto='true'] .plegable-boton svg {
+  transform: rotate(180deg);
+}
+
+.plegable-cuerpo {
+  padding: 0 var(--e-8) var(--e-8);
+  display: grid;
+  gap: var(--e-8);
+  border-top: 1px solid var(--linea);
+  padding-top: var(--e-8);
+}
+
+/* ---- Cargador -------------------------------------------------------- */
+
+.cargador {
+  animation: girar 900ms linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cargador {
+    animation-duration: 3s;
+  }
+}

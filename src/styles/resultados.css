@@ -1,0 +1,697 @@
+/* =====================================================================
+   Báscula — pantalla de resultados
+   ===================================================================== */
+
+.resultados {
+  display: grid;
+  gap: var(--e-24);
+  padding-top: var(--e-8);
+  animation: entra var(--dur) var(--salida) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resultados {
+    animation: none;
+  }
+}
+
+.exportar {
+  flex: 1 1 12rem;
+  display: grid;
+  gap: var(--e-2);
+}
+
+.exportar .btn {
+  width: 100%;
+}
+
+.exportar-estado:empty {
+  display: none;
+}
+
+.exportar-estado {
+  color: var(--error);
+  font-size: var(--t-sm);
+}
+
+/* ---- Cabecera -------------------------------------------------------- */
+
+.cabecera-plan {
+  display: grid;
+  gap: var(--e-2);
+  padding-bottom: var(--e-12);
+  border-bottom: 2px solid var(--tinta);
+}
+
+.cabecera-etiqueta {
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.cabecera-cifra {
+  font-family: var(--display);
+  font-size: var(--t-cifra);
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  color: var(--verde);
+}
+
+.cabecera-unidad {
+  color: var(--tinta-media);
+  font-size: var(--t-md);
+}
+
+.cabecera-objetivo {
+  margin-top: var(--e-4);
+  font-family: var(--display);
+  font-size: var(--t-lg);
+  font-weight: 600;
+}
+
+.cabecera-ajuste {
+  margin-top: var(--e-4);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.etiqueta-ajuste {
+  display: inline-block;
+  margin-right: var(--e-4);
+  padding: 2px 8px;
+  border: 1px solid var(--verde-borde);
+  border-radius: 999px;
+  background: var(--verde-velo);
+  color: var(--verde);
+  font-size: var(--t-xs);
+  font-weight: 700;
+}
+
+.datos-secundarios {
+  display: grid;
+  gap: var(--e-8);
+  margin: var(--e-12) 0 var(--e-8);
+  padding: 0;
+}
+
+.datos-secundarios dt {
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.datos-secundarios dd {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+.dato-nota {
+  display: block;
+  color: var(--tinta-media);
+  font-family: var(--texto);
+  font-size: var(--t-sm);
+  font-weight: 400;
+}
+
+/* ---- Secciones ------------------------------------------------------- */
+
+.seccion {
+  display: grid;
+  gap: var(--e-8);
+}
+
+.seccion-cabecera {
+  display: grid;
+  gap: var(--e-2);
+}
+
+.seccion h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  font-size: var(--t-lg);
+}
+
+.seccion-icono {
+  display: inline-grid;
+  place-items: center;
+  color: var(--verde);
+}
+
+.seccion-descripcion {
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+/* ---- Macros ---------------------------------------------------------- */
+
+.macros-cabecera {
+  display: grid;
+  gap: var(--e-8);
+  align-items: center;
+  justify-items: center;
+}
+
+.donut svg {
+  width: min(220px, 62vw);
+  height: auto;
+}
+
+.donut-cifra {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 700;
+  fill: var(--tinta);
+}
+
+.donut-unidad {
+  font-family: var(--texto);
+  font-size: 11px;
+  fill: var(--tinta-suave);
+}
+
+.leyenda-macros {
+  display: grid;
+  gap: var(--e-4);
+  width: 100%;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.leyenda-macros li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: var(--e-6);
+  padding-bottom: var(--e-4);
+  border-bottom: 1px solid var(--linea);
+}
+
+.leyenda-punto {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+li[data-macro='proteina'] .leyenda-punto {
+  background: var(--proteina);
+}
+li[data-macro='grasa'] .leyenda-punto {
+  background: var(--grasa);
+}
+li[data-macro='carbo'] .leyenda-punto {
+  background: var(--carbo);
+}
+
+.leyenda-valor {
+  font-family: var(--display);
+  font-weight: 700;
+}
+
+.macros-detalle {
+  display: grid;
+  gap: var(--e-8);
+}
+
+.macro {
+  display: grid;
+  gap: var(--e-2);
+  padding-top: var(--e-8);
+  border-top: 2px solid var(--linea);
+}
+
+.macro[data-macro='proteina'] {
+  border-top-color: var(--proteina);
+}
+.macro[data-macro='grasa'] {
+  border-top-color: var(--grasa);
+}
+.macro[data-macro='carbo'] {
+  border-top-color: var(--carbo);
+}
+.macro[data-macro='fibra'] {
+  border-top-color: var(--fibra);
+}
+
+.macro h3 {
+  font-size: var(--t-base);
+  font-family: var(--texto);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tinta-media);
+}
+
+.macro-cifra {
+  font-family: var(--display);
+  font-size: var(--t-xl);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.macro-cifra span {
+  font-size: var(--t-base);
+  font-weight: 500;
+  color: var(--tinta-suave);
+}
+
+.macro-datos {
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.macro-frase {
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+/* ---- Agua ------------------------------------------------------------ */
+
+.agua-franja {
+  font-family: var(--display);
+  font-size: var(--t-lg);
+  font-weight: 700;
+  color: var(--carbo);
+}
+
+.agua-secundaria {
+  color: var(--tinta-media);
+}
+
+/* ---- Tabla de comidas ------------------------------------------------ */
+
+.tabla-envoltorio {
+  overflow-x: auto;
+}
+
+.tabla-comidas {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-sm);
+}
+
+.tabla-comidas th,
+.tabla-comidas td {
+  text-align: right;
+  padding: var(--e-4) var(--e-4);
+}
+
+.tabla-comidas thead th {
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--linea-fuerte);
+}
+
+.tabla-comidas tbody th,
+.tabla-comidas tfoot th,
+.tabla-comidas thead th:first-child {
+  text-align: left;
+}
+
+.tabla-comidas tbody tr {
+  border-bottom: 1px solid var(--linea);
+}
+
+.tabla-comidas tfoot th,
+.tabla-comidas tfoot td {
+  border-top: 2px solid var(--tinta);
+  font-weight: 700;
+  padding-top: var(--e-6);
+}
+
+.comida-nombre {
+  display: block;
+  font-family: var(--display);
+  font-size: var(--t-base);
+  font-weight: 600;
+}
+
+.comida-hora {
+  display: block;
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-weight: 500;
+}
+
+.etiqueta-peri {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 1px 7px;
+  border: 1px solid var(--verde-borde);
+  border-radius: 999px;
+  background: var(--verde-velo);
+  color: var(--verde);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* En móvil la tabla se convierte en tarjetas apiladas. */
+@media (max-width: 39.99rem) {
+  .tabla-comidas thead {
+    display: none;
+  }
+
+  .tabla-comidas tbody tr,
+  .tabla-comidas tfoot tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px var(--e-6);
+    padding: var(--e-6) 0;
+  }
+
+  .tabla-comidas tbody th,
+  .tabla-comidas tfoot th {
+    grid-column: 1 / -1;
+    padding: 0 0 var(--e-2);
+  }
+
+  .tabla-comidas td {
+    display: flex;
+    justify-content: space-between;
+    padding: 1px 0;
+  }
+
+  .tabla-comidas td::before {
+    content: attr(data-etiqueta);
+    color: var(--tinta-suave);
+    font-weight: 500;
+  }
+
+  .tabla-comidas tfoot td {
+    border-top: none;
+  }
+
+  .tabla-comidas tfoot th {
+    border-top: 2px solid var(--tinta);
+    padding-top: var(--e-6);
+  }
+}
+
+/* ---- Avisos ---------------------------------------------------------- */
+
+.lista-avisos {
+  display: grid;
+  gap: var(--e-6);
+}
+
+.caja-aviso {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--e-6);
+  padding: var(--e-8);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+  background: var(--hueso-hundido);
+}
+
+.caja-aviso.es-warn {
+  border-color: var(--aviso-borde);
+  background: var(--aviso-velo);
+}
+
+.caja-aviso-icono {
+  color: var(--tinta-suave);
+  padding-top: 2px;
+}
+
+.caja-aviso.es-warn .caja-aviso-icono {
+  color: var(--aviso);
+}
+
+.caja-aviso-titulo {
+  font-weight: 700;
+  font-size: var(--t-sm);
+}
+
+.caja-aviso-texto {
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+  margin-top: 2px;
+}
+
+/* ---- Menús ----------------------------------------------------------- */
+
+.conmutador {
+  display: inline-flex;
+  padding: 3px;
+  gap: 3px;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 999px;
+  background: var(--papel);
+}
+
+.conmutador-opcion {
+  min-height: 40px;
+  padding: 0 var(--e-8);
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+
+.conmutador-opcion[data-activo='true'] {
+  background: var(--verde);
+  color: var(--papel);
+}
+
+.lista-menu {
+  display: grid;
+  gap: var(--e-12);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.menu-comida-cabecera {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--e-4);
+  padding-bottom: var(--e-4);
+  border-bottom: 1px solid var(--linea-fuerte);
+}
+
+.menu-comida-cabecera h3 {
+  font-size: var(--t-md);
+}
+
+.menu-alimentos {
+  display: grid;
+  gap: var(--e-4);
+  list-style: none;
+  padding: 0;
+  margin: var(--e-6) 0;
+}
+
+.menu-alimentos li {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: var(--e-4);
+  align-items: baseline;
+}
+
+.menu-gramos {
+  font-family: var(--display);
+  font-weight: 700;
+  text-align: right;
+}
+
+.menu-alimento {
+  font-weight: 500;
+}
+
+.menu-medida {
+  grid-column: 2;
+  color: var(--tinta-suave);
+  font-size: var(--t-sm);
+}
+
+.menu-totales {
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.menu-alternativas {
+  margin-top: var(--e-4);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.menu-total-dia {
+  padding-top: var(--e-6);
+  border-top: 2px solid var(--tinta);
+  font-weight: 700;
+}
+
+.lista-consejos {
+  display: grid;
+  gap: var(--e-6);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  counter-reset: consejo;
+}
+
+.lista-consejos li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--e-6);
+  counter-increment: consejo;
+  color: var(--tinta-media);
+}
+
+.lista-consejos li::before {
+  content: counter(consejo);
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--verde-velo);
+  color: var(--verde);
+  font-family: var(--display);
+  font-size: var(--t-sm);
+  font-weight: 700;
+}
+
+/* ---- Peso objetivo y cronograma -------------------------------------- */
+
+.peso-cifra {
+  font-family: var(--display);
+  font-size: var(--t-2xl);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.peso-etiqueta {
+  color: var(--tinta-suave);
+  font-size: var(--t-sm);
+}
+
+.peso-franja {
+  font-family: var(--display);
+  font-size: var(--t-lg);
+  font-weight: 700;
+}
+
+.hito {
+  display: grid;
+  gap: var(--e-2);
+  padding: var(--e-8);
+  border: 1px solid var(--verde-borde);
+  border-radius: var(--r-md);
+  background: var(--verde-velo);
+}
+
+.hito-cifra {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--verde);
+}
+
+.cronograma {
+  display: grid;
+  gap: var(--e-6);
+}
+
+.cronograma-principal {
+  font-family: var(--display);
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+.cronograma-hitos {
+  display: grid;
+  gap: var(--e-4);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+/* ---- Metodología y disclaimer ---------------------------------------- */
+
+.referencias h3 {
+  font-size: var(--t-base);
+  margin-bottom: var(--e-4);
+}
+
+.lista-referencias {
+  display: grid;
+  gap: var(--e-2);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.disclaimer {
+  display: grid;
+  gap: var(--e-6);
+  padding: var(--e-12) 0 0;
+  border-top: 1px solid var(--linea);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.disclaimer-ayuda {
+  font-weight: 600;
+  color: var(--verde);
+}
+
+/* ---- Escritorio ------------------------------------------------------ */
+
+@media (min-width: 40rem) {
+  .macros-cabecera {
+    grid-template-columns: auto 1fr;
+    gap: var(--e-16);
+  }
+
+  .macros-detalle {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--e-12);
+  }
+
+  .datos-secundarios {
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  }
+
+  .menu-alimentos li {
+    grid-template-columns: 4.5rem 1fr auto;
+  }
+
+  .menu-medida {
+    grid-column: auto;
+    text-align: right;
+  }
+}
+
+/* Dentro de un plegable las notas no llevan caja propia: nada de tarjetas
+   dentro de tarjetas. Se separan con una línea fina. */
+.plegable-cuerpo .caja-aviso {
+  border: none;
+  background: none;
+  border-radius: 0;
+  padding: 0 0 var(--e-8);
+}
+
+.plegable-cuerpo .caja-aviso + .caja-aviso {
+  border-top: 1px solid var(--linea);
+  padding-top: var(--e-8);
+}
+
+.plegable-cuerpo .caja-aviso:last-child {
+  padding-bottom: 0;
+}

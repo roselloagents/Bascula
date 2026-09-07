@@ -1,0 +1,82 @@
+/* =====================================================================
+   Báscula — variables de diseño
+   Tema claro cálido (hueso/arena), tinta parda, un acento (verde bosque)
+   y tres colores fijos de macro que se repiten en pantalla y en el PDF.
+   ===================================================================== */
+
+:root {
+  /* ---- Superficies y tinta ---------------------------------------- */
+  --hueso: oklch(97.2% 0.012 86);
+  --hueso-hundido: oklch(94.8% 0.016 86);
+  --papel: oklch(99.2% 0.006 86);
+  --tinta: oklch(24% 0.02 62);
+  --tinta-media: oklch(45% 0.018 62);
+  --tinta-suave: oklch(58% 0.016 62);
+  --linea: oklch(87% 0.014 80);
+  --linea-fuerte: oklch(78% 0.018 76);
+
+  /* ---- Acento: verde bosque --------------------------------------- */
+  --verde: oklch(38% 0.068 155);
+  --verde-oscuro: oklch(30% 0.058 155);
+  --verde-claro: oklch(62% 0.078 155);
+  --verde-velo: oklch(94% 0.026 155);
+  --verde-borde: oklch(80% 0.048 155);
+
+  /* ---- Macros (mismos tres colores en UI y PDF) ------------------- */
+  --proteina: oklch(51% 0.145 33);
+  --proteina-velo: oklch(94% 0.035 40);
+  --grasa: oklch(60% 0.115 72);
+  --grasa-velo: oklch(94.5% 0.04 80);
+  --carbo: oklch(48% 0.088 232);
+  --carbo-velo: oklch(94% 0.03 232);
+  --fibra: oklch(45% 0.06 150);
+  --fibra-velo: oklch(94% 0.025 150);
+
+  /* ---- Señales ---------------------------------------------------- */
+  --aviso: oklch(52% 0.115 68);
+  --aviso-velo: oklch(96% 0.035 82);
+  --aviso-borde: oklch(82% 0.075 78);
+  --error: oklch(48% 0.155 28);
+  --error-velo: oklch(96% 0.028 32);
+  --error-borde: oklch(80% 0.09 30);
+
+  /* ---- Tipografía -------------------------------------------------- */
+  --display: 'Petrona', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --texto: 'Hanken Grotesk', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  --t-xs: 0.78rem;
+  --t-sm: 0.875rem;
+  --t-base: 1rem;
+  --t-md: 1.125rem;
+  --t-lg: clamp(1.3rem, 1.15rem + 0.7vw, 1.6rem);
+  --t-xl: clamp(1.65rem, 1.35rem + 1.4vw, 2.25rem);
+  --t-2xl: clamp(2.1rem, 1.6rem + 2.4vw, 3rem);
+  --t-cifra: clamp(3.4rem, 2.2rem + 6vw, 5rem);
+
+  /* ---- Espacio (escala de 4) --------------------------------------- */
+  --e-2: 0.25rem;
+  --e-4: 0.5rem;
+  --e-6: 0.75rem;
+  --e-8: 1rem;
+  --e-12: 1.5rem;
+  --e-16: 2rem;
+  --e-24: 3rem;
+  --e-32: 4rem;
+
+  /* ---- Formas ------------------------------------------------------ */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --toque: 48px;
+  --ancho: 46rem;
+
+  /* ---- Movimiento --------------------------------------------------- */
+  --salida: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur: 380ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 1ms;
+  }
+}
