@@ -10,6 +10,7 @@ import type {
   EjemploDia,
   Ejemplos,
   Inputs,
+  ListaCompra,
   Macros,
   Preferencia,
   Resultado,
@@ -29,9 +30,13 @@ import { equivalencias } from './equivalencias'
 import { esVarianteSinLactosa, pasaPreferencia } from './filtros'
 import type { FoodQuery, Plantilla, RolComida } from './plantillas'
 import { BANCOS, HC_LOW_CARB_ALTERNO, plantillasDe } from './plantillas'
+import { BANCOS_SENCILLOS, MAX_ALIMENTOS_SENCILLO } from './bancoSencillo'
+import type { GramosAlimento } from './compra'
+import { listaCompraDeDias } from './compra'
 import {
   NOTA_CARDIACA,
   NOTA_DIABETES,
+  NOTA_MODO_SENCILLO,
   TEXTO_SIN_MENU,
   alternativasComida,
   avisoProteinaVegetal,
@@ -39,6 +44,7 @@ import {
   nombreCorto,
   notaComidaLejos,
   notaDosPlatos,
+  notaFallbackSencillo,
   notaFibra,
   notaMacroDia,
   notaProteinaLejos,
@@ -75,6 +81,14 @@ interface Contexto {
   tomaLigera: boolean
   /** Índice del plato dentro de la toma: desplaza la rotación para que los platos no se repitan. */
   plato: number
+  /**
+   * Modo sencillo (§3.7.2): apaga la variedad. Sin desplazamiento por usuario, sin rotación por
+   * comida y sin evitar los alimentos ya usados en el día, para que las dos variantes de cada rol
+   * caigan siempre sobre la misma lista corta de básicos.
+   */
+  sencillo: boolean
+  /** Cereal de respaldo de §3.2 cuando el ancla low-carb no cubre el hidrato. `null` si no aplica. */
+  hcAlterno: FoodQuery | null
 }
 
 interface ComidaResuelta {
@@ -150,10 +164,11 @@ function elegirAlimento(q: FoodQuery | null, ctx: Contexto, rotacion: number, ev
     lista = [...lista].sort((x, y) => proteinaMinima(x) - proteinaMinima(y) || x.id.localeCompare(y.id))
   }
   // En una toma pequeña manda el mínimo de ración, así que se empieza siempre por el primero
-  // de la lista (el más ligero) en vez de por el desplazamiento del usuario.
-  const base = ctx.tomaLigera ? rotacion : ctx.offset + rotacion
+  // de la lista (el más ligero) en vez de por el desplazamiento del usuario. En modo sencillo,
+  // por lo mismo: gana el primer candidato de la lista que quepa dentro de la ración (§3.7.2).
+  const base = ctx.tomaLigera || ctx.sencillo ? rotacion : ctx.offset + rotacion
   const inicio = (((base % lista.length) + lista.length) % lista.length)
-  if (evitarUsados) {
+  if (evitarUsados && !ctx.sencillo) {
     for (let k = 0; k < lista.length; k++) {
       const c = lista[(inicio + k) % lista.length]
       if (!ctx.usados.has(c.id)) return c
@@ -194,7 +209,7 @@ function resolverPlantilla(
   const proteina2 = elegirAlimento(p.ancla_proteina_2, ctx, 1 + Math.max(0, rotProteina), false)
   // En una toma pequeña la búsqueda arranca en el primer candidato (el más ligero), sin sumarle
   // el índice de la comida: la variedad la da `usados`, no el desplazamiento.
-  const i = ctx.tomaLigera ? 0 : ctx.indiceComida + ctx.plato
+  const i = ctx.tomaLigera || ctx.sencillo ? 0 : ctx.indiceComida + ctx.plato
   const carbohidrato = elegirAlimento(p.ancla_carbohidrato, ctx, i + rotHc, false)
   const grasa = elegirAlimento(p.ancla_grasa, ctx, i + rotHc, false)
   const rotV = Math.max(0, rotVegetal)
@@ -205,9 +220,9 @@ function resolverPlantilla(
   if (p.verdura && !verdura) return null
   if (p.fruta && !fruta) return null
   // Cereal normal de respaldo, solo en low-carb: lo usa `escalarComida` si el ancla low-carb no
-  // puede cubrir el hidrato del plan ni con su ración máxima (§3.2).
-  const carbohidrato_alterno =
-    ctx.preferencia === 'low_carb' ? elegirAlimento(HC_LOW_CARB_ALTERNO, ctx, i + rotHc, false) : null
+  // puede cubrir el hidrato del plan ni con su ración máxima (§3.2). En modo sencillo la consulta
+  // llega recortada a un único id que ya está en la lista corta, para no romper el tope de 12.
+  const carbohidrato_alterno = elegirAlimento(ctx.hcAlterno, ctx, i + rotHc, false)
   return { id: p.id, proteina, proteina2, carbohidrato, carbohidrato_alterno, grasa, verdura, fruta }
 }
 
@@ -367,20 +382,39 @@ interface DiaConstruido {
   convergen: boolean
 }
 
-function construirDia(resultado: Resultado, preferencia: Preferencia, offset: number, priorizarFibra: boolean): DiaConstruido {
+interface OpcionesDia {
+  /** Reparto por comidas del motor (`resultado.comidas`) o el reconstruido desde `Ejemplos`. */
+  comidas: readonly Comida[]
+  preferencia: Preferencia
+  offset: number
+  priorizarFibra: boolean
+  /** Banco de plantillas: el de §3.2 o una de las dos variantes del banco sencillo (§3.7.2). */
+  banco: readonly Plantilla[]
+  sencillo: boolean
+}
+
+/** Cereal de respaldo de §3.2: solo en low-carb, y recortado en modo sencillo. */
+function hcAlternoDe(preferencia: Preferencia, sencillo: boolean): FoodQuery | null {
+  if (preferencia !== 'low_carb') return null
+  return sencillo ? BANCOS_SENCILLOS.low_carb.hcAlterno : HC_LOW_CARB_ALTERNO
+}
+
+function construirDia(o: OpcionesDia): DiaConstruido {
   const ctx: Contexto = {
-    preferencia,
-    offset,
+    preferencia: o.preferencia,
+    offset: o.offset,
     usados: new Set(),
     indiceComida: 0,
-    priorizarFibra,
+    priorizarFibra: o.priorizarFibra,
     tomaLigera: false,
     plato: 0,
+    sencillo: o.sencillo,
+    hcAlterno: hcAlternoDe(o.preferencia, o.sencillo),
   }
-  const banco = BANCOS[preferencia]
+  const banco = o.banco
   const usadas = new Set<string>()
   const comidas: ComidaResuelta[] = []
-  for (const comida of resultado.comidas) {
+  for (const comida of o.comidas) {
     comidas.push(construirComida(comida, ctx, banco, usadas))
     ctx.indiceComida += 1
     // Las proteínas se reservan dentro del día; verduras y frutas se liberan si se agotan.
@@ -420,26 +454,59 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
       descanso: diaSinMenu('descanso'),
       consejos: consejos(resultado.objetivo_efectivo, preferencia, inputs.n_comidas),
       equivalencias: tablas,
+      modo_sencillo: inputs.menu_sencillo === true,
     }
   }
 
+  const sencillo = inputs.menu_sencillo === true
+
   // "Ver otro ejemplo" (§2.5) desplaza el índice de arranque en +1: mismo plan, otras plantillas.
-  const offset = inputs.n_comidas + inputs.edad + Math.max(0, Math.trunc(variante))
-  let dia = construirDia(resultado, preferencia, offset, false)
+  // En modo sencillo no hay desplazamiento: el menú es siempre el mismo par de días (§3.7.2).
+  const offset = sencillo ? 0 : inputs.n_comidas + inputs.edad + Math.max(0, Math.trunc(variante))
+  const bancoSencillo = BANCOS_SENCILLOS[preferencia]
+  const opciones: OpcionesDia = {
+    comidas: resultado.comidas,
+    preferencia,
+    offset,
+    priorizarFibra: false,
+    banco: sencillo ? bancoSencillo.A : BANCOS[preferencia],
+    sencillo,
+  }
+  let dia = construirDia(opciones)
 
   // Comprobación de fibra (§3.3): primero se rota a verduras de más fibra; si aun así no llega, nota.
+  // En modo sencillo la lista de verduras tiene un único candidato: reordenarla no cambiaría nada.
   const fibraObjetivo = resultado.macros.fibra_g
   const umbralFibra = 0.7 * fibraObjetivo
-  if (dia.fibra < umbralFibra) {
-    const alterno = construirDia(resultado, preferencia, offset, true)
+  if (!sencillo && dia.fibra < umbralFibra) {
+    const alterno = construirDia({ ...opciones, priorizarFibra: true })
     const mejora = alterno.fibra > dia.fibra
     const noEmpeora = alterno.convergen || !dia.convergen
     if (mejora && noEmpeora) dia = alterno
   }
 
+  // Modo sencillo: el día B (días pares) usa las variantes `…-B` del mismo banco corto. No viaja
+  // en `Ejemplos` (§3.7.3), solo sirve para promediar los gramos de la lista de la compra.
+  let diaB = sencillo ? construirDia({ ...opciones, banco: bancoSencillo.B }) : null
+
+  // Respaldo de §3.7.2: una toma que el banco sencillo no consigue cuadrar se rehace con el banco
+  // normal. Solo se acepta si no rompe el tope de 12 alimentos distintos en la semana, que es la
+  // promesa del modo; si lo rompe, se prefiere el menú sencillo con su nota de desviación.
+  const notasFallback: string[] = []
+  if (sencillo && diaB) {
+    const conFallback = aplicarFallbackSencillo(dia, diaB, resultado.comidas, preferencia, offset)
+    if (conFallback) {
+      dia = conFallback.dia
+      diaB = conFallback.diaB
+      notasFallback.push(...conFallback.notas)
+    }
+  }
+
   const notas: string[] = []
+  if (sencillo) notas.push(NOTA_MODO_SENCILLO)
   if (inputs.condiciones.includes('diabetes')) notas.push(NOTA_DIABETES)
   if (inputs.condiciones.includes('cardiaca')) notas.push(NOTA_CARDIACA)
+  notas.push(...notasFallback)
 
   for (let i = 0; i < dia.comidas.length; i++) {
     const c = dia.comidas[i]
@@ -510,5 +577,195 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
     descanso,
     consejos: consejos(resultado.objetivo_efectivo, preferencia, inputs.n_comidas),
     equivalencias: tablas,
+    // La lista de la compra se genera SIEMPRE que hay menú, en modo sencillo o normal (§3.7.3).
+    compra: listaCompraDeDias(gramosDeDia(dia), diaB ? gramosDeDia(diaB) : null),
+    modo_sencillo: sencillo,
   }
+}
+
+// ---------- Modo sencillo: respaldo y tope de variedad (§3.7.2) ----------
+
+/** Gramos de cada alimento de un día construido, listos para la lista de la compra. */
+function gramosDeDia(dia: DiaConstruido): GramosAlimento[] {
+  const lista: GramosAlimento[] = []
+  for (const c of dia.comidas) {
+    for (const a of c.ejemplo.alimentos) lista.push({ id: a.id, nombre: a.nombre, gramos: a.gramos })
+  }
+  return lista
+}
+
+/** Alimentos distintos que aparecen en la semana (día A + día B). */
+function distintosSemana(dia: DiaConstruido, diaB: DiaConstruido | null): number {
+  const ids = new Set<string>()
+  for (const g of gramosDeDia(dia)) ids.add(g.id)
+  if (diaB) for (const g of gramosDeDia(diaB)) ids.add(g.id)
+  return ids.size
+}
+
+/** Rehace una sola toma con el banco normal de §3.2, con su propio contexto (determinista). */
+function rehacerConBancoNormal(
+  comida: Comida,
+  indice: number,
+  preferencia: Preferencia,
+  offset: number,
+): ComidaResuelta {
+  const ctx: Contexto = {
+    preferencia,
+    offset,
+    usados: new Set(),
+    indiceComida: indice,
+    priorizarFibra: false,
+    tomaLigera: false,
+    plato: 0,
+    sencillo: false,
+    hcAlterno: hcAlternoDe(preferencia, false),
+  }
+  return construirComida(comida, ctx, BANCOS[preferencia], new Set())
+}
+
+function recomponerDia(comidas: ComidaResuelta[]): DiaConstruido {
+  return {
+    comidas,
+    fibra: comidas.reduce((t, c) => t + sumaFibra(c.porciones), 0),
+    convergen: comidas.every((c) => c.converge),
+  }
+}
+
+/**
+ * Respaldo de §3.7.2: sustituye por el banco normal de §3.2 las tomas que el banco sencillo no
+ * consigue meter dentro del ±10 % de kcal de §3.3. Las tomas se prueban de una en una y en orden,
+ * y una sustitución solo se acepta si la semana sigue cabiendo en `MAX_ALIMENTOS_SENCILLO`
+ * alimentos distintos: el tope de variedad es la promesa del modo y manda sobre el ajuste fino.
+ * Devuelve `null` si no se ha aceptado ninguna sustitución.
+ */
+function aplicarFallbackSencillo(
+  dia: DiaConstruido,
+  diaB: DiaConstruido,
+  comidas: readonly Comida[],
+  preferencia: Preferencia,
+  offset: number,
+): { dia: DiaConstruido; diaB: DiaConstruido; notas: string[] } | null {
+  // Candidatas: tomas que el banco sencillo no cierra y que el normal sí. Se calculan una vez.
+  const alternas = new Map<number, ComidaResuelta>()
+  for (let i = 0; i < comidas.length; i++) {
+    const a = dia.comidas[i]
+    const b = diaB.comidas[i]
+    if (!a || !b || (a.converge && b.converge)) continue
+    const alterna = rehacerConBancoNormal(comidas[i], i, preferencia, offset)
+    if (alterna.converge) alternas.set(i, alterna)
+  }
+  if (alternas.size === 0) return null
+
+  const aplicar = (indices: readonly number[]): { A: ComidaResuelta[]; B: ComidaResuelta[] } => {
+    const A = [...dia.comidas]
+    const B = [...diaB.comidas]
+    for (const i of indices) {
+      const alterna = alternas.get(i)
+      if (!alterna) continue
+      if (!A[i].converge) A[i] = alterna
+      if (!B[i].converge) B[i] = alterna
+    }
+    return { A, B }
+  }
+  const cabe = (r: { A: ComidaResuelta[]; B: ComidaResuelta[] }): boolean =>
+    distintosSemana(recomponerDia(r.A), recomponerDia(r.B)) <= MAX_ALIMENTOS_SENCILLO
+
+  // Primero, todas a la vez: es lo que menos alimentos añade cuando el banco normal reutiliza los
+  // mismos básicos. Si no cabe, se aceptan de una en una mientras el tope lo permita.
+  const todas = [...alternas.keys()]
+  let elegidas = todas
+  if (!cabe(aplicar(todas))) {
+    elegidas = []
+    for (const i of todas) {
+      const prueba = [...elegidas, i]
+      if (cabe(aplicar(prueba))) elegidas = prueba
+    }
+  }
+  if (elegidas.length === 0) return null
+
+  const { A, B } = aplicar(elegidas)
+  const notas = elegidas.map((i) => notaFallbackSencillo(dia.comidas[i].ejemplo.comida))
+  return { dia: recomponerDia(A), diaB: recomponerDia(B), notas: [...new Set(notas)] }
+}
+
+// ---------- Lista de la compra semanal (§3.7.3) ----------
+
+/**
+ * Gramos por alimento del día que viaja en `Ejemplos` (el día A del par, en modo sencillo).
+ * Trabaja sobre `alimentos[]`, que es exactamente lo que ve el usuario en la pantalla.
+ */
+function gramosDeEjemplo(comidas: readonly EjemploComida[]): GramosAlimento[] {
+  const lista: GramosAlimento[] = []
+  for (const c of comidas) {
+    for (const a of c.alimentos) lista.push({ id: a.id, nombre: a.nombre, gramos: a.gramos })
+  }
+  return lista
+}
+
+const PREFERENCIAS: readonly Preferencia[] = [
+  'omnivoro',
+  'vegetariano',
+  'vegano',
+  'sin_lactosa',
+  'sin_gluten',
+  'low_carb',
+]
+
+/**
+ * Preferencia con la que se construyó un menú sencillo. No se puede leer de `inputs.preferencia`
+ * sin más: el Paso 6.8 del motor anula el low-carb con `diabetes`, y `preferencia_efectiva` no
+ * viaja en `Ejemplos`. Se deduce de los alimentos del día A, que en modo sencillo salen siempre
+ * de la lista corta de su preferencia; la del usuario se prueba primero, así que en el caso normal
+ * la respuesta es esa.
+ */
+function preferenciaDelMenu(comidas: readonly EjemploComida[], inputs: Inputs): Preferencia {
+  const ids = new Set(gramosDeEjemplo(comidas).map((g) => g.id))
+  const orden = [inputs.preferencia, ...PREFERENCIAS.filter((p) => p !== inputs.preferencia)]
+  for (const p of orden) {
+    const permitidos = new Set(BANCOS_SENCILLOS[p].candidatos)
+    if ([...ids].every((id) => permitidos.has(id))) return p
+  }
+  return inputs.preferencia
+}
+
+/** Reconstruye el reparto por comidas a partir del día que viaja en `Ejemplos`. */
+function comidasDeEjemplo(comidas: readonly EjemploComida[]): Comida[] {
+  return comidas.map((c) => ({
+    nombre: c.comida,
+    hora: c.hora,
+    pct_kcal: 0,
+    proteina_g: c.objetivo.prot,
+    grasa_g: c.objetivo.fat,
+    hc_g: c.objetivo.carb,
+    kcal: c.objetivo.kcal,
+    peri: c.peri,
+  }))
+}
+
+/**
+ * Lista de la compra semanal del menú (§3.7.3). Es exactamente lo que `generarEjemplos` deja en
+ * `Ejemplos.compra`: si ya está calculada se devuelve tal cual, y si no (un `Ejemplos` construido
+ * a mano) se calcula desde los gramos del día que sí viaja. En modo sencillo reconstruye el día B
+ * con la misma regla determinista de §3.7.2 para promediar los gramos de las dos variantes.
+ *
+ * Pura y determinista: mismos `Ejemplos` e `Inputs` → misma lista, incluido el orden de `items`.
+ */
+export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCompra {
+  if (ejemplos.compra) return ejemplos.compra
+
+  const comidas = ejemplos.entreno.comidas
+  const diaA = gramosDeEjemplo(comidas)
+  const sencillo = inputs.menu_sencillo === true
+  if (!sencillo || comidas.length === 0) return listaCompraDeDias(diaA, null)
+
+  const preferencia = preferenciaDelMenu(comidas, inputs)
+  const diaB = construirDia({
+    comidas: comidasDeEjemplo(comidas),
+    preferencia,
+    offset: 0,
+    priorizarFibra: false,
+    banco: BANCOS_SENCILLOS[preferencia].B,
+    sencillo: true,
+  })
+  return listaCompraDeDias(diaA, gramosDeDia(diaB))
 }

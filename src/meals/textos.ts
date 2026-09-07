@@ -103,6 +103,15 @@ export const NOTA_CARDIACA =
 export const TEXTO_SIN_MENU =
   'No te proponemos menús de ejemplo. Con tu condición, la elección concreta de alimentos (potasio, fósforo, sodio y tipo de proteína) cambia mucho el resultado y debe hacerla un/a dietista-nutricionista especializado/a. Tus calorías y tus macros siguen siendo una referencia orientativa que puedes llevarle.'
 
+/** Nota fija del modo sencillo: explica la alternancia de días A y B (§3.7.2). */
+export const NOTA_MODO_SENCILLO =
+  'Menú sencillo: te proponemos dos versiones de cada comida que se van alternando. Los días 1, 3, 5 y 7 sigues el menú de abajo; los días 2, 4 y 6 cambias el acompañamiento y la fuente de proteína por la otra opción de la lista de la compra. Con eso te llegan menos de doce alimentos distintos para toda la semana.'
+
+/** Nota del respaldo de §3.7.2: una toma que no cuadra con el banco sencillo usa el normal. */
+export function notaFallbackSencillo(comida: string): string {
+  return `${comida}: con la combinación básica no salían las calorías de esa toma, así que ese plato se resuelve con una receta del menú normal. Todo lo que lleva está en la lista de la compra.`
+}
+
 /** Nota de la toma muy grande, repartida en varios platos. */
 export function notaDosPlatos(comida: string, kcal: number, platos: number): string {
   const cuantos = platos >= 4 ? 'cuatro platos' : platos === 3 ? 'tres platos' : 'dos platos'
