@@ -10,9 +10,13 @@ import type {
   DatosPdf,
   EjemploComida,
   EjemploDia,
+  ItemCompra,
+  ListaCompra,
   Macros,
+  SeccionSuper,
   TablasEquivalencia,
 } from '../engine/types'
+import { NOMBRE_SECCION, ORDEN_SECCIONES } from '../data/secciones'
 import { etiqueta, NOMBRE_FORMULA_CLASICA } from './etiquetas'
 import {
   anchoBarra,
@@ -30,6 +34,7 @@ import {
   rangoFechas,
   sinPuntoFinal,
   SIN_DATO,
+  winAnsi,
 } from './formato'
 
 // ---------- Paleta (misma identidad que la pantalla, DESIGN-brief.md) ----------
@@ -134,6 +139,19 @@ const s = StyleSheet.create({
   celdaTexto: { fontSize: 9.5 },
   celdaNum: { fontSize: 9.5, textAlign: 'right' },
   cabeceraCelda: { fontFamily: 'Helvetica-Bold', fontSize: 8.5, color: C.acento },
+
+  // La lista de la compra es la única tabla con 14 filas de tres líneas: va más compacta que el
+  // resto para que quepa entera en una página (SPEC §4.4b: se imprime suelta).
+  filaCompra: {
+    flexDirection: 'row',
+    paddingVertical: 2,
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.linea,
+    alignItems: 'flex-start',
+  },
+  celdaCompra: { fontSize: 9 },
+  celdaCompraNum: { fontSize: 9, textAlign: 'right' },
+  compraSmall: { fontSize: 7.5, color: C.suave, lineHeight: 1.25 },
 
   aviso: {
     borderLeftWidth: 3,
@@ -356,6 +374,81 @@ function BloqueEquivalencias({ tablas }: { tablas: TablasEquivalencia }) {
   )
 }
 
+/** Lista de la compra (§3.7 y §4.4b): el PDF pinta `ejemplos.compra` tal cual, sin recalcular nada. */
+const SUBTITULO_COMPRA =
+  'Para 7 días, con el formato en el que se vende cada cosa en Mercadona. Sin precios: cambian de una tienda ' +
+  'a otra y de una semana a otra.'
+
+/** Agrupa los items por sección respetando `ORDEN_SECCIONES`; lo que no encaja cae en "otros". */
+function porSecciones(items: readonly ItemCompra[]): { seccion: SeccionSuper; items: ItemCompra[] }[] {
+  const grupos = new Map<SeccionSuper, ItemCompra[]>()
+  for (const item of items) {
+    if (!item) continue
+    const seccion = ORDEN_SECCIONES.includes(item.seccion) ? item.seccion : 'otros'
+    const lista = grupos.get(seccion)
+    if (lista) lista.push(item)
+    else grupos.set(seccion, [item])
+  }
+  return ORDEN_SECCIONES.filter((s) => (grupos.get(s)?.length ?? 0) > 0).map((s) => ({
+    seccion: s,
+    items: grupos.get(s) ?? [],
+  }))
+}
+
+/** `3 días` / `1 día` / `—` si el generador no ha podido acotarlo. */
+function duracionTexto(dias: number | null | undefined): string {
+  const n = num(dias)
+  if (n === SIN_DATO) return SIN_DATO
+  return dias === 1 ? '1 día' : `${n} días`
+}
+
+/** `2 x bandeja aprox. 1 kg`. La "x" va en ASCII: el aspa tipográfica no existe en WinAnsi. */
+function comprarTexto(item: ItemCompra): string {
+  const cuantos = num(item.envases)
+  const formato = winAnsi(item.envase_descripcion ?? '')
+  if (cuantos === SIN_DATO && formato.trim().length === 0) return SIN_DATO
+  if (formato.trim().length === 0) return cuantos
+  if (cuantos === SIN_DATO) return formato
+  return `${cuantos} x ${formato}`
+}
+
+function LineaCompra({ item }: { item: ItemCompra }) {
+  const consejo = winAnsi(item.consejo ?? '').trim()
+  return (
+    <View style={s.filaCompra} wrap={false}>
+      <View style={{ flex: 2.3, paddingRight: 6 }}>
+        <Text style={[s.celdaCompra, { fontFamily: 'Helvetica-Bold' }]}>{winAnsi(item.producto) || SIN_DATO}</Text>
+        <Text style={s.compraSmall}>
+          {winAnsi(item.nombre) || SIN_DATO}
+          {consejo.length > 0 ? ` · ${consejo}` : ''}
+        </Text>
+      </View>
+      <View style={{ flex: 1.25, paddingRight: 6 }}>
+        <Text style={s.celdaCompraNum}>{gramos(item.gramos_semana)} en la semana</Text>
+        <Text style={[s.compraSmall, { textAlign: 'right' }]}>{gramos(item.gramos_dia, 0)} al día</Text>
+      </View>
+      <Text style={[s.celdaCompraNum, { flex: 1.9, paddingRight: 6 }]}>{comprarTexto(item)}</Text>
+      <Text style={[s.celdaCompraNum, { flex: 0.75 }]}>{duracionTexto(item.dura_dias)}</Text>
+    </View>
+  )
+}
+
+function BloqueSeccionCompra({ seccion, items }: { seccion: SeccionSuper; items: readonly ItemCompra[] }) {
+  return (
+    <View style={{ marginBottom: 4 }} minPresenceAhead={46}>
+      <View style={[s.tablaCabecera, { paddingBottom: 2, marginBottom: 1, alignItems: 'flex-end' }]}>
+        <Text style={[s.h3, { color: C.acento, flex: 2.3, marginBottom: 0 }]}>{NOMBRE_SECCION[seccion]}</Text>
+        <Text style={[s.cabeceraCelda, { flex: 1.25, textAlign: 'right' }]}>CANTIDAD</Text>
+        <Text style={[s.cabeceraCelda, { flex: 1.9, textAlign: 'right' }]}>COMPRAR</Text>
+        <Text style={[s.cabeceraCelda, { flex: 0.75, textAlign: 'right' }]}>DURA</Text>
+      </View>
+      {items.map((item, i) => (
+        <LineaCompra key={`${item.alimento_id}-${i}`} item={item} />
+      ))}
+    </View>
+  )
+}
+
 // ---------- Textos fijos ----------
 const AVISOS_DESTACADOS = [
   'WARN_DIABETES',
@@ -457,6 +550,10 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
   )
 
   const hayMenu = (ejemplos?.entreno?.comidas ?? []).length > 0
+  // §4.4b: la página de la compra solo existe si el generador ha dejado la lista en `ejemplos.compra`.
+  const compra: ListaCompra | null =
+    hayMenu && ejemplos?.compra && (ejemplos.compra.items ?? []).length > 0 ? ejemplos.compra : null
+  const seccionesCompra = compra ? porSecciones(compra.items) : []
   const diasIguales =
     !ejemplos?.descanso ||
     JSON.stringify(ejemplos.entreno?.comidas ?? []) === JSON.stringify(ejemplos.descanso?.comidas ?? [])
@@ -750,6 +847,31 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           </Seccion>
         ) : null}
       </Marco>
+
+      {/* ---------- Página 4b: lista de la compra (§4.4b). Sin menú o sin lista, no se imprime. ---------- */}
+      {compra ? (
+        <Marco fecha={fecha}>
+          <Text style={[s.h1, { fontSize: 19, marginBottom: 2 }]}>Tu lista de la compra de la semana</Text>
+          <Text style={[s.small, { marginBottom: 6 }]}>{SUBTITULO_COMPRA}</Text>
+          {ejemplos.modo_sencillo ? (
+            <View style={[s.tarjeta, { marginBottom: 6, padding: 6, borderLeftWidth: 3, borderLeftColor: C.acento }]} wrap={false}>
+              <Text style={{ fontFamily: 'Helvetica-Bold', color: C.acento }}>
+                Modo sencillo: {num(compra.alimentos_distintos)} alimentos para toda la semana.
+              </Text>
+            </View>
+          ) : null}
+          {seccionesCompra.map((g) => (
+            <BloqueSeccionCompra key={g.seccion} seccion={g.seccion} items={g.items} />
+          ))}
+          {(compra.notas ?? []).length > 0 ? (
+            <View style={[s.nota, { marginTop: 2, padding: 6 }]} wrap={false}>
+              <Text style={s.compraSmall}>
+                {(compra.notas ?? []).map((n) => winAnsi(n)).join('  ·  ')}
+              </Text>
+            </View>
+          ) : null}
+        </Marco>
+      ) : null}
 
       {/* ---------- Página 5: peso objetivo, consejos y referencias ---------- */}
       <Marco fecha={fecha}>

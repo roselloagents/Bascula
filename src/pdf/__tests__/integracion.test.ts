@@ -8,10 +8,11 @@ import { calcular, textosAvisos } from '../../engine'
 import { generarEjemplos } from '../../meals'
 import { VECTORES } from '../../meals/__tests__/vectores'
 import { elementoPlan } from '../index'
+import { CP1252_EXTRA, winAnsi } from '../formato'
 import type { DatosPdf } from '../../engine/types'
 
-/** Máximo de páginas declarado en SPEC-ux-comidas-pdf.md §4.0. */
-const PAGINAS_MAX = 8
+/** Máximo de páginas declarado en SPEC-ux-comidas-pdf.md §4.0, ya con la página de la compra (§4.4b). */
+const PAGINAS_MAX = 9
 
 function datosDe(indice: number): DatosPdf {
   const v = VECTORES[indice]
@@ -25,7 +26,6 @@ function datosDe(indice: number): DatosPdf {
  * propio de CP1252. Todo lo que quede fuera (U+2212, U+2248, flechas, ≤/≥) desaparece de la
  * página o se convierte en otra letra.
  */
-const CP1252_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ'
 function fueraDeWinAnsi(texto: string): string[] {
   const malos: string[] = []
   for (const c of texto) {
@@ -49,7 +49,14 @@ describe('PDF — vectores de la §5 de punta a punta', () => {
 
     it(`todo el texto que entra en el PDF es imprimible en WinAnsi — caso ${v.n}`, () => {
       const datos = datosDe(i)
-      for (const texto of cadenas(datos)) {
+      // La lista de la compra llega con los `≈` de `mercadona.json`, que WinAnsi no tiene: el
+      // documento la pasa por `winAnsi()` antes de imprimirla, así que se comprueba ya saneada.
+      const { compra, ...restoEjemplos } = datos.ejemplos
+      const textos = [
+        ...cadenas({ ...datos, ejemplos: restoEjemplos }),
+        ...cadenas(compra ?? null).map(winAnsi),
+      ]
+      for (const texto of textos) {
         expect(fueraDeWinAnsi(texto), `caso ${v.n}: "${texto}"`).toEqual([])
       }
     })

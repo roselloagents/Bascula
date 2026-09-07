@@ -9,6 +9,12 @@ const MENOS = '-'
 /** Guion largo que sustituye a cualquier valor no imprimible. */
 export const SIN_DATO = '—'
 
+/**
+ * Tramo propio de CP1252 que Helvetica/WinAnsi sí imprime, además de Latin-1 sin controles.
+ * Lo comparte el test de integración para comprobar que nada desaparece de la página.
+ */
+export const CP1252_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ'
+
 function esNumero(valor: unknown): valor is number {
   return typeof valor === 'number' && Number.isFinite(valor)
 }
@@ -146,4 +152,29 @@ export function lista(elementos: readonly string[]): string {
   if (limpios.length === 0) return SIN_DATO
   if (limpios.length === 1) return limpios[0]
   return `${limpios.slice(0, -1).join(', ')} y ${limpios[limpios.length - 1]}`
+}
+
+/**
+ * Deja un texto imprimible con Helvetica + WinAnsiEncoding.
+ *
+ * Los formatos de `src/data/mercadona.json` llevan el signo `≈` (U+2248), que WinAnsi no tiene:
+ * @react-pdf/renderer no falla, simplemente **borra** el carácter, así que "bandeja ≈ 1 kg" se
+ * imprimiría como "bandeja  1 kg" y el usuario leería un peso exacto donde hay una aproximación.
+ * Se sustituyen los pocos símbolos que pueden llegar desde datos y se descarta el resto.
+ */
+export function winAnsi(texto: string | null | undefined): string {
+  if (typeof texto !== 'string') return SIN_DATO
+  const sustituido = texto
+    .replace(/\u2248/g, 'aprox.')
+    .replace(/\u2212/g, '-')
+    .replace(/\u2264/g, '<=')
+    .replace(/\u2265/g, '>=')
+    .replace(/\u2192/g, '->')
+  let salida = ''
+  for (const c of sustituido) {
+    const code = c.codePointAt(0) ?? 0
+    const imprimible = (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff)
+    if (imprimible || c === '\n' || CP1252_EXTRA.includes(c)) salida += c
+  }
+  return salida
 }
