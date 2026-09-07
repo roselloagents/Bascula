@@ -314,6 +314,9 @@ export interface LimitesAjuste {
   kcal_recomendada: number
   /** `macros.hc_g` del plan recomendado. Nunca cambia. */
   hc_recomendado_g: number
+  /** `macros.grasa_g` del plan recomendado. Nunca cambia: `ajustarMacros` la restituye tal cual
+   *  cuando el ajuste está vacío, y así "volver a lo recomendado" devuelve el plan bit a bit. */
+  grasa_recomendada_g: number
   /** Extremo inferior del control de calorías (múltiplo de 10): el suelo de seguridad del paso 7. */
   kcal_min: number
   /** Extremo superior (múltiplo de 10): el TDEE en `perder`, `1,20 · kcal_recomendada` en el resto. */

@@ -2,16 +2,25 @@
 // TypeScript puro, sin React ni dependencias, determinista. Las firmas exportadas son las de
 // CONTRATO.md y no deben cambiar: la UI, el generador de comidas y el PDF las consumen tal cual.
 
+import { ajustarMacros } from './adjust'
 import { calcularGrasa } from './bodyfat'
 import { calcularBmr, calcularMlg } from './bmr'
 import { calcularCalorias } from './calories'
 import {
+  AJUSTE_KCAL_FACTOR_MAX,
+  AJUSTE_KCAL_FACTOR_MIN,
   ALTO_RENDIMIENTO_HORAS,
+  EA_MIN,
+  EA_MIN_MUY_ALTO,
+  HC_MIN_AJUSTE_UI,
   IMC_MUSCULADO_FFMI_HOMBRE,
   IMC_MUSCULADO_FFMI_MUJER,
   IMC_OBJETIVO_MIN,
+  KCAL_PASO_AJUSTE,
   MICRONUTRIENTES_KCAL_HOMBRE,
   MICRONUTRIENTES_KCAL_MUJER,
+  SUELO_KCAL_HOMBRE,
+  SUELO_KCAL_MUJER,
 } from './constants'
 import { calcularFfmi } from './ffmi'
 import { calcularObjetivo } from './goal'
@@ -19,15 +28,25 @@ import { calcularFibra, calcularMacros } from './macros'
 import { calcularComidas } from './meals'
 import type { CodigoAviso, EmitirAviso } from './messages'
 import { filtrarAvisos, textoError, textosAvisos } from './messages'
+import { normalizarPreferencias } from './preferences'
+import { round10, roundUp10 } from './round'
 import { calcularPesoObjetivo } from './target'
 import { calcularTdee } from './tdee'
-import { calcularCronograma } from './timeline'
+import { calcularPaso14 } from './timeline'
 import { validarInputs } from './validate'
 import { calcularAgua } from './water'
-import type { Condicion, ImcCategoria, Inputs, Resultado } from './types'
+import type {
+  Condicion,
+  ImcCategoria,
+  Inputs,
+  LimitesAjuste,
+  Menstruacion,
+  RecomposicionPrioridad,
+  Resultado,
+} from './types'
 
 export type * from './types'
-export { textoError, textosAvisos }
+export { ajustarMacros, textoError, textosAvisos }
 
 /** Paso 1 — categoría de IMC (OMS). Bordes estrictos por arriba, no estrictos por abajo. */
 function categoriaImc(imc: number): ImcCategoria {
@@ -63,6 +82,11 @@ export function calcular(inputs: Inputs): Resultado {
   if ((inputs.cribado_tca === 'positivo' || inputs.cribado_tca === 'evitado') && !condiciones.includes('tca')) {
     condiciones.push('tca')
   }
+  // Regla de traducción de las preferencias (§1.1) y normalización de la regla: se hacen aquí,
+  // antes de la primera exclusión, para que el resto del motor hable siempre del trío efectivo.
+  const { pref_base, restricciones, low_carb_pedido } = normalizarPreferencias(inputs)
+  const menstruacion: Menstruacion | null =
+    inputs.sexo === 'mujer' ? (inputs.menstruacion ?? null) : null // en hombres se ignora
   const imc = PC / h2
   if (inputs.edad < 18 || inputs.edad > 75) return { ...RESULTADO_BLOQUEADO, excluido: 'EXCL_EDAD' }
   if (inputs.embarazo_lactancia === true) return { ...RESULTADO_BLOQUEADO, excluido: 'EXCL_EMBARAZO_LACTANCIA' }
@@ -88,9 +112,22 @@ export function calcular(inputs: Inputs): Resultado {
 
   // ---------------- Paso 6
   const objetivo = calcularObjetivo(
-    { inputs, condiciones, imc, banda: grasa.banda, perfil: tdee.perfil, mlg },
+    {
+      inputs,
+      condiciones,
+      imc,
+      banda: grasa.banda,
+      perfil: tdee.perfil,
+      mlg,
+      pref_base,
+      restricciones,
+      low_carb_pedido,
+      menstruacion,
+    },
     emitir,
   )
+  // `null`/ausente ≡ `'equilibrado'`, que es exactamente el comportamiento v1.0 (§1 fila 22).
+  const recomposicion_prioridad: RecomposicionPrioridad = inputs.recomposicion_prioridad ?? 'equilibrado'
 
   // ---------------- Paso 7
   const calorias = calcularCalorias(
@@ -104,6 +141,7 @@ export function calcular(inputs: Inputs): Resultado {
       experiencia: inputs.entrenamiento.experiencia,
       objetivo_efectivo: objetivo.objetivo_efectivo,
       ritmo_efectivo: objetivo.ritmo_efectivo,
+      recomposicion_prioridad,
       tdee: tdee.valor,
       bmr: bmr.valor,
       mlg,
@@ -125,7 +163,9 @@ export function calcular(inputs: Inputs): Resultado {
       perfil: tdee.perfil,
       objetivo_efectivo,
       ritmo_efectivo: objetivo.ritmo_efectivo,
-      preferencia_efectiva: objetivo.preferencia_efectiva,
+      recomposicion_prioridad,
+      pref_base: objetivo.preferencia_base,
+      low_carb: objetivo.low_carb,
       condiciones,
       somatotipo: inputs.somatotipo,
       kcal: calorias.kcal,
@@ -135,7 +175,11 @@ export function calcular(inputs: Inputs): Resultado {
   const kcal = macros.kcal
 
   // ---------------- Paso 10bis — segunda pasada de la regla de margen, contra las kcal ya cerradas
-  if ((objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion') && kcal >= tdee.valor - 50) {
+  if (
+    !calorias.recomp_sin_deficit &&
+    (objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion') &&
+    kcal >= tdee.valor - 50
+  ) {
     objetivo_efectivo = 'mantener'
     emitir('WARN_SIN_MARGEN_DEFICIT')
   }
@@ -144,7 +188,7 @@ export function calcular(inputs: Inputs): Resultado {
   }
 
   // ---------------- Paso 11
-  const fibra = calcularFibra(kcal, macros.hc_g, objetivo.preferencia_efectiva, emitir)
+  const fibra = calcularFibra(kcal, macros.hc_g, objetivo.low_carb, emitir)
 
   // ---------------- Paso 12
   const agua = calcularAgua(
@@ -183,8 +227,8 @@ export function calcular(inputs: Inputs): Resultado {
     emitir,
   )
 
-  // ---------------- Paso 14
-  const cronograma = calcularCronograma(
+  // ---------------- Pasos 14 y 14b
+  const { cronograma, proyeccion } = calcularPaso14(
     {
       objetivo_efectivo,
       pesoKg: PC,
@@ -220,7 +264,7 @@ export function calcular(inputs: Inputs): Resultado {
   const es_renal = condiciones.includes('renal')
   if (inputs.edad >= 60 && !es_renal) emitir('INFO_MAYOR_60')
   if (inputs.edad >= 60 && es_renal) emitir('INFO_MAYOR_60_RENAL')
-  if (objetivo.preferencia_efectiva === 'vegano') emitir('INFO_VEGANO')
+  if (objetivo.preferencia_base === 'vegano') emitir('INFO_VEGANO')
   if (
     ffmi.normalizado >= (hombre ? IMC_MUSCULADO_FFMI_HOMBRE : IMC_MUSCULADO_FFMI_MUJER) &&
     imc >= 25 &&
@@ -237,10 +281,63 @@ export function calcular(inputs: Inputs): Resultado {
   }
   if (kcal < (hombre ? MICRONUTRIENTES_KCAL_HOMBRE : MICRONUTRIENTES_KCAL_MUJER)) emitir('INFO_MICRONUTRIENTES')
 
+  // REGLA (decisión D). Se evalúa aquí y no en el paso 6: `objetivo_efectivo` ya no puede cambiar,
+  // y la tercera cláusula mira el ritmo ELEGIDO por el usuario (el 6.7bis ya pudo suavizar el
+  // efectivo, y entonces la condición se autodestruiría).
+  if (menstruacion === 'regular' || menstruacion === 'irregular') emitir('INFO_CICLO')
+  if (
+    (menstruacion === 'irregular' || menstruacion === 'ausente') &&
+    (objetivo_efectivo === 'perder' ||
+      grasa.banda === 'muy_bajo' ||
+      grasa.banda === 'bajo' ||
+      inputs.ritmo === 'agresivo')
+  ) {
+    emitir('WARN_CICLO_AUSENTE')
+  }
+
   // Reevaluación contra `objetivo_efectivo`: el paso 6 lo emitió contra el objetivo intermedio.
   let avisos: CodigoAviso[] = emitidos
   if (objetivo_efectivo !== 'perder') avisos = avisos.filter((c) => c !== 'WARN_PERDIDA_MAYOR_65')
-  avisos = filtrarAvisos(avisos, condiciones.includes('tca'))
+  const tiene_tca = condiciones.includes('tca')
+  avisos = filtrarAvisos(avisos, tiene_tca)
+
+  // ---------------- Paso 18 — límites del ajuste manual (se publican SIEMPRE, también sin ajuste).
+  // Con `'tca'` no hay panel de ajuste: `limites_ajuste` queda `undefined`, igual que `proyeccion`.
+  const suelo_sexo = hombre ? SUELO_KCAL_HOMBRE : SUELO_KCAL_MUJER
+  const suelo_ea_aj = (grasa.banda === 'muy_alto' ? EA_MIN_MUY_ALTO : EA_MIN) * mlg + tdee.ejercicio_dia
+  const suelo_aj =
+    objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion'
+      ? Math.max(suelo_sexo, bmr.valor, suelo_ea_aj)
+      : suelo_sexo
+  let kcal_min_aj = roundUp10(suelo_aj)
+  let kcal_max_aj: number
+  if (objetivo_efectivo === 'perder') {
+    kcal_max_aj = round10(tdee.valor)
+  } else {
+    kcal_min_aj = Math.max(kcal_min_aj, round10(AJUSTE_KCAL_FACTOR_MIN * kcal))
+    kcal_max_aj = round10(AJUSTE_KCAL_FACTOR_MAX * kcal)
+  }
+  // El plan recomendado SIEMPRE cabe dentro de sus propios límites: el `round10` del paso 7 puede
+  // dejarlo hasta 5 kcal por debajo del suelo cuando el suelo no llegó a activarse.
+  kcal_min_aj = Math.min(kcal_min_aj, kcal)
+  kcal_max_aj = Math.max(kcal_max_aj, kcal)
+  if (kcal_max_aj < kcal_min_aj) kcal_max_aj = kcal_min_aj
+  const limites_ajuste: LimitesAjuste | undefined = tiene_tca
+    ? undefined
+    : {
+        kcal_recomendada: kcal,
+        hc_recomendado_g: macros.hc_g,
+        grasa_recomendada_g: macros.grasa_g,
+        kcal_min: kcal_min_aj,
+        kcal_max: kcal_max_aj,
+        kcal_paso: KCAL_PASO_AJUSTE,
+        hc_min_ui_g: HC_MIN_AJUSTE_UI,
+        hc_min_motor_g: macros.hc_min,
+        suelo_grasa_abs_g: macros.suelo_grasa_abs_g,
+        peso_kg: PC,
+        fecha_inicio: inputs.fecha_inicio,
+        kcal_micronutrientes: hombre ? MICRONUTRIENTES_KCAL_HOMBRE : MICRONUTRIENTES_KCAL_MUJER,
+      }
 
   return {
     imc,
@@ -291,6 +388,15 @@ export function calcular(inputs: Inputs): Resultado {
     ffmi,
     comidas,
     avisos,
+    // ---------------- v1.1
+    preferencia_base: objetivo.preferencia_base,
+    restricciones: objetivo.restricciones,
+    low_carb: objetivo.low_carb,
+    recomposicion_prioridad: objetivo_efectivo === 'recomposicion' ? recomposicion_prioridad : undefined,
+    // Regla no expuesta: con `'tca'` no se publica la proyección, por el mismo motivo por el que
+    // se retiran los avisos de cronograma (paso 17).
+    proyeccion: tiene_tca ? undefined : proyeccion,
+    limites_ajuste,
   }
 }
 

@@ -16,6 +16,7 @@ import {
   GRASA_PCT_PERDER,
   GRASA_PCT_PERDER_AGRESIVO,
   GRASA_PCT_RECOMPOSICION,
+  GRASA_PCT_RECOMPOSICION_PERDER,
   GRASA_SUELO_GKG_HOMBRE,
   GRASA_SUELO_GKG_MUJER,
   GRASA_SUELO_PCT_KCAL,
@@ -49,7 +50,8 @@ import type {
   InputSomatotipo,
   ObjetivoEfectivo,
   Perfil,
-  Preferencia,
+  PreferenciaBase,
+  RecomposicionPrioridad,
   Ritmo,
   Sexo,
   Somatotipo,
@@ -76,7 +78,12 @@ export interface EntradaMacros {
   perfil: Perfil
   objetivo_efectivo: ObjetivoEfectivo
   ritmo_efectivo: Ritmo
-  preferencia_efectiva: Preferencia
+  /** Prioridad de recomposición ya resuelta (paso 9: `perder` sube la grasa 5 puntos). */
+  recomposicion_prioridad: RecomposicionPrioridad
+  /** Base dietética efectiva: es ella —no el banco— la que multiplica la proteína (§1.1). */
+  pref_base: PreferenciaBase
+  /** Interruptor bajo en hidratos ya efectivo (el paso 6.8 lo anula con `diabetes`). */
+  low_carb: boolean
   condiciones: readonly Condicion[]
   somatotipo: InputSomatotipo | null
   kcal: number
@@ -97,12 +104,17 @@ export interface SalidaMacros {
   pct_cap: number
   suelo_g: number
   techo_g: number
+  /** Mínimo de hidratos del paso 10 (130 g, o 75 g con `low_carb`), para `limites_ajuste`. */
+  hc_min: number
+  /** Parte absoluta del suelo de grasa del paso 9: `(0,7 H / 0,8 M) · base_kg`. */
+  suelo_grasa_abs_g: number
 }
 
 export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMacros {
   const hombre = e.sexo === 'hombre'
   const PC = e.pesoKg
-  const pref = e.preferencia_efectiva
+  const pref_base = e.pref_base
+  const low_carb = e.low_carb
   const es_renal = e.condiciones.includes('renal')
   let kcal = e.kcal
 
@@ -131,8 +143,9 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
   if (e.condiciones.includes('bariatrica') || e.condiciones.includes('glp1')) {
     gkg = Math.max(gkg, PROT_MIN_BARIATRICA_GLP1)
   }
-  if (pref === 'vegano') gkg = gkg * PROT_FACTOR_VEGANO
-  if (pref === 'vegetariano') gkg = gkg * PROT_FACTOR_VEGETARIANO
+  // La BASE dietética, no el banco: un usuario vegano y bajo en hidratos sigue siendo vegano.
+  if (pref_base === 'vegano') gkg = gkg * PROT_FACTOR_VEGANO
+  if (pref_base === 'vegetariano') gkg = gkg * PROT_FACTOR_VEGETARIANO
   // El techo es SIEMPRE el último filtro de g/kg, después de los multiplicadores de preferencia.
   gkg = Math.min(gkg, e.imc >= 30 ? PROT_TECHO_GKG_AJUSTADO : PROT_TECHO_GKG)
 
@@ -145,7 +158,7 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
   if (e.condiciones.includes('otra')) emitir('WARN_CONDICION_OTRA')
 
   const pctCap = (): number =>
-    (pref === 'vegano' || pref === 'vegetariano') && kcal < PROT_KCAL_VEGETAL_UMBRAL
+    (pref_base === 'vegano' || pref_base === 'vegetariano') && kcal < PROT_KCAL_VEGETAL_UMBRAL
       ? PROT_PCT_CAP_VEGETAL
       : PROT_PCT_CAP
   const calcularPcap = (): number => Math.min(PROT_TECHO_GKG_PC * PC, pctCap() * kcal / 4)
@@ -179,20 +192,21 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
   let p_min = calcularPmin()
 
   // ---------------- Paso 9 — grasa
-  const pct_grasa =
-    pref === 'low_carb'
-      ? GRASA_PCT_LOWCARB
-      : e.objetivo_efectivo === 'perder'
-        ? e.ritmo_efectivo === 'agresivo'
-          ? GRASA_PCT_PERDER_AGRESIVO
-          : GRASA_PCT_PERDER
-        : e.objetivo_efectivo === 'recomposicion'
-          ? GRASA_PCT_RECOMPOSICION
-          : e.objetivo_efectivo === 'mantener'
-            ? GRASA_PCT_MANTENER
-            : GRASA_PCT_GANAR
+  const pct_grasa = low_carb
+    ? GRASA_PCT_LOWCARB
+    : e.objetivo_efectivo === 'perder'
+      ? e.ritmo_efectivo === 'agresivo'
+        ? GRASA_PCT_PERDER_AGRESIVO
+        : GRASA_PCT_PERDER
+      : e.objetivo_efectivo === 'recomposicion'
+        ? e.recomposicion_prioridad === 'perder'
+          ? GRASA_PCT_RECOMPOSICION_PERDER
+          : GRASA_PCT_RECOMPOSICION
+        : e.objetivo_efectivo === 'mantener'
+          ? GRASA_PCT_MANTENER
+          : GRASA_PCT_GANAR
   const suelo_gkg = hombre ? GRASA_SUELO_GKG_HOMBRE : GRASA_SUELO_GKG_MUJER
-  const pctTecho = pref === 'low_carb' ? GRASA_TECHO_PCT_KCAL_LOWCARB : GRASA_TECHO_PCT_KCAL
+  const pctTecho = low_carb ? GRASA_TECHO_PCT_KCAL_LOWCARB : GRASA_TECHO_PCT_KCAL
   const calcularSueloG = (): number => Math.max(suelo_gkg * base, GRASA_SUELO_PCT_KCAL * kcal / 9)
   const calcularTechoG = (): number => pctTecho * kcal / 9
 
@@ -225,10 +239,10 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
   const soma = clasificarSomatotipo(e.somatotipo)
   const delta = SOMATOTIPO_DESPLAZAMIENTO * (kcal - 4 * P) / 9
   let G1: number
-  if (pref !== 'low_carb' && soma === 'endomorfo') {
+  if (!low_carb && soma === 'endomorfo') {
     G1 = Math.min(G0 + delta, techo_g)
     emitir('INFO_SOMATOTIPO')
-  } else if (pref !== 'low_carb' && soma === 'ectomorfo') {
+  } else if (!low_carb && soma === 'ectomorfo') {
     G1 = Math.max(G0 - delta, suelo_g)
     emitir('INFO_SOMATOTIPO')
   } else {
@@ -239,7 +253,7 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
   if (G > techo_g) G = roundDown5(techo_g)
 
   // ---------------- Paso 10 — hidratos (resto) y factibilidad
-  const hc_min = pref === 'low_carb' ? HC_MIN_LOWCARB : HC_MIN
+  const hc_min = low_carb ? HC_MIN_LOWCARB : HC_MIN
   let HC = 0
   for (let it = 0; ; it++) {
     // Agotar el tope es un fallo del motor, no una salida válida (§ paso 10).
@@ -289,6 +303,8 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
     pct_cap,
     suelo_g,
     techo_g,
+    hc_min,
+    suelo_grasa_abs_g: suelo_gkg * base,
   }
 }
 
@@ -301,14 +317,13 @@ export interface SalidaFibra {
 export function calcularFibra(
   kcal: number,
   hc: number,
-  preferencia: Preferencia,
+  low_carb: boolean,
   emitir: EmitirAviso,
 ): SalidaFibra {
   const fibra_prop = FIBRA_POR_1000_KCAL * kcal / 1000
-  const suelo_fibra =
-    preferencia === 'low_carb'
-      ? Math.max(FIBRA_SUELO_LOWCARB, FIBRA_LOWCARB_POR_1000_KCAL * kcal / 1000)
-      : Math.min(FIBRA_REFERENCIA, FIBRA_SUELO_PCT_HC * hc)
+  const suelo_fibra = low_carb
+    ? Math.max(FIBRA_SUELO_LOWCARB, FIBRA_LOWCARB_POR_1000_KCAL * kcal / 1000)
+    : Math.min(FIBRA_REFERENCIA, FIBRA_SUELO_PCT_HC * hc)
   const fibra_g = Math.round(clamp(fibra_prop, suelo_fibra, FIBRA_MAX))
   if (fibra_g < FIBRA_REFERENCIA) emitir('INFO_FIBRA_AJUSTADA')
   return { fibra_g, azucares_libres_max_g: 0.10 * kcal / 4 }

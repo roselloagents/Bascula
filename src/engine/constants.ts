@@ -82,6 +82,31 @@ export const GANANCIA_LEJANA_UMBRAL = 0.10
 export const HORIZONTE_MAX_SEMANAS = 104
 export const HORIZONTE_MAX_SEMANAS_GANAR = 20
 
+// ---------- §3.1 v1.1 — prioridad de recomposición, proyección y ajuste manual ----------
+/** `perder`: el déficit de recomposición sube 5 puntos porcentuales, con tope duro del 15 %. */
+export const RECOMP_PRIORIDAD_DELTA = 0.05
+export const RECOMP_PRIORIDAD_TOPE = 0.15
+/** Semanas de la proyección con cronograma (tope duro) y sin él (curva plana). */
+export const SEM_PROYECCION_MAX = 26
+export const SEM_PROYECCION_PLANA = 12
+/** Oscilación normal de peso (agua, sal, intestino) de la proyección plana. */
+export const BANDA_PLANA_KG = 1
+/** Un ciclo MATADOR son 8 semanas de dieta + 1 de descanso = 9 semanas de calendario. */
+export const DIET_BREAK_CICLO_SEMANAS = 9
+/** Mínimo del deslizador de hidratos del panel de ajuste (paso 18). */
+export const HC_MIN_AJUSTE_UI = 30
+/** Salto del control de calorías del panel de ajuste. */
+export const KCAL_PASO_AJUSTE = 50
+/** Franja de calorías del ajuste fuera de `perder`: ±20 % del plan recomendado. */
+export const AJUSTE_KCAL_FACTOR_MIN = 0.80
+export const AJUSTE_KCAL_FACTOR_MAX = 1.20
+/** Déficit por debajo del cual el plan ajustado deja de ser una pérdida (`WARN_KCAL_AJUSTE_ALTA`). */
+export const AJUSTE_DEFICIT_MIN = 100
+/** Orden canónico de las restricciones combinables (§1.1). */
+export const RESTRICCIONES_CANONICAS = ['sin_lactosa', 'sin_gluten'] as const
+/** Bases dietéticas excluyentes (§1.1). */
+export const PREFERENCIAS_BASE = ['omnivoro', 'vegetariano', 'vegano'] as const
+
 // ---------- §3.2 Somatotipo ----------
 export const SOMA_Q1: Record<'fina' | 'media' | 'ancha', number> = { fina: -1, media: 0, ancha: 1 }
 export const SOMA_Q2: Record<'poca' | 'moderada' | 'mucha', number> = { poca: -1, moderada: 0, mucha: 1 }
@@ -156,6 +181,8 @@ export const GRASA_PCT_LOWCARB = 0.45
 export const GRASA_PCT_PERDER_AGRESIVO = 0.25
 export const GRASA_PCT_PERDER = 0.28
 export const GRASA_PCT_RECOMPOSICION = 0.28
+/** Recomposición con prioridad `perder`: +5 puntos de grasa a costa de los hidratos (v1.1). */
+export const GRASA_PCT_RECOMPOSICION_PERDER = 0.33
 export const GRASA_PCT_MANTENER = 0.32
 export const GRASA_PCT_GANAR = 0.27
 

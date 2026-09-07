@@ -20,6 +20,11 @@ const DOMINIOS = {
   preferencia: ['omnivoro', 'vegetariano', 'vegano', 'sin_lactosa', 'sin_gluten', 'low_carb'],
   condicion: ['diabetes', 'renal', 'hepatica', 'tca', 'cardiaca', 'hipertension', 'tiroides', 'bariatrica', 'glp1', 'otra'],
   cribado_tca: ['positivo', 'evitado', 'negativo'],
+  // v1.1: solo se validan si están presentes y no son `null` (§1.1).
+  recomposicion_prioridad: ['perder', 'equilibrado', 'ganar'],
+  menstruacion: ['regular', 'irregular', 'ausente', 'no_dice'],
+  preferencia_base: ['omnivoro', 'vegetariano', 'vegano'],
+  restriccion: ['sin_lactosa', 'sin_gluten'],
 } as const satisfies Record<string, readonly string[]>
 
 /** Etiquetas legibles de cada campo, para el texto de `ERR_INPUT_RANGO`. */
@@ -51,6 +56,11 @@ export const ETIQUETAS_CAMPO: Record<string, string> = {
   condiciones: 'las condiciones de salud',
   cribado_tca: 'la respuesta del cuestionario breve',
   fecha_inicio: 'la fecha de inicio',
+  recomposicion_prioridad: 'qué te importa más ahora en la recomposición',
+  menstruacion: 'la respuesta sobre tu regla',
+  preferencia_base: 'la base de tu alimentación',
+  restricciones: 'las restricciones alimentarias',
+  low_carb: 'la opción baja en hidratos',
 }
 
 const enDominio = (dominio: readonly string[], valor: unknown): boolean =>
@@ -96,6 +106,27 @@ export function validarInputs(inputs: Inputs): string[] {
     e.push('cribado_tca')
   }
   if (![2, 3, 4, 5, 6].includes(inputs.n_comidas)) e.push('n_comidas')
+
+  // --- v1.1: campos opcionales. Ausente o `null` es SIEMPRE válido (§1.1); presente, debe
+  // pertenecer a su dominio. `menstruacion` con `sexo = 'hombre'` no es un error: se valida y
+  // después el paso 0 la ignora.
+  const opcional = (valor: unknown, dominio: readonly string[], campo: string): void => {
+    if (valor !== undefined && valor !== null && !enDominio(dominio, valor)) e.push(campo)
+  }
+  opcional(inputs.recomposicion_prioridad, DOMINIOS.recomposicion_prioridad, 'recomposicion_prioridad')
+  opcional(inputs.menstruacion, DOMINIOS.menstruacion, 'menstruacion')
+  opcional(inputs.preferencia_base, DOMINIOS.preferencia_base, 'preferencia_base')
+  if (
+    inputs.restricciones !== undefined &&
+    inputs.restricciones !== null &&
+    (!Array.isArray(inputs.restricciones) ||
+      inputs.restricciones.some((r) => !enDominio(DOMINIOS.restriccion, r)))
+  ) {
+    e.push('restricciones')
+  }
+  if (inputs.low_carb !== undefined && inputs.low_carb !== null && typeof inputs.low_carb !== 'boolean') {
+    e.push('low_carb')
+  }
 
   // --- enteros y formato de fecha
   if (!Number.isInteger(inputs.edad)) e.push('edad')

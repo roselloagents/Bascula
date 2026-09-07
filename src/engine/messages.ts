@@ -4,7 +4,7 @@
 // del paso 17.
 
 import { capDeficit } from './calories'
-import { EA_MIN, EA_MIN_MUY_ALTO } from './constants'
+import { EA_MIN, EA_MIN_MUY_ALTO, HC_MIN } from './constants'
 import { round5 } from './round'
 import { mensajesDeErrores, validarInputs } from './validate'
 import type { AvisoTexto, Inputs, Resultado, Severidad } from './types'
@@ -85,6 +85,15 @@ export type CodigoAviso =
   | 'INFO_IMC_MUSCULADO'
   | 'INFO_GRASA_ESTIMADA'
   | 'INFO_ALTO_RENDIMIENTO'
+  // ---------- v1.1 ----------
+  | 'INFO_RECOMP_PRIORIDAD_PERDER'
+  | 'INFO_RECOMP_PRIORIDAD_GANAR'
+  | 'INFO_CICLO'
+  | 'WARN_CICLO_AUSENTE'
+  | 'INFO_PROYECCION_PLANA'
+  | 'INFO_AJUSTE_MANUAL'
+  | 'WARN_HC_BAJO_MINIMO'
+  | 'WARN_KCAL_AJUSTE_ALTA'
 
 /** Emisor de avisos del motor: idempotente, sin duplicados. */
 export type EmitirAviso = (codigo: CodigoAviso) => void
@@ -585,6 +594,63 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
     texto:
       'Con más de 10 horas semanales de entrenamiento, un/a dietista-nutricionista deportivo puede afinar mucho más estos números (periodización, timing). Toma esto como punto de partida.',
   },
+
+  // ---------------------------------------------------------------- v1.1
+  INFO_RECOMP_PRIORIDAD_PERDER: {
+    severidad: 'info',
+    titulo: 'Recomposición con foco en la grasa',
+    texto:
+      'Nos has dicho que ahora te importa más perder grasa, así que dentro de la recomposición hemos apretado un poco el déficit y te hemos subido la grasa a costa de los hidratos. Sigue siendo una recomposición: los cambios serán lentos y la báscula se moverá poco. Mide con fotos y cinta métrica, no solo con el peso.',
+  },
+  INFO_RECOMP_PRIORIDAD_GANAR: {
+    severidad: 'info',
+    titulo: 'Recomposición sin déficit',
+    texto:
+      'Nos has dicho que ahora te importa más ganar músculo, así que no te ponemos déficit: comerás en tu gasto estimado. Con la proteína alta y entrenamiento de fuerza 3-4 días por semana es donde más músculo se gana sin engordar. Si dentro de un par de meses la cintura sube, vuelve a calcular pidiendo prioridad a perder grasa.',
+  },
+  INFO_CICLO: {
+    severidad: 'info',
+    titulo: 'Tu ciclo y tu plan',
+    texto:
+      'Tu gasto energético cambia poco a lo largo del ciclo, así que no ajustamos tus calorías por eso. Lo que sí cambia es lo que marca la báscula: la semana antes de la regla es normal retener 1-2 kg de agua y tener más hambre (unas 100-300 kcal). Pésate siempre en la misma fase del ciclo si quieres comparar, no te asustes con el peso de esa semana, y si comes 100-200 kcal más esos días, compénsalo en el resto de la semana sin cambiar el total. En los días de regla, cuida el hierro: carne roja, legumbre o verdura de hoja acompañadas de algo de vitamina C.',
+  },
+  WARN_CICLO_AUSENTE: {
+    severidad: 'warn',
+    titulo: 'Regla y déficit: ojo',
+    // El fragmento del ritmo se omite cuando el paso 6.7bis no ha suavizado nada, es decir,
+    // cuando el usuario no había elegido `agresivo`.
+    texto: (ctx) =>
+      `Nos has dicho que tu regla es irregular o que no la tienes, y a la vez tu plan lleva déficit, poca grasa corporal o un ritmo rápido. Esa combinación puede indicar baja disponibilidad energética (lo que se llama RED-S): comer por debajo de lo que gastas durante meses altera las hormonas, el hueso y el propio ciclo.${
+        ctx.inputs.ritmo === 'agresivo' ? ' Hemos suavizado el ritmo a moderado.' : ''
+      } Si llevas tres meses o más sin regla y no es por anticonceptivos ni por la menopausia, pide cita con tu médico antes de seguir con el déficit.`,
+  },
+  INFO_PROYECCION_PLANA: {
+    severidad: 'info',
+    titulo: 'Sin curva de peso',
+    texto:
+      'Con este objetivo no proyectamos una curva de peso: lo que esperamos es que tu peso se mantenga, con la oscilación normal de un kilo arriba o abajo por agua, sal e intestino. Lo que sí debería cambiar es cómo te queda la ropa, las medidas y las cargas del entrenamiento.',
+  },
+  INFO_AJUSTE_MANUAL: {
+    severidad: 'info',
+    titulo: 'Plan ajustado por ti',
+    texto:
+      'Has ajustado a mano las calorías o los hidratos, así que estos ya no son los números que te propusimos. Hemos recalculado con tu ajuste la grasa, el reparto por comidas, el menú, la lista de la compra y el calendario. La proteína no la tocamos: es la que protege tu músculo cuando comes menos. Puedes volver a lo recomendado cuando quieras.',
+  },
+  WARN_HC_BAJO_MINIMO: {
+    severidad: 'warn',
+    titulo: 'Hidratos por debajo del mínimo',
+    // `{130/75}` se resuelve a `limites_ajuste.hc_min_motor_g`: 75 g con bajo en hidratos.
+    texto: (ctx) => {
+      const minimo = ctx.resultado.limites_ajuste?.hc_min_motor_g ?? HC_MIN
+      return `Has bajado los hidratos por debajo de los ${minimo} g que usamos como mínimo de referencia. No es peligroso a corto plazo y hay gente que se encuentra mejor así, pero cuenta con dos cosas: entrenar fuerte cuesta más y la fibra es más difícil de cubrir. Si te notas sin energía, con mal descanso o con estreñimiento, súbelos otra vez.`
+    },
+  },
+  WARN_KCAL_AJUSTE_ALTA: {
+    severidad: 'warn',
+    titulo: 'Ese ajuste deja de ser déficit',
+    texto:
+      'Con las calorías que has puesto, el déficit se queda en menos de 100 kcal al día sobre tu gasto estimado: en la práctica esto es un plan de mantenimiento y el calendario que ves deja de tener sentido. Si quieres perder grasa, baja las calorías o sube la actividad diaria; si lo que quieres es mantener, cambia el objetivo y vuelve a calcular.',
+  },
 }
 
 // ---------------------------------------------------------------- supresiones (paso 6) y filtro TCA (paso 17)
@@ -594,6 +660,25 @@ const CRONOGRAMA_CORTE: CodigoAviso[] = [
   'INFO_SIN_CRONOGRAMA_SIN_MARGEN',
   'INFO_CRONOGRAMA_NO_ESTIMABLE',
   'INFO_CRONOGRAMA_FUERA_DE_HORIZONTE',
+]
+
+/** Familia entera del cronograma y de la proyección: el paso 18 la retira y la vuelve a emitir. */
+export const CRONOGRAMA_FAMILIA: CodigoAviso[] = [
+  'INFO_ADAPTACION',
+  'WARN_CRONOGRAMA_LARGO',
+  ...CRONOGRAMA_CORTE,
+  'INFO_PROYECCION_PLANA',
+]
+
+/** Avisos que `ajustarMacros` retira antes de reevaluarlos con las kcal y los HC nuevos (paso 18). */
+export const AVISOS_REEVALUADOS_AJUSTE: CodigoAviso[] = [
+  'INFO_AJUSTE_MANUAL',
+  'WARN_HC_BAJO_MINIMO',
+  'WARN_KCAL_AJUSTE_ALTA',
+  ...CRONOGRAMA_FAMILIA,
+  'INFO_FIBRA_AJUSTADA',
+  'INFO_MICRONUTRIENTES',
+  'WARN_DEFICIT_MINIMO',
 ]
 
 /** Avisos que no se emiten con `'tca' ∈ condiciones` (paso 17, lista cerrada). */
@@ -610,10 +695,13 @@ export const TCA_OCULTOS: CodigoAviso[] = [
   'INFO_SIN_CRONOGRAMA_SIN_MARGEN',
   'INFO_CRONOGRAMA_NO_ESTIMABLE',
   'INFO_CRONOGRAMA_FUERA_DE_HORIZONTE',
+  'INFO_PROYECCION_PLANA',
 ]
 
-/** Reglas de supresión de avisos contradictorios (paso 6). La lista es cerrada. */
+/** Reglas de supresión de avisos contradictorios (paso 6, más la de la v1.1). La lista es cerrada. */
 export const SUPRESIONES: ReadonlyArray<readonly [CodigoAviso, readonly CodigoAviso[]]> = [
+  // v1.1: la condición de WARN_DEFICIT_MINIMO está contenida en la de WARN_KCAL_AJUSTE_ALTA.
+  ['WARN_KCAL_AJUSTE_ALTA', ['WARN_DEFICIT_MINIMO']],
   ['INFO_OBJETIVO_IGNORADO', ['WARN_OBJETIVO_INCOHERENTE']],
   ['WARN_IMC_BAJO_NO_DEFICIT', ['WARN_YA_MAGRO']],
   ['WARN_YA_EN_OBJETIVO', ['WARN_YA_MAGRO']],

@@ -1,4 +1,4 @@
-// Vectores de prueba normativos de docs/SPEC-calculo.md §5 (los catorce casos), más las
+// Vectores de prueba normativos de docs/SPEC-calculo.md §5 (los dieciséis casos), más las
 // exclusiones del paso 0, la validación de la §1 y los casos borde de las tablas 3.x.
 //
 // Convención de la §5: los intermedios se comparan con tolerancia ±0,15 (la spec la fija así
@@ -143,7 +143,7 @@ interface Vector {
   avisos: string[]
 }
 
-// ---------------------------------------------------------------- los catorce vectores
+// ---------------------------------------------------------------- los dieciséis vectores
 
 const VECTORES: Vector[] = [
   {
@@ -370,7 +370,7 @@ const VECTORES: Vector[] = [
       { nombre: 'Comida', hora: '14:00', pct: 35, p: 50, g: 30, hc: 80, kcal: 790, peri: false },
       { nombre: 'Cena', hora: '21:00', pct: 35, p: 55, g: 30, hc: 90, kcal: 850, peri: false },
     ],
-    avisos: ['INFO_AGUA_MAYORES', 'INFO_MAYOR_60', 'INFO_SIN_CRONOGRAMA', 'WARN_PROTEINA_TOMA_ALTA'],
+    avisos: ['INFO_AGUA_MAYORES', 'INFO_MAYOR_60', 'INFO_PROYECCION_PLANA', 'INFO_SIN_CRONOGRAMA', 'WARN_PROTEINA_TOMA_ALTA'],
   },
 
   {
@@ -651,7 +651,7 @@ const VECTORES: Vector[] = [
       { nombre: 'Comida', hora: '14:00', pct: 35, p: 45, g: 35, hc: 150, kcal: 1095, peri: false },
       { nombre: 'Cena', hora: '21:00', pct: 35, p: 40, g: 40, hc: 145, kcal: 1100, peri: false },
     ],
-    avisos: ['INFO_IMC_MUSCULADO', 'INFO_SIN_CRONOGRAMA', 'WARN_SIN_MARGEN_DEFICIT'],
+    avisos: ['INFO_IMC_MUSCULADO', 'INFO_PROYECCION_PLANA', 'INFO_SIN_CRONOGRAMA', 'WARN_SIN_MARGEN_DEFICIT'],
   },
 
   {
@@ -696,7 +696,7 @@ const VECTORES: Vector[] = [
       { nombre: 'Merienda', hora: '17:30', pct: 15, p: 25, g: 10, hc: 55, kcal: 410, peri: true },
       { nombre: 'Cena', hora: '21:00', pct: 30, p: 50, g: 25, hc: 85, kcal: 765, peri: false },
     ],
-    avisos: ['INFO_SIN_CRONOGRAMA', 'WARN_PROTEINA_TOMA_ALTA', 'WARN_YA_EN_OBJETIVO'],
+    avisos: ['INFO_PROYECCION_PLANA', 'INFO_SIN_CRONOGRAMA', 'WARN_PROTEINA_TOMA_ALTA', 'WARN_YA_EN_OBJETIVO'],
   },
 
   {
@@ -792,8 +792,111 @@ const VECTORES: Vector[] = [
     avisos: [
       'INFO_AGUA_MAYORES', 'INFO_CRONOGRAMA_FUERA_DE_HORIZONTE', 'INFO_DEFICIT_CAPADO_TDEE',
       'INFO_FIBRA_AJUSTADA', 'INFO_GRASA_ESTIMADA', 'INFO_MAYOR_60', 'INFO_PROTEINA_CAPADA',
+      'INFO_PROYECCION_PLANA',
       'WARN_DEFICIT_INFACTIBLE', 'WARN_OBJETIVO_MUY_LEJANO', 'WARN_PERDIDA_MAYOR_65',
     ],
+  },
+
+  {
+    n: '15',
+    titulo: 'Mujer 34 años, perder agresivo, regla irregular, omnívora sin lactosa (D, E, F)',
+    inputs: {
+      ...BASE,
+      sexo: 'mujer',
+      edad: 34,
+      altura_cm: 168,
+      peso_kg: 78,
+      grasa: { metodo: 'desconocido' },
+      somatotipo: null,
+      actividad_diaria: 'ligero',
+      entrenamiento: ent({ tipo: 'fuerza', dias_semana: 3, minutos_sesion: 50, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+      objetivo: 'perder',
+      ritmo: 'agresivo',
+      peso_objetivo: 68,
+      n_comidas: 4,
+      preferencia_base: 'omnivoro',
+      restricciones: ['sin_lactosa'],
+      low_carb: false,
+      menstruacion: 'irregular',
+    },
+    imc: 27.6,
+    imc_categoria: 'sobrepeso',
+    grasa: { pct: 38.5, margen: 5, cunbae: 38.5, deurenberg: 35.6, fiabilidad: 'baja', metodo_efectivo: 'desconocido', banda: 'muy_alto' },
+    mlg: 48.01,
+    bmr: { valor: 1499.0, ecuacion: 'mifflin', mifflin: 1499.0, katch: 1407.0, harris: 1542.1 },
+    tdee: { valor: 2241.9, bruto: 2359.9, pal: 1.5, ejercicio_dia: 111.4, perfil: 'fuerza', kcal_sesion: 260.0 },
+    // El paso 6.7bis ha suavizado el ritmo `agresivo` a `moderado` por `menstruacion = 'irregular'`.
+    objetivo_efectivo: 'perder',
+    ritmo_efectivo: 'moderado',
+    kcal: 1600,
+    kcal_cierre: 1605,
+    macros: { p: 120, g: 65, hc: 135, fibra: 22, azucares: 40.0, base_kg: 78.0, base_proteina: 'peso_corporal', somatotipo: 'mesomorfo' },
+    agua: { ml: 2750, rango: [2500, 3000], vasos: 11 },
+    peso_objetivo: {
+      metodo: 'grasa', sugerido: 62.5, rango: [57.0, 67.0], mostrar_central: false, efectivo: 68.0, hito: null,
+      imc22: 62.1, rango_imc: [56.4, 70.3],
+      clasicas: { devine: 59.6, robinson: 59.4, miller: 61.5, hamwi: 59.0 },
+    },
+    cronograma: { ritmo_kg_sem: 0.584, ritmo_pct_sem: 0.75, delta_kg: 10.0, semanas: [20, 22], diet_breaks: 2, fecha_min: '2027-01-25', fecha_max: '2027-02-08', precision_fecha: 'mes', tramo_12sem: [6.0, 7.0] },
+    ffmi: { valor: 17.0, normalizado: 17.1, categoria: null },
+    comidas: [
+      { nombre: 'Desayuno', hora: '08:00', pct: 25, p: 30, g: 15, hc: 35, kcal: 395, peri: false },
+      { nombre: 'Comida', hora: '14:00', pct: 30, p: 35, g: 20, hc: 35, kcal: 460, peri: false },
+      { nombre: 'Merienda', hora: '17:30', pct: 15, p: 20, g: 10, hc: 25, kcal: 270, peri: true },
+      { nombre: 'Cena', hora: '21:00', pct: 30, p: 35, g: 20, hc: 40, kcal: 480, peri: false },
+    ],
+    avisos: ['INFO_ADAPTACION', 'INFO_CICLO', 'INFO_FIBRA_AJUSTADA', 'INFO_GRASA_ESTIMADA', 'INFO_PROTEINA_CAPADA', 'WARN_CICLO_AUSENTE'],
+  },
+
+  {
+    n: '16',
+    titulo: 'Mujer 31 años, recomposición con prioridad perder, y ajuste manual de hidratos (B, C)',
+    inputs: {
+      ...BASE,
+      sexo: 'mujer',
+      edad: 31,
+      altura_cm: 165,
+      peso_kg: 64,
+      grasa: { metodo: 'conocido', valor: 27, fuente: 'fiable' },
+      somatotipo: null,
+      actividad_diaria: 'ligero',
+      entrenamiento: ent({ tipo: 'fuerza', dias_semana: 4, minutos_sesion: 55, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+      objetivo: 'recomposicion',
+      ritmo: 'moderado',
+      n_comidas: 4,
+      preferencia_base: 'omnivoro',
+      restricciones: [],
+      low_carb: false,
+      recomposicion_prioridad: 'perder',
+      menstruacion: 'regular',
+    },
+    imc: 23.5,
+    imc_categoria: 'normal',
+    grasa: { pct: 27.0, margen: 2, cunbae: 32.0, deurenberg: 29.9, fiabilidad: 'alta', metodo_efectivo: 'conocido', banda: 'medio' },
+    mlg: 46.72,
+    bmr: { valor: 1379.2, ecuacion: 'katch_mcardle', mifflin: 1355.3, katch: 1379.2, harris: 1416.3 },
+    tdee: { valor: 2092.7, bruto: 2202.8, pal: 1.5, ejercicio_dia: 134.1, perfil: 'fuerza', kcal_sesion: 234.7 },
+    objetivo_efectivo: 'recomposicion',
+    ritmo_efectivo: 'moderado',
+    // Déficit de recomposición: tabla 3.9[medio] 7,5 % + 5 puntos por la prioridad = 12,5 %.
+    kcal: 1830,
+    kcal_cierre: 1825,
+    macros: { p: 130, g: 65, hc: 180, fibra: 26, azucares: 45.8, base_kg: 64.0, base_proteina: 'peso_corporal', somatotipo: 'mesomorfo' },
+    agua: { ml: 2500, rango: [2250, 2750], vasos: 10 },
+    peso_objetivo: {
+      metodo: 'actual', sugerido: 64.0, rango: [57.0, 64.0], mostrar_central: true, efectivo: null, hito: null,
+      imc22: 59.9, rango_imc: [54.4, 67.8],
+      clasicas: { devine: 56.9, robinson: 57.4, miller: 59.8, hamwi: 56.4 },
+    },
+    cronograma: null,
+    ffmi: { valor: 17.2, normalizado: 17.5, categoria: 'bueno' },
+    comidas: [
+      { nombre: 'Desayuno', hora: '08:00', pct: 25, p: 35, g: 15, hc: 45, kcal: 455, peri: false },
+      { nombre: 'Comida', hora: '14:00', pct: 30, p: 35, g: 20, hc: 45, kcal: 500, peri: false },
+      { nombre: 'Merienda', hora: '17:30', pct: 15, p: 20, g: 10, hc: 35, kcal: 310, peri: true },
+      { nombre: 'Cena', hora: '21:00', pct: 30, p: 40, g: 20, hc: 55, kcal: 560, peri: false },
+    ],
+    avisos: ['INFO_BMR_ATLETA', 'INFO_CICLO', 'INFO_PROYECCION_PLANA', 'INFO_RECOMP_PRIORIDAD_PERDER', 'INFO_SIN_CRONOGRAMA', 'WARN_PROTEINA_TOMA_ALTA'],
   },
 ]
 
@@ -1323,7 +1426,7 @@ describe('Fragmentos condicionales de los textos (§4)', () => {
 
 // ---------------------------------------------------------------- invariantes sobre los vectores
 
-describe('Invariantes de seguridad sobre los catorce vectores', () => {
+describe('Invariantes de seguridad sobre los dieciséis vectores', () => {
   it('perder implica al menos 50 kcal de déficit real (S24)', () => {
     for (const v of VECTORES) {
       const r = calcular(v.inputs)

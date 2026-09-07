@@ -10,6 +10,8 @@ import {
   IMC_OBJETIVO_MIN,
   KCAL_POR_KG_GRASA,
   RECOMPOSICION,
+  RECOMP_PRIORIDAD_DELTA,
+  RECOMP_PRIORIDAD_TOPE,
   RITMO_PERDIDA,
   SUELO_KCAL_HOMBRE,
   SUELO_KCAL_MUJER,
@@ -20,7 +22,15 @@ import {
 } from './constants'
 import type { EmitirAviso } from './messages'
 import { clamp, round10, roundUp10 } from './round'
-import type { BandaGrasa, Experiencia, ObjetivoEfectivo, Perfil, Ritmo, Sexo } from './types'
+import type {
+  BandaGrasa,
+  Experiencia,
+  ObjetivoEfectivo,
+  Perfil,
+  RecomposicionPrioridad,
+  Ritmo,
+  Sexo,
+} from './types'
 
 export interface EntradaCalorias {
   sexo: Sexo
@@ -32,6 +42,8 @@ export interface EntradaCalorias {
   experiencia: Experiencia
   objetivo_efectivo: ObjetivoEfectivo
   ritmo_efectivo: Ritmo
+  /** Prioridad de recomposición ya resuelta (`'equilibrado'` por defecto, v1.1). */
+  recomposicion_prioridad: RecomposicionPrioridad
   tdee: number
   bmr: number
   mlg: number
@@ -42,6 +54,8 @@ export interface SalidaCalorias {
   kcal: number
   objetivo_efectivo: ObjetivoEfectivo
   cap_pct: number
+  /** Exención de la regla de margen: `recomposicion` + prioridad `ganar` pide CERO déficit. */
+  recomp_sin_deficit: boolean
 }
 
 /** Techo de déficit como fracción del TDEE (§3.1). */
@@ -55,6 +69,11 @@ export function calcularCalorias(e: EntradaCalorias, emitir: EmitirAviso): Salid
   const cap_pct = capDeficit(e.banda, e.edad)
   let objetivo_efectivo = e.objetivo_efectivo
   let kcal_calc: number
+  // Quien pide recomposición priorizando ganar músculo pide explícitamente cero déficit:
+  // convertirlo en `mantener` con WARN_SIN_MARGEN_DEFICIT sería contarle que "no podemos
+  // proponerte un déficit" cuando es justo lo que ha pedido.
+  const recomp_sin_deficit =
+    objetivo_efectivo === 'recomposicion' && e.recomposicion_prioridad === 'ganar'
 
   if (objetivo_efectivo === 'perder') {
     const ritmo_pct = RITMO_PERDIDA[e.banda as 'muy_alto' | 'alto' | 'medio'][e.ritmo_efectivo]
@@ -66,7 +85,15 @@ export function calcularCalorias(e: EntradaCalorias, emitir: EmitirAviso): Salid
     const sup_pct = e.perfil !== 'fuerza' ? SUPERAVIT_SIN_FUERZA : SUPERAVIT[e.experiencia][e.ritmo_efectivo]
     kcal_calc = e.tdee + clamp(sup_pct * e.tdee, SUPERAVIT_MIN, SUPERAVIT_MAX)
   } else if (objetivo_efectivo === 'recomposicion') {
-    kcal_calc = e.tdee * (1 - RECOMPOSICION[e.banda])
+    let d = RECOMPOSICION[e.banda]
+    if (e.recomposicion_prioridad === 'perder') {
+      d = Math.min(d + RECOMP_PRIORIDAD_DELTA, RECOMP_PRIORIDAD_TOPE)
+      emitir('INFO_RECOMP_PRIORIDAD_PERDER')
+    } else if (e.recomposicion_prioridad === 'ganar') {
+      d = 0
+      emitir('INFO_RECOMP_PRIORIDAD_GANAR')
+    }
+    kcal_calc = e.tdee * (1 - d)
   } else {
     kcal_calc = e.tdee
   }
@@ -100,11 +127,15 @@ export function calcularCalorias(e: EntradaCalorias, emitir: EmitirAviso): Salid
   let kcal = suelo_activo ? roundUp10(kcal_calc) : round10(kcal_calc)
 
   // Primera pasada de la regla de margen; los pasos 9 y 10 aún pueden subir kcal (paso 10bis).
-  if ((objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion') && kcal >= e.tdee - 50) {
+  if (
+    !recomp_sin_deficit &&
+    (objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion') &&
+    kcal >= e.tdee - 50
+  ) {
     objetivo_efectivo = 'mantener'
     kcal = round10(Math.max(e.tdee, kcal))
     emitir('WARN_SIN_MARGEN_DEFICIT')
   }
 
-  return { kcal, objetivo_efectivo, cap_pct }
+  return { kcal, objetivo_efectivo, cap_pct, recomp_sin_deficit }
 }

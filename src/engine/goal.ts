@@ -9,7 +9,19 @@ import {
   IMC_OBJETIVO_MIN,
 } from './constants'
 import type { EmitirAviso } from './messages'
-import type { BandaGrasa, Condicion, Inputs, ObjetivoEfectivo, Perfil, Preferencia, Ritmo } from './types'
+import { bancoDe } from './preferences'
+import type {
+  BandaGrasa,
+  Condicion,
+  Inputs,
+  Menstruacion,
+  ObjetivoEfectivo,
+  Perfil,
+  Preferencia,
+  PreferenciaBase,
+  Restriccion,
+  Ritmo,
+} from './types'
 
 export interface EntradaObjetivo {
   inputs: Inputs
@@ -18,6 +30,12 @@ export interface EntradaObjetivo {
   banda: BandaGrasa
   perfil: Perfil
   mlg: number
+  /** Trío de la regla de traducción del paso 0 (§1.1). */
+  pref_base: PreferenciaBase
+  restricciones: readonly Restriccion[]
+  low_carb_pedido: boolean
+  /** `menstruacion` normalizada del paso 0: siempre `null` en hombres. */
+  menstruacion: Menstruacion | null
 }
 
 export interface SalidaObjetivo {
@@ -26,6 +44,10 @@ export interface SalidaObjetivo {
   objetivo_propuesto?: ObjetivoEfectivo
   ritmo_efectivo: Ritmo
   preferencia_efectiva: Preferencia
+  /** Trío efectivo publicado en `Resultado` (paso 6.8). */
+  preferencia_base: PreferenciaBase
+  restricciones: Restriccion[]
+  low_carb: boolean
   /** %grasa objetivo central y franja (paso 13); el central lo usa también la regla 6.3. */
   g_c: number
   g_lo: number
@@ -129,12 +151,32 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
     emitir('WARN_PERDIDA_MAYOR_65')
   }
 
-  // 6.8 — preferencia efectiva
-  let preferencia_efectiva: Preferencia = inputs.preferencia
-  if (condiciones.includes('diabetes') && preferencia_efectiva === 'low_carb') {
-    preferencia_efectiva = 'omnivoro'
-    emitir('WARN_LOWCARB_DIABETES')
+  // 6.7bis — REGLA (solo mujeres). Es el ÚNICO efecto numérico de `menstruacion`.
+  // `WARN_CICLO_AUSENTE` NO se emite aquí: su condición mira el objetivo FINAL (que los pasos 7
+  // y 10bis todavía pueden reescribir) y el ritmo ELEGIDO por el usuario, no este ya suavizado.
+  if (e.menstruacion === 'irregular' || e.menstruacion === 'ausente') {
+    if (ritmo_efectivo === 'agresivo') ritmo_efectivo = 'moderado'
   }
 
-  return { objetivo_efectivo: obj, objetivo_propuesto, ritmo_efectivo, preferencia_efectiva, g_c, g_lo, g_hi }
+  // 6.8 — preferencias: la diabetes solo anula el interruptor de bajo en hidratos
+  let low_carb = e.low_carb_pedido
+  if (condiciones.includes('diabetes') && low_carb) {
+    low_carb = false
+    emitir('WARN_LOWCARB_DIABETES')
+  }
+  const restricciones = [...e.restricciones]
+  const preferencia_efectiva = bancoDe(e.pref_base, restricciones, low_carb)
+
+  return {
+    objetivo_efectivo: obj,
+    objetivo_propuesto,
+    ritmo_efectivo,
+    preferencia_efectiva,
+    preferencia_base: e.pref_base,
+    restricciones,
+    low_carb,
+    g_c,
+    g_lo,
+    g_hi,
+  }
 }
