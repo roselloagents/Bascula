@@ -165,11 +165,14 @@ const PAN_O_TORTITAS: FoodQuery = {
   ids_preferidos: ['tortitas_arroz', 'pan_integral', 'pan_blanco'],
 }
 
+// El solomillo cierra la lista, no la encabeza: un menú de ejemplo con 250 g de solomillo a
+// diario es caro y poco realista (QA §7). El pollo, el pavo, el lomo y el muslo van delante; el
+// solomillo sigue apareciendo cuando la rotación llega hasta él o los demás no encajan.
 const CARNE_MAGRA: FoodQuery = {
   rol: 'proteina',
   grupo: 'proteina',
   proteina_min: 15,
-  ids_preferidos: ['pechuga_pollo', 'ternera_solomillo', 'pechuga_pavo', 'cerdo_lomo', 'muslo_pollo'],
+  ids_preferidos: ['pechuga_pollo', 'pechuga_pavo', 'cerdo_lomo', 'muslo_pollo', 'ternera_solomillo'],
 }
 
 const PESCADO_BLANCO: FoodQuery = {
@@ -260,7 +263,7 @@ const CARNE_O_PESCADO: FoodQuery = {
   rol: 'proteina',
   grupo: 'proteina',
   proteina_min: 14,
-  ids_preferidos: ['pechuga_pollo', 'salmon', 'ternera_solomillo', 'merluza', 'pechuga_pavo', 'cerdo_lomo'],
+  ids_preferidos: ['pechuga_pollo', 'salmon', 'merluza', 'pechuga_pavo', 'cerdo_lomo', 'ternera_solomillo'],
 }
 
 // ---------- Banco omnívoro (base de `sin_lactosa` y `sin_gluten`) ----------

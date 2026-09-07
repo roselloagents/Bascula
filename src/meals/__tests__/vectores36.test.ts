@@ -13,19 +13,23 @@ interface MenuEsperado {
   kcal: number
 }
 
-/** Generados con el algoritmo de §3.3 sobre `foods.json`, nunca escritos a mano. */
+/**
+ * Generados con el algoritmo de §3.3 sobre `foods.json`, nunca escritos a mano. Última
+ * regeneración: al bajar el tope de claras de 5 a 4 unidades y mandar el solomillo al final de
+ * `CARNE_MAGRA` y de `CARNE_O_PESCADO` (QA §7).
+ */
 const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra: number }> = {
   '1': {
     menus: [
       {
         comida: 'Desayuno',
-        alimentos: ['platano 120', 'queso_fresco_batido_0 270', 'clara_huevo 165', 'pan_integral 30', 'almendras 35'],
-        kcal: 592,
+        alimentos: ['platano 120', 'queso_fresco_batido_0 300', 'clara_huevo 132', 'pan_integral 30', 'almendras 35'],
+        kcal: 588,
       },
       {
         comida: 'Comida',
-        alimentos: ['tomate 180', 'ternera_solomillo 250', 'pasta_cocida 150', 'aove 5'],
-        kcal: 643,
+        alimentos: ['tomate 180', 'pechuga_pavo 220', 'pasta_cocida 150', 'aove 15'],
+        kcal: 639,
       },
       {
         comida: 'Merienda',
@@ -38,7 +42,7 @@ const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra:
         kcal: 670,
       },
     ],
-    kcalDia: 2307,
+    kcalDia: 2299,
     fibra: 26.745,
   },
   '2': {
@@ -71,8 +75,8 @@ const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra:
       },
       {
         comida: 'Comida',
-        alimentos: ['berenjena 180', 'cerdo_lomo 250', 'pasta_cocida 130', 'aove 10'],
-        kcal: 707,
+        alimentos: ['berenjena 180', 'muslo_pollo 250', 'pasta_cocida 130', 'aove 15'],
+        kcal: 692,
       },
       {
         comida: 'Cena',
@@ -80,7 +84,7 @@ const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra:
         kcal: 681,
       },
     ],
-    kcalDia: 2017,
+    kcalDia: 2002,
     fibra: 21.5,
   },
 }

@@ -37,9 +37,11 @@ const IDS_CREMAS = ['mantequilla_cacahuete']
  * Topes de plausibilidad de los alimentos contables (§3.5): un gramaje puede caber en la fila de
  * `clampRacion` y aun así no parecerse a un plato real. Siete claras de huevo o cuatro latas de
  * atún son técnicamente válidas y nadie las come así.
+ * Las claras bajan de 5 a 4: cinco claras en un desayuno seguían leyéndose como una ración de
+ * gimnasio, no como un desayuno de casa (QA §7).
  */
 const TOPE_UNIDADES: Record<string, number> = {
-  clara_huevo: 5,
+  clara_huevo: 4,
   atun_natural: 2,
   atun_aceite: 2,
   tortitas_arroz: 8,
