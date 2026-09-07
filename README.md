@@ -8,7 +8,8 @@ de ejemplo con gramajes reales, la lista de la compra de la semana y un informe 
 
 Es una aplicación de una sola página, **sin servidor y sin base de datos**: todo el cálculo ocurre
 en el navegador y lo único que se guarda es un borrador en el `localStorage` del propio dispositivo.
-No hay cuentas, no hay analítica y ningún dato sale del móvil.
+No hay cuentas, no hay analítica y ningún dato sale del móvil: la página no hace una sola petición
+a un tercero, ni siquiera para las tipografías, que van autoalojadas en `public/fonts`.
 
 ## Cómo se calcula
 

@@ -9,12 +9,9 @@
       content="Báscula: calcula tus calorías y macros diarios (proteína, grasa, carbohidratos), agua y reparto por comidas, con ejemplos de alimentos y plan en PDF."
     />
     <meta name="theme-color" content="#f7f2e9" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400..700&family=Petrona:wght@400..700&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Tipografías autoalojadas en public/fonts: ninguna petición sale del dispositivo. -->
+    <link rel="preload" href="/fonts/hanken-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/petrona-latin.woff2" as="font" type="font/woff2" crossorigin />
     <title>Báscula · Tus macros, bien calculados</title>
   </head>
   <body>
