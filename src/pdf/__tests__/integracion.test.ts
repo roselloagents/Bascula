@@ -4,12 +4,12 @@
 // Helvetica/WinAnsi no puede imprimir) no los veía ningún test.
 import { describe, expect, it } from 'vitest'
 import { renderToBuffer } from '@react-pdf/renderer'
-import { calcular, textosAvisos } from '../../engine'
+import { ajustarMacros, calcular, textosAvisos } from '../../engine'
 import { generarEjemplos } from '../../meals'
 import { VECTORES } from '../../meals/__tests__/vectores'
 import { elementoPlan } from '../index'
 import { CP1252_EXTRA, winAnsi } from '../formato'
-import type { DatosPdf } from '../../engine/types'
+import type { DatosPdf, Pesaje } from '../../engine/types'
 
 /**
  * Máximo de páginas declarado en SPEC-ux-comidas-pdf.md §4.0, ya con la página de la compra
@@ -114,4 +114,50 @@ describe('PDF — vectores de la §5 de punta a punta', () => {
       expect(paginas, `caso ${v.n}`).toBeGreaterThan(3)
     }
   }, 180_000)
+
+  // Plan ajustado a mano (§2.2b) y seguimiento local (§4.5b): el camino que recorre de verdad la
+  // pantalla —`ajustarMacros` sobre el plan del motor, menú rehecho con el plan ajustado y los
+  // pesajes de este dispositivo— no lo ejercía ninguna fixture. Es también el más largo: la marca
+  // "ajustado por ti", la tabla semana a semana y los pesajes caben, o no, dentro del tope de §4.0.
+  it('rinde el plan ajustado con pesajes sin pasarse del máximo de páginas', async () => {
+    let ajustados = 0
+    for (let i = 0; i < VECTORES.length; i++) {
+      const v = VECTORES[i]
+      const inputs = VECTORES[i].inputs
+      const base = calcular(inputs)
+      // Sin `limites_ajuste` no hay panel de ajuste (caso 2, con 'tca' en condiciones): el motor
+      // no deja ajustar y la pantalla tampoco lo ofrece.
+      if (base.excluido || !base.limites_ajuste) continue
+      ajustados++
+
+      const limites = base.limites_ajuste
+      const resultado = ajustarMacros(base, {
+        hc_g: Math.max(limites.hc_min_motor_g - 20, limites.hc_min_ui_g),
+        kcal: Math.max(limites.kcal_min, limites.kcal_recomendada - 50),
+      })
+      expect(resultado.ajuste, `caso ${v.n}`).toBeDefined()
+      expect(resultado.macros.proteina_g, `caso ${v.n}`).toBe(base.macros.proteina_g)
+
+      const pesajes: Pesaje[] = [
+        { fecha: inputs.fecha_inicio, kg: inputs.peso_kg },
+        { fecha: '2026-04-06', kg: inputs.peso_kg - 1.2 },
+        { fecha: '2026-05-04', kg: inputs.peso_kg - 2.4 },
+      ]
+      const datos: DatosPdf = {
+        inputs,
+        resultado,
+        ejemplos: generarEjemplos(inputs, resultado),
+        avisos: textosAvisos(resultado, inputs),
+        fecha: '2026-09-07',
+        pesajes,
+      }
+      const buffer = await renderToBuffer(elementoPlan(datos))
+      const paginas = (buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length
+      expect(paginas, `caso ${v.n} ajustado: ${paginas} páginas`).toBeLessThanOrEqual(PAGINAS_MAX)
+      expect(paginas, `caso ${v.n} ajustado`).toBeGreaterThan(3)
+    }
+    // Que no se cuele un futuro en el que el bucle no ajusta nada y el test pasa en vacío.
+    expect(ajustados).toBeGreaterThan(10)
+  }, 180_000)
 })
+
