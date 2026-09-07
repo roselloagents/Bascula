@@ -105,7 +105,7 @@ export const TEXTO_SIN_MENU =
 
 /** Nota fija del modo sencillo: explica la alternancia de días A y B (§3.7.2). */
 export const NOTA_MODO_SENCILLO =
-  'Menú sencillo: te proponemos dos versiones de cada comida que se van alternando. Los días 1, 3, 5 y 7 sigues el menú de abajo; los días 2, 4 y 6 cambias el acompañamiento y la fuente de proteína por la otra opción de la lista de la compra. Con eso te llegan menos de doce alimentos distintos para toda la semana.'
+  'Menú sencillo: te proponemos dos versiones de cada comida que se van alternando. Los días 1, 3, 5 y 7 sigues el menú de abajo; los días 2, 4 y 6 cambias el acompañamiento y la fuente de proteína por la otra opción de la lista de la compra. Con eso te llegan como mucho doce alimentos distintos para toda la semana.'
 
 /** Nota del respaldo de §3.7.2: una toma que no cuadra con el banco sencillo usa el normal. */
 export function notaFallbackSencillo(comida: string): string {
