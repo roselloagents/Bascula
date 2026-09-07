@@ -190,6 +190,31 @@ export const AVISOS_PRIORITARIOS = [
 
 // ---- Rasgos de los somatotipos (leyenda del cuestionario) ----------------
 
+export const NOMBRE_SOMATOTIPO: Record<Somatotipo, string> = {
+  ectomorfo: 'Ectomorfo',
+  mesomorfo: 'Mesomorfo',
+  endomorfo: 'Endomorfo',
+}
+
+/** Rasgos en lenguaje llano bajo las siluetas del paso 7 (2-3 por tipo, sin jerga). */
+export const RASGOS_CORTOS: Record<Somatotipo, string[]> = {
+  ectomorfo: [
+    'Muñecas y tobillos finos, hombros estrechos',
+    'Te cuesta ganar peso, comas lo que comas',
+    'Ganas músculo despacio',
+  ],
+  mesomorfo: [
+    'Estructura media, hombros anchos respecto a la cintura',
+    'Ganas músculo con relativa facilidad',
+    'Cambias de peso sin demasiados extremos',
+  ],
+  endomorfo: [
+    'Estructura ancha y huesos grandes',
+    'Ganas peso con facilidad cuando te descuidas',
+    'Te cuesta más definir, aunque ganes fuerza rápido',
+  ],
+}
+
 export const RASGOS_SOMATOTIPO: { tipo: Somatotipo; nombre: string; rasgos: string }[] = [
   {
     tipo: 'ectomorfo',

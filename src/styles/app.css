@@ -217,10 +217,116 @@
   text-align: center;
 }
 
+.trio-siluetas li {
+  transition: border-color 180ms var(--salida), background-color 180ms var(--salida),
+    transform 180ms var(--salida), opacity 180ms var(--salida);
+}
+
+/* Con una silueta resaltada, las otras dos se apagan: el contraste es lo que hace que el
+   cambio se vea al pulsar una respuesta, no solo el borde verde. */
+.trio-siluetas[data-hay-destacado='true'] li {
+  opacity: 0.5;
+}
+
 .trio-siluetas li[data-destacado='true'] {
   border-color: var(--verde);
+  border-width: 2px;
+  padding: calc(var(--e-8) - 1px) calc(var(--e-4) - 1px);
   background: var(--verde-velo);
   color: var(--verde);
+  opacity: 1;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px -10px var(--verde);
+}
+
+.trio-siluetas li[data-destacado='true'] .trio-nombre {
+  color: var(--verde);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trio-siluetas li {
+    transition: none;
+    transform: none;
+  }
+
+  .trio-siluetas li[data-destacado='true'] {
+    transform: none;
+  }
+}
+
+/* ---- Leyenda del somatotipo en vivo ---------------------------------- */
+
+/* Las siluetas se quedan fijas mientras se contestan las cuatro preguntas: si no, al pulsar la
+   tercera respuesta el resalte cambia fuera de la pantalla y no se ve. Debajo de la barra de
+   progreso (que es la que manda, con z-index 5) y con su mismo fondo. */
+/* Bloque de flujo (no rejilla): el contenedor de un elemento `sticky` es lo que limita hasta
+   dónde puede quedarse fijo, así que las preguntas tienen que estar dentro. */
+.soma-panel > * + * {
+  margin-top: var(--e-12);
+}
+
+.bloque-siluetas {
+  position: sticky;
+  top: 5.4rem;
+  z-index: 4;
+  padding-bottom: var(--e-4);
+  background: var(--hueso);
+}
+
+/* En móvil la tarjeta fija tiene que ser corta: los rasgos de las tres siluetas se leen en la
+   leyenda de abajo, que ya describe la que encaja. */
+@media (max-width: 39.99rem) {
+  .bloque-siluetas .trio-rasgos {
+    display: none;
+  }
+}
+
+/* Pantallas muy bajas (móvil apaisado): fijar el trío se comería la mitad de la ventana. */
+@media (max-height: 34rem) {
+  .bloque-siluetas {
+    position: static;
+  }
+}
+
+.leyenda-soma {
+  display: grid;
+  gap: var(--e-4);
+  padding: var(--e-8);
+  border: 1px solid var(--verde-borde);
+  border-radius: var(--r-md);
+  background: var(--verde-velo);
+}
+
+.leyenda-soma-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--e-4);
+  font-family: var(--display);
+  font-size: var(--t-md);
+  color: var(--verde-oscuro);
+}
+
+.leyenda-soma-etiqueta {
+  font-family: var(--texto);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tinta-suave);
+}
+
+.leyenda-soma-rasgos {
+  display: grid;
+  gap: var(--e-2);
+  margin: 0;
+  padding-left: var(--e-12);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.leyenda-soma-vacia {
+  text-align: center;
 }
 
 .trio-nombre {

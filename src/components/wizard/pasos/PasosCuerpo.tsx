@@ -1,12 +1,14 @@
 // Pasos 6 y 7: porcentaje de grasa corporal (cuatro métodos) y somatotipo.
 
-import type { CategoriaVisual, MetodoGrasa, Sexo } from '../../../engine/types'
+import type { CategoriaVisual, MetodoGrasa, Sexo, Somatotipo } from '../../../engine/types'
 import { CampoNumero, Grupo, Opcion, OpcionAccion } from '../../ui/Controles'
 import {
   IlustracionMedidas,
   SiluetaGrasa,
   TrioSomatotipos,
 } from '../../graficos/Siluetas'
+import { NOMBRE_SOMATOTIPO, RASGOS_CORTOS } from '../../utiles/copy'
+import { somatotipoProvisional } from '../../utiles/somatotipo'
 import { estaMarcado, metodoEfectivo, proteccionActiva } from '../borrador'
 import { Pantalla, type PropsPaso } from './comun'
 
@@ -236,10 +238,44 @@ const PREGUNTAS_SOMATOTIPO = [
   },
 ]
 
+/**
+ * Leyenda bajo las tres siluetas: nombre del somatotipo que corresponde a lo contestado hasta
+ * ahora y sus rasgos en lenguaje llano. Sin respuestas, invita a contestar en vez de quedarse en
+ * blanco. No muestra ningún número: el somatotipo solo desplaza hidratos y grasa (§3.2).
+ */
+function LeyendaSomatotipo({ tipo, completo }: { tipo: Somatotipo | null; completo: boolean }) {
+  if (tipo === null) {
+    return (
+      <p className="nota leyenda-soma-vacia" aria-live="polite">
+        Contesta y te iremos marcando con cuál de las tres encajas más.
+      </p>
+    )
+  }
+  return (
+    <div className="leyenda-soma" aria-live="polite">
+      <p className="leyenda-soma-titulo">
+        <span className="leyenda-soma-etiqueta">
+          {completo ? 'Encajas con' : 'De momento encajas con'}
+        </span>
+        <strong>{NOMBRE_SOMATOTIPO[tipo]}</strong>
+      </p>
+      <ul className="leyenda-soma-rasgos">
+        {RASGOS_CORTOS[tipo].map((rasgo) => (
+          <li key={rasgo}>{rasgo}</li>
+        ))}
+      </ul>
+      {!completo ? (
+        <p className="nota">Puede cambiar con las respuestas que te quedan.</p>
+      ) : null}
+    </div>
+  )
+}
+
 export function PasoSomatotipo({ b, set }: PropsPaso) {
   const sexo: Sexo = b.sexo ?? 'hombre'
   const s = b.somatotipo
   const completo = Boolean(s.q1 && s.q2 && s.q3 && s.q4)
+  const destacado = somatotipoProvisional(s)
 
   if (b.somatotipoElegido !== 'responder') {
     return (
@@ -248,7 +284,8 @@ export function PasoSomatotipo({ b, set }: PropsPaso) {
         ayuda="Lo preguntamos solo para ajustar el reparto entre hidratos y grasa a lo que te suele sentar mejor. No cambia ni tus calorías ni tu proteína, y puedes saltarlo sin perder nada."
         intro="El somatotipo (ectomorfo, mesomorfo, endomorfo) es una forma antigua de describir la silueta corporal. La ciencia actual no ha demostrado que sirva para calcular calorías o macros con precisión. Si lo rellenas, lo usaremos solo como un ajuste ligero entre carbohidratos y grasa, nunca para decidir cuántas calorías o cuánta proteína necesitas."
       >
-        <TrioSomatotipos sexo={sexo} />
+        <TrioSomatotipos sexo={sexo} destacado={destacado} />
+        {destacado ? <LeyendaSomatotipo tipo={destacado} completo={completo} /> : null}
         {/* Son dos acciones de navegación, no una respuesta: botones, no radios. */}
         <div className="opciones">
           <OpcionAccion
@@ -266,26 +303,37 @@ export function PasoSomatotipo({ b, set }: PropsPaso) {
   }
 
   return (
-    <Pantalla titulo="Cuatro preguntas sobre tu constitución">
-      <TrioSomatotipos sexo={sexo} />
-      {PREGUNTAS_SOMATOTIPO.map((pregunta) => (
-        <Grupo key={pregunta.clave} etiqueta={pregunta.titulo} fila>
-          {pregunta.opciones.map((opcion) => (
-            <Opcion
-              key={opcion.valor}
-              nombre={`soma-${pregunta.clave}`}
-              compacta
-              titulo={opcion.titulo}
-              seleccionada={s[pregunta.clave] === opcion.valor}
-              onElegir={() =>
-                set((previo) => ({
-                  somatotipo: { ...previo.somatotipo, [pregunta.clave]: opcion.valor },
-                }))
-              }
-            />
-          ))}
-        </Grupo>
-      ))}
+    <Pantalla
+      titulo="Cuatro preguntas sobre tu constitución"
+      intro="Según vayas contestando, resaltaremos la silueta con la que más encajas."
+    >
+      {/* Las siluetas y las preguntas van en el mismo bloque para que el trío pueda quedarse
+          fijo (`position: sticky`) mientras se contesta: así se ve cambiar el resalte al pulsar
+          la tercera o la cuarta respuesta, que caen fuera de la primera pantalla. */}
+      <div className="soma-panel">
+        <div className="bloque-siluetas">
+          <TrioSomatotipos sexo={sexo} destacado={destacado} />
+        </div>
+        <LeyendaSomatotipo tipo={destacado} completo={completo} />
+        {PREGUNTAS_SOMATOTIPO.map((pregunta) => (
+          <Grupo key={pregunta.clave} etiqueta={pregunta.titulo} fila>
+            {pregunta.opciones.map((opcion) => (
+              <Opcion
+                key={opcion.valor}
+                nombre={`soma-${pregunta.clave}`}
+                compacta
+                titulo={opcion.titulo}
+                seleccionada={s[pregunta.clave] === opcion.valor}
+                onElegir={() =>
+                  set((previo) => ({
+                    somatotipo: { ...previo.somatotipo, [pregunta.clave]: opcion.valor },
+                  }))
+                }
+              />
+            ))}
+          </Grupo>
+        ))}
+      </div>
       {completo ? (
         <p className="nota nota-recuadro">
           Listo. Lo usaremos solo como un ajuste ligero entre hidratos y grasa; en tus resultados verás

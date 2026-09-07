@@ -144,9 +144,10 @@ export function SiluetaSomatotipo({
 }
 
 /**
- * Las tres siluetas juntas. `destacado` solo se usa en resultados, donde el
- * somatotipo lo ha decidido el motor: en el cuestionario no se resalta ninguna,
- * porque la interfaz no reproduce la tabla de decisión del motor.
+ * Las tres siluetas juntas. `destacado` resalta una: en resultados lo decide el motor y en el
+ * paso 7 del cuestionario lo decide `somatotipoProvisional`, que delega en la misma función del
+ * motor en cuanto están las cuatro respuestas (la interfaz no reproduce su tabla de decisión).
+ * Con `null` no se resalta ninguna.
  */
 export function TrioSomatotipos({
   sexo,
@@ -156,11 +157,16 @@ export function TrioSomatotipos({
   destacado?: Somatotipo | null
 }) {
   return (
-    <ul className="trio-siluetas">
+    <ul className="trio-siluetas" data-hay-destacado={destacado !== null}>
       {RASGOS_SOMATOTIPO.map(({ tipo, nombre, rasgos }) => (
         <li key={tipo} data-destacado={destacado === tipo}>
           <SiluetaSomatotipo tipo={tipo} sexo={sexo} alto={88} />
-          <p className="trio-nombre">{nombre}</p>
+          <p className="trio-nombre">
+            {nombre}
+            {destacado === tipo ? (
+              <span className="visualmente-oculto"> (el que más encaja con tus respuestas)</span>
+            ) : null}
+          </p>
           <p className="trio-rasgos">{rasgos}</p>
         </li>
       ))}
