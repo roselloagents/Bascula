@@ -85,6 +85,11 @@ export interface InputCalculo {
   condiciones: Condicion[]
   cribado_tca: CribadoTCA | null
   fecha_inicio: string // ISO 'YYYY-MM-DD'
+  /** Paso 13 del wizard, "¿Quieres comidas sencillas?" (SPEC-ux-comidas-pdf §3.7). `false` por defecto.
+   *  **El motor lo ignora por completo**: no entra en ningún cálculo de kcal, macros, agua ni cronograma.
+   *  Solo lo lee el generador de menús, que con `true` usa el banco sencillo (≤ 12 alimentos distintos
+   *  en la semana y dos variantes por rol de comida que se alternan por día par/impar). */
+  menu_sencillo?: boolean
 }
 
 /** Alias histórico usado por la UI, el generador de comidas y el PDF. */
@@ -308,6 +313,65 @@ export interface Ejemplos {
   consejos: string[] // 3-5 consejos prácticos de adherencia según preferencia/objetivo
   /** Tablas isoproteica, isoglucídica e isolipídica filtradas por `preferencia_efectiva` (§2.5). */
   equivalencias: TablasEquivalencia
+  /** Lista de la compra semanal del menú (§3.7). `undefined` cuando no hay menú
+   *  (condición `renal` o `hepatica`, §3.1) o cuando el generador aún no la ha calculado. */
+  compra?: ListaCompra
+  /** `true` si el menú se ha generado con el banco sencillo (`inputs.menu_sencillo`, §3.7).
+   *  La pantalla y el PDF lo usan solo para el rótulo del bloque; no cambia ningún número. */
+  modo_sencillo?: boolean
+}
+
+// ---------- Lista de la compra semanal (docs/SPEC-ux-comidas-pdf.md §3.7) ----------
+/** Sección del supermercado por la que se agrupa la lista (orden de recorrido de la tienda). */
+export type SeccionSuper =
+  | 'carniceria'
+  | 'pescaderia'
+  | 'huevos_lacteos'
+  | 'fruteria'
+  | 'despensa'
+  | 'congelados'
+  | 'panaderia'
+  | 'otros'
+
+/** Cómo se guarda el producto una vez comprado. Determina el consejo de compra fraccionada. */
+export type Conservacion = 'fresco' | 'despensa' | 'congelado'
+
+/** Una línea de la lista de la compra: un alimento del menú con su formato de venta típico. */
+export interface ItemCompra {
+  /** `id` de `src/data/foods.json`. */
+  alimento_id: string
+  /** Nombre del alimento tal y como aparece en el menú. */
+  nombre: string
+  /** Producto comercial típico de Mercadona (`src/data/mercadona.json`). Sin precio. */
+  producto: string
+  seccion: SeccionSuper
+  conservacion: Conservacion
+  /** Gramos que pide el menú en un día (media de las dos variantes si se alternan). */
+  gramos_dia: number
+  /** `gramos_dia · 7`, redondeado. */
+  gramos_semana: number
+  /** Peso neto aproximado de un envase o unidad de compra. Siempre > 0. */
+  envase_g: number
+  /** Formato del envase en texto ("bandeja ≈ 1 kg", "docena", "bote 400 g escurrido 240 g"). */
+  envase_descripcion: string
+  /** `ceil(gramos_semana / envase_g)`. */
+  envases: number
+  /** `floor(envases · envase_g / gramos_dia)`, acotado por `conservacion_dias`. */
+  dura_dias: number
+  /** Consejo breve de conservación o de compra fraccionada. */
+  consejo?: string
+}
+
+/** Bloque "Lista de la compra" de §2.5b y de la página del PDF de §3.7. */
+export interface ListaCompra {
+  supermercado: 'Mercadona'
+  dias: 7
+  /** Ordenados por sección (orden de `SeccionSuper`) y, dentro de cada sección, por `nombre`. */
+  items: ItemCompra[]
+  /** Número de alimentos distintos del menú semanal (`items.length`). */
+  alimentos_distintos: number
+  /** Notas fijas al pie de la lista (formatos aproximados, compra fraccionada, pesar en crudo). */
+  notas: string[]
 }
 
 // ---------- Datos para el PDF ----------
