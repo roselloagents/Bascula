@@ -1,6 +1,7 @@
 // Pasos 8 a 13: actividad diaria, entrenamiento, objetivo, ritmo, peso objetivo
 // y preferencias de menú.
 
+import { Fragment } from 'react'
 import type {
   ActividadDiaria,
   Experiencia,
@@ -8,7 +9,9 @@ import type {
   Momento,
   NComidas,
   Objetivo,
-  Preferencia,
+  PreferenciaBase,
+  RecomposicionPrioridad,
+  Restriccion,
   Ritmo,
   TipoEntrenamiento,
 } from '../../../engine/types'
@@ -230,6 +233,12 @@ const OBJETIVOS: { valor: Objetivo; titulo: string; detalle: string }[] = [
   },
 ]
 
+const PRIORIDADES_RECOMP: { valor: RecomposicionPrioridad; titulo: string }[] = [
+  { valor: 'perder', titulo: 'Perder grasa' },
+  { valor: 'equilibrado', titulo: 'Las dos por igual' },
+  { valor: 'ganar', titulo: 'Ganar músculo' },
+]
+
 export function PasoObjetivo({ b, set }: PropsPaso) {
   return (
     <Pantalla
@@ -238,14 +247,37 @@ export function PasoObjetivo({ b, set }: PropsPaso) {
     >
       <div className="opciones">
         {OBJETIVOS.map(({ valor, titulo, detalle }) => (
-          <Opcion
-            key={valor}
-            nombre="objetivo"
-            titulo={titulo}
-            detalle={detalle}
-            seleccionada={b.objetivo === valor}
-            onElegir={() => set({ objetivo: valor })}
-          />
+          <Fragment key={valor}>
+            <Opcion
+              nombre="objetivo"
+              titulo={titulo}
+              detalle={detalle}
+              seleccionada={b.objetivo === valor}
+              onElegir={() => set({ objetivo: valor })}
+            />
+            {/* Subpregunta del paso 10 (SPEC-ux §1, decisión C): vive dentro de esta pantalla,
+                justo debajo de la tarjeta de recomposición, y no cuenta en la barra de progreso. */}
+            {valor === 'recomposicion' && b.objetivo === 'recomposicion' ? (
+              <div className="subpregunta">
+                <Grupo
+                  etiqueta="¿Qué te importa más ahora?"
+                  descripcion="La recomposición es un equilibrio, y el equilibrio se puede inclinar. Si ahora te importa más perder grasa, bajamos algo más las calorías y te subimos la grasa a costa de los hidratos. Si te importa más ganar músculo, te dejamos comiendo en tu gasto, sin déficit. En los dos casos sigue siendo un proceso lento."
+                  fila
+                >
+                  {PRIORIDADES_RECOMP.map((prioridad) => (
+                    <Opcion
+                      key={prioridad.valor}
+                      nombre="recomposicion-prioridad"
+                      compacta
+                      titulo={prioridad.titulo}
+                      seleccionada={b.recomposicion_prioridad === prioridad.valor}
+                      onElegir={() => set({ recomposicion_prioridad: prioridad.valor })}
+                    />
+                  ))}
+                </Grupo>
+              </div>
+            ) : null}
+          </Fragment>
         ))}
       </div>
     </Pantalla>
@@ -337,38 +369,77 @@ export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
   )
 }
 
-const PREFERENCIAS: { valor: Preferencia; titulo: string; detalle: string }[] = [
-  { valor: 'omnivoro', titulo: 'Omnívoro', detalle: 'Como de todo.' },
+const BASES: { valor: PreferenciaBase; titulo: string; detalle: string }[] = [
+  { valor: 'omnivoro', titulo: 'Como de todo', detalle: 'Sin restricciones: carne, pescado, huevos y lácteos.' },
   { valor: 'vegetariano', titulo: 'Vegetariano', detalle: 'Sin carne ni pescado; sí huevos y lácteos.' },
   { valor: 'vegano', titulo: 'Vegano', detalle: 'Sin ningún alimento de origen animal.' },
+]
+
+const RESTRICCIONES: { valor: Restriccion; titulo: string; detalle: string }[] = [
   { valor: 'sin_lactosa', titulo: 'Sin lactosa', detalle: 'Evito la leche y los lácteos con lactosa.' },
   { valor: 'sin_gluten', titulo: 'Sin gluten', detalle: 'Evito el trigo, la cebada y el centeno.' },
-  { valor: 'low_carb', titulo: 'Bajo en hidratos', detalle: 'Prefiero comer pocos hidratos de carbono.' },
 ]
 
 const COMIDAS: NComidas[] = [2, 3, 4, 5, 6]
 
 export function PasoPreferencias({ b, set }: PropsPaso) {
+  // Varias a la vez (v1.1, decisión E): antes había que renunciar a una para poder elegir la otra.
+  const alternarRestriccion = (restriccion: Restriccion) =>
+    set((previo) => ({
+      restricciones: previo.restricciones.includes(restriccion)
+        ? previo.restricciones.filter((r) => r !== restriccion)
+        : [...previo.restricciones, restriccion],
+    }))
+
   return (
     <Pantalla
       titulo="Cómo comes en tu día a día"
-      ayuda="No cambia tus calorías ni tus macros: solo los alimentos del menú de ejemplo y el número de comidas entre las que repartimos el día."
+      ayuda="Salvo el interruptor de bajo en hidratos, nada de esto cambia tus calorías ni tus macros: solo los alimentos del menú de ejemplo y el número de comidas entre las que repartimos el día."
     >
       <Grupo
-        etiqueta="¿Sigues alguna preferencia alimentaria?"
-        descripcion="Esto cambia los alimentos de tus menús de ejemplo. En vegano y vegetariano también subimos un poco la proteína total, porque las fuentes vegetales se aprovechan algo peor."
+        etiqueta="¿Cómo comes?"
+        descripcion="La base cambia los alimentos de tus menús. En vegano y vegetariano además subimos un poco la proteína total, porque las fuentes vegetales se aprovechan algo peor."
       >
-        {PREFERENCIAS.map(({ valor, titulo, detalle }) => (
+        {BASES.map(({ valor, titulo, detalle }) => (
           <Opcion
             key={valor}
-            nombre="preferencia"
+            nombre="preferencia-base"
             titulo={titulo}
             detalle={detalle}
-            seleccionada={b.preferencia === valor}
-            onElegir={() => set({ preferencia: valor })}
+            seleccionada={b.preferencia_base === valor}
+            onElegir={() => set({ preferencia_base: valor })}
           />
         ))}
       </Grupo>
+
+      <Grupo
+        etiqueta="¿Evitas algo?"
+        descripcion="Puedes marcar las dos. Solo cambian los alimentos que te proponemos: tus calorías y tus macros son exactamente los mismos."
+      >
+        {RESTRICCIONES.map(({ valor, titulo, detalle }) => (
+          <Opcion
+            key={valor}
+            nombre={`restriccion-${valor}`}
+            tipo="checkbox"
+            titulo={titulo}
+            detalle={detalle}
+            seleccionada={b.restricciones.includes(valor)}
+            onElegir={() => alternarRestriccion(valor)}
+          />
+        ))}
+      </Grupo>
+
+      {/* [SPEC] SPEC-ux §1 paso 13, 1c: título y descripción literales. Apagado por defecto. */}
+      <Interruptor
+        titulo="Bajo en hidratos"
+        detalle="Menos pan, arroz y pasta; más grasa. Cambia de verdad tus macros, no solo el menú."
+        activo={b.low_carb}
+        onCambiar={(low_carb) => set({ low_carb })}
+      />
+      <p className="nota">
+        Este sí cambia los números: te subimos la grasa al 45 % de las calorías y bajamos el mínimo de
+        hidratos. Si tienes diabetes no lo aplicaremos y te lo explicaremos en el resultado.
+      </p>
 
       <Grupo etiqueta="¿Cuántas comidas al día prefieres hacer?" fila>
         {COMIDAS.map((valor) => (

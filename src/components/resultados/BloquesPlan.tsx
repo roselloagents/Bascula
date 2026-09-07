@@ -35,7 +35,6 @@ interface PropsBloque {
   inputs: InputCalculo
   resultado: Resultado
   avisos: AvisoTexto[]
-  protegido: boolean
 }
 
 /** Sufijo de ritmo de la cabecera (SPEC-ux §2.1, regla normativa). */
@@ -47,7 +46,7 @@ function sufijoObjetivo(resultado: Resultado): string {
   return ''
 }
 
-export function Cabecera({ inputs, resultado, avisos, protegido }: PropsBloque) {
+export function Cabecera({ inputs, resultado, avisos }: PropsBloque) {
   const reconvertido = inputs.objetivo !== resultado.objetivo_efectivo
   const avisoReconversion = avisos.find((a) => CODIGOS_RECONVERSION.includes(a.codigo))
   const [grasaMin, grasaMax] = resultado.grasa.rango
@@ -56,7 +55,11 @@ export function Cabecera({ inputs, resultado, avisos, protegido }: PropsBloque) 
     <header className="cabecera-plan">
       <p className="cabecera-etiqueta">Tu objetivo diario</p>
       <p className="cifra cabecera-cifra">{entero(resultado.kcal)}</p>
-      <p className="cabecera-unidad">kcal al día</p>
+      <p className="cabecera-unidad">
+        kcal al día
+        {/* Plan ajustado a mano (§2.2b): el distintivo acompaña siempre a la cifra grande. */}
+        {resultado.ajuste ? <span className="etiqueta-ajustado">ajustado por ti</span> : null}
+      </p>
       <p className="cabecera-objetivo">
         {OBJETIVO_TITULO[resultado.objetivo_efectivo]}
         {sufijoObjetivo(resultado)}
@@ -77,17 +80,15 @@ export function Cabecera({ inputs, resultado, avisos, protegido }: PropsBloque) 
             <span className="dato-nota">{IMC_CATEGORIA[resultado.imc_categoria]}</span>
           </dd>
         </div>
-        {!protegido ? (
-          <div>
-            <dt>Grasa corporal estimada</dt>
-            <dd className="cifra">
-              {num(Math.round(grasaMin))}-{num(Math.round(grasaMax))} %{' '}
-              <span className="dato-nota">
-                {FIABILIDAD_GRASA[resultado.grasa.metodo_efectivo] ?? 'estimación orientativa'}
-              </span>
-            </dd>
-          </div>
-        ) : null}
+        <div>
+          <dt>Grasa corporal estimada</dt>
+          <dd className="cifra">
+            {num(Math.round(grasaMin))}-{num(Math.round(grasaMax))} %{' '}
+            <span className="dato-nota">
+              {FIABILIDAD_GRASA[resultado.grasa.metodo_efectivo] ?? 'estimación orientativa'}
+            </span>
+          </dd>
+        </div>
         <div>
           <dt>Gasto energético diario</dt>
           <dd className="cifra">
@@ -98,7 +99,7 @@ export function Cabecera({ inputs, resultado, avisos, protegido }: PropsBloque) 
       </dl>
 
       <p className="nota">{NOTA_TDEE}</p>
-      {!protegido ? <p className="nota">{NOTA_GRASA}</p> : null}
+      <p className="nota">{NOTA_GRASA}</p>
     </header>
   )
 }
@@ -175,6 +176,20 @@ export function BloqueMacros({ resultado, avisos }: PropsBloque) {
         Como referencia, limita los azúcares añadidos a menos de{' '}
         <span className="cifra">{entero(m.azucares_libres_max_g)} g</span> al día.
       </p>
+    </Seccion>
+  )
+}
+
+/**
+ * Tarjeta "Tu ciclo y tu plan" (§2.2c). Se pinta exactamente cuando el motor emite `INFO_CICLO`,
+ * con su texto íntegro: no cambia ningún número y el copy lo dice con todas las letras.
+ */
+export function TarjetaCiclo({ avisos }: { avisos: AvisoTexto[] }) {
+  const ciclo = buscarAviso(avisos, 'INFO_CICLO')
+  if (!ciclo) return null
+  return (
+    <Seccion titulo="Tu ciclo y tu plan">
+      <p>{ciclo.texto}</p>
     </Seccion>
   )
 }

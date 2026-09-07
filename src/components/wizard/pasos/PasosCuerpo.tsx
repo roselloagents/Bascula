@@ -9,7 +9,7 @@ import {
 } from '../../graficos/Siluetas'
 import { NOMBRE_SOMATOTIPO, RASGOS_CORTOS } from '../../utiles/copy'
 import { somatotipoProvisional } from '../../utiles/somatotipo'
-import { estaMarcado, metodoEfectivo, proteccionActiva } from '../borrador'
+import { estaMarcado } from '../borrador'
 import { Pantalla, type PropsPaso } from './comun'
 
 const METODOS: { valor: MetodoGrasa; titulo: string; detalle: string }[] = [
@@ -57,11 +57,8 @@ function visualesDe(sexo: Sexo) {
 
 export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
   const sexo: Sexo = b.sexo ?? 'hombre'
-  const protegido = proteccionActiva(b)
-  const metodos = protegido ? METODOS.filter((m) => m.valor !== 'visual') : METODOS
-  // Mismo criterio que la validación y que `aInputs`: con la protección activa el método visual
-  // no existe, y no elegir ninguno equivale a `desconocido` (§1.2.6).
-  const metodo = metodoEfectivo(b)
+  // v1.1 (decisión A): el selector visual de siluetas vuelve para todo el mundo.
+  const metodo = b.grasa.metodo
   const visualElegida = visualesDe(sexo).find((v) => v.valor === b.grasa.categoria)
   const visuales = visualesDe(sexo)
 
@@ -71,7 +68,7 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
       intro="Ninguna fórmula sin aparato mide la grasa corporal con precisión absoluta: te daremos siempre un rango, no una cifra exacta. Cuanto mejor sea el dato de partida, más ajustado será tu plan."
     >
       <div className="opciones">
-        {metodos.map(({ valor, titulo, detalle }) => (
+        {METODOS.map(({ valor, titulo, detalle }) => (
           <Opcion
             key={valor}
             nombre="metodo-grasa"

@@ -108,6 +108,15 @@ export function IconoLapiz({ tam = 18, className }: IconoProps) {
   )
 }
 
+export function IconoPapelera({ tam = 18, className }: IconoProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={tam} height={tam} aria-hidden="true" className={className}>
+      <path {...base} d="M4.5 6.5h15M9.5 6.5V4.5h5v2M6.5 6.5l1 13h9l1-13" />
+      <path {...base} d="M10.5 10v6M13.5 10v6" />
+    </svg>
+  )
+}
+
 /** Rueda de carga: se detiene con prefers-reduced-motion (regla en el CSS). */
 export function Cargador({ tam = 18, className }: IconoProps) {
   return (

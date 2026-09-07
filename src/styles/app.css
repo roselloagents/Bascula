@@ -165,6 +165,14 @@
   gap: var(--e-12);
 }
 
+/* Subpregunta que se despliega dentro de una tarjeta ya elegida (§1 paso 10, recomposición). */
+.subpregunta {
+  padding: var(--e-8);
+  border: 1px solid var(--verde-borde);
+  border-radius: var(--r-md);
+  background: var(--verde-velo);
+}
+
 /* ---- Barra de navegación (siempre visible) --------------------------- */
 
 .barra-navegacion {

@@ -7,13 +7,13 @@ import { Confirmacion } from '../ui/Confirmacion'
 import { Plegable } from '../ui/Controles'
 import { IconoAtras, IconoFlecha } from '../ui/Iconos'
 import { leerNumero } from '../utiles/formato'
-import { aInputs, estadoPaso, pasosVisibles, type Borrador, type PasoId } from './borrador'
+import { aInputs, anclarPlan, estadoPaso, pasosVisibles, type Borrador, type PasoId } from './borrador'
 import {
   PasoCondiciones,
-  PasoCribado,
   PasoEdad,
   PasoEmbarazo,
   PasoMedidas,
+  PasoRegla,
   PasoSexo,
 } from './pasos/PasosPerfil'
 import { PasoGrasa, PasoSomatotipo } from './pasos/PasosCuerpo'
@@ -31,9 +31,9 @@ const COMPONENTES: Record<PasoId, (props: PropsPaso) => ReactElement> = {
   sexo: PasoSexo,
   edad: PasoEdad,
   embarazo: PasoEmbarazo,
+  regla: PasoRegla,
   medidas: PasoMedidas,
   condiciones: PasoCondiciones,
-  cribado: PasoCribado,
   grasa: PasoGrasa,
   somatotipo: PasoSomatotipo,
   actividad: PasoActividad,
@@ -49,9 +49,9 @@ const TITULO_PASO: Record<PasoId, string> = {
   sexo: 'Sexo',
   edad: 'Edad',
   embarazo: 'Embarazo o lactancia',
+  regla: 'Tu regla',
   medidas: 'Altura y peso',
   condiciones: 'Condiciones médicas',
-  cribado: 'Relación con la comida',
   grasa: 'Grasa corporal',
   somatotipo: 'Constitución',
   actividad: 'Actividad diaria',
@@ -98,10 +98,10 @@ export function Wizard({
   const esUltimo = indice === pasos.length - 1
   const Componente = COMPONENTES[paso]
 
-  // Índice de navegación: aparece cuando está todo contestado salvo el cribado, que nunca se
-  // persiste (se vuelve a preguntar en cada sesión). Sin esa excepción, quien recargaba la página
-  // con el cuestionario entero relleno no tenía forma de saltar a una pregunta.
-  const todoContestado = pasos.every((p) => p === 'cribado' || estadoPaso(borrador, p).completo)
+  // Índice de navegación: aparece cuando el cuestionario entero está contestado, que es el caso
+  // de quien vuelve desde los resultados a cambiar un dato. Retirado el cribado (v1.1), ya no hay
+  // ningún paso que quede fuera de la cuenta.
+  const todoContestado = pasos.every((p) => estadoPaso(borrador, p).completo)
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -131,7 +131,11 @@ export function Wizard({
       return
     }
     if (esUltimo) {
-      onTerminar(aInputs(borrador))
+      // El plan se ancla en su día de arranque antes de calcularlo, y el borrador se queda con
+      // esa fecha: así la proyección y los pesajes hablan siempre del mismo punto de partida.
+      const anclado = anclarPlan(borrador)
+      if (anclado !== borrador) set(anclado)
+      onTerminar(aInputs(anclado))
       return
     }
     setPasoActual(pasos[indice + 1])

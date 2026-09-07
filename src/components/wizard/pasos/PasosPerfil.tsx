@@ -1,10 +1,9 @@
-// Pasos 1 a 5b: sexo, edad, embarazo/lactancia, altura y peso, condiciones
-// médicas y cribado breve sobre la relación con la comida.
+// Pasos 1 a 5: sexo, edad, embarazo/lactancia, regla, altura y peso y
+// condiciones médicas.
 
-import type { Condicion } from '../../../engine/types'
-import { CampoNumero, Grupo, Opcion } from '../../ui/Controles'
+import type { Condicion, Menstruacion } from '../../../engine/types'
+import { CampoNumero, Opcion } from '../../ui/Controles'
 import { CONDICION_ETIQUETA, TEXTO_CONDICIONES_FIJO } from '../../utiles/copy'
-import type { RespuestaCribado } from '../borrador'
 import { estaMarcado } from '../borrador'
 import { Pantalla, type PropsPaso } from './comun'
 
@@ -73,6 +72,40 @@ export function PasoEmbarazo({ b, set }: PropsPaso) {
           seleccionada={b.embarazo_lactancia === false}
           onElegir={() => set({ embarazo_lactancia: false })}
         />
+      </div>
+    </Pantalla>
+  )
+}
+
+const REGLAS: { valor: Menstruacion; titulo: string }[] = [
+  { valor: 'regular', titulo: 'Regular — me viene más o menos cada mes' },
+  { valor: 'irregular', titulo: 'Irregular — se me adelanta, se me atrasa o se me salta' },
+  { valor: 'ausente', titulo: 'No la tengo — menopausia, anticonceptivo continuo u otra causa' },
+  { valor: 'no_dice', titulo: 'Prefiero no decirlo' },
+]
+
+/**
+ * Paso 3b (SPEC-ux §1). No cambia calorías ni macros: produce la tarjeta "Tu ciclo y tu plan" y,
+ * con regla irregular o ausente junto a un déficit, el aviso de seguridad. Se puede dejar sin
+ * contestar: `null` vale exactamente igual que "prefiero no decirlo".
+ */
+export function PasoRegla({ b, set }: PropsPaso) {
+  return (
+    <Pantalla
+      titulo="¿Cómo es tu regla?"
+      intro="Puedes saltarte esta pregunta: no cambia ningún número de tu plan."
+      ayuda="No cambia tus calorías ni tus macros: el gasto energético varía muy poco a lo largo del ciclo. Lo preguntamos por dos motivos. Uno, para explicarte por qué la báscula sube un par de kilos la semana antes de la regla sin que hayas hecho nada mal. Y dos, porque una regla irregular o ausente junto con un déficit puede ser una señal de que estás comiendo demasiado poco, y eso sí conviene mirarlo."
+    >
+      <div className="opciones">
+        {REGLAS.map(({ valor, titulo }) => (
+          <Opcion
+            key={valor}
+            nombre="menstruacion"
+            titulo={titulo}
+            seleccionada={b.menstruacion === valor}
+            onElegir={() => set({ menstruacion: valor })}
+          />
+        ))}
       </div>
     </Pantalla>
   )
@@ -159,54 +192,6 @@ export function PasoCondiciones({ b, set }: PropsPaso) {
         />
       </div>
       <p className="nota nota-recuadro">{TEXTO_CONDICIONES_FIJO}</p>
-    </Pantalla>
-  )
-}
-
-const RESPUESTAS_CRIBADO: { valor: RespuestaCribado; titulo: string }[] = [
-  { valor: 'si', titulo: 'Sí' },
-  { valor: 'prefiero_no', titulo: 'Prefiero no responder' },
-  { valor: 'no', titulo: 'No' },
-]
-
-export function PasoCribado({ b, set }: PropsPaso) {
-  const responder = (clave: 'q1' | 'q2', valor: RespuestaCribado) =>
-    set((previo) => ({ cribado: { ...previo.cribado, [clave]: valor } }))
-
-  return (
-    <Pantalla
-      titulo="Tu relación con la comida"
-      intro="Solo la usamos para ajustar el ritmo de tu plan. En tu informe verás una nota diciendo que hemos aplicado el ritmo más suave, pero no aparece esta pregunta ni tu respuesta."
-    >
-      <Grupo etiqueta="¿Alguna vez la comida o el peso te han generado mucha ansiedad o preocupación?" fila>
-        {RESPUESTAS_CRIBADO.map(({ valor, titulo }) => (
-          <Opcion
-            key={valor}
-            nombre="cribado-1"
-            compacta
-            titulo={titulo}
-            seleccionada={b.cribado.q1 === valor}
-            onElegir={() => responder('q1', valor)}
-          />
-        ))}
-      </Grupo>
-      <Grupo etiqueta="¿Dirías que la comida o el peso ocupan tu cabeza gran parte del día?" fila>
-        {RESPUESTAS_CRIBADO.map(({ valor, titulo }) => (
-          <Opcion
-            key={valor}
-            nombre="cribado-2"
-            compacta
-            titulo={titulo}
-            seleccionada={b.cribado.q2 === valor}
-            onElegir={() => responder('q2', valor)}
-          />
-        ))}
-      </Grupo>
-      <p className="nota nota-recuadro">
-        Si en algún momento la comida o el peso te generan mucha ansiedad, no tienes que gestionarlo
-        solo/a: puedes hablar gratis con ADANER (Asociación en Defensa de la Atención a la Anorexia y
-        la Bulimia) o con tu centro de salud.
-      </p>
     </Pantalla>
   )
 }

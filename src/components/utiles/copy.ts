@@ -50,9 +50,13 @@ export const NOTA_CIERRE_KCAL =
 export const DISCLAIMER =
   'Báscula te ofrece una orientación nutricional general basada en evidencia científica, no un consejo médico ni un plan personalizado por un profesional sanitario. Los resultados son estimaciones: tu cuerpo puede responder de forma distinta. Si tienes una condición médica, tomas medicación, estás embarazada o en periodo de lactancia, o tienes antecedentes de trastornos de conducta alimentaria, consulta con un/a médico o dietista-nutricionista colegiado/a antes de seguir estas recomendaciones.'
 
-/** [SPEC] SPEC-ux §2.10 y §1.2.5b: pie universal, nunca condicionado. */
+/**
+ * [SPEC] SPEC-ux §2.10 (v1.1, decisión A): línea literal del disclaimer, igual en pantalla y en
+ * el PDF, siempre visible y sin depender de ninguna respuesta. La pantalla la pinta con
+ * `adaner.org` como enlace; el texto es el mismo palabra por palabra.
+ */
 export const AYUDA_TCA =
-  '¿La comida o el peso te generan ansiedad? Habla gratis con ADANER (adaner.org) o pide cita en tu centro de salud.'
+  'Si la comida o el peso te generan ansiedad, puedes hablar gratis con ADANER (adaner.org) o con tu centro de salud.'
 
 /** [SPEC] SPEC-ux §1.2.5, texto fijo bajo las condiciones médicas. */
 export const TEXTO_CONDICIONES_FIJO =

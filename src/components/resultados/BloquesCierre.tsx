@@ -4,7 +4,7 @@
 import type { AvisoTexto, InputCalculo, Resultado } from '../../engine/types'
 import { Plegable } from '../ui/Controles'
 import { TrioSomatotipos } from '../graficos/Siluetas'
-import { AYUDA_TCA, DISCLAIMER, NOTA_PESO_OBJETIVO } from '../utiles/copy'
+import { DISCLAIMER, NOTA_PESO_OBJETIVO } from '../utiles/copy'
 import { entero, fechaLarga, mesYAno, num, numCorto } from '../utiles/formato'
 import { CajaAviso, Seccion } from './comun'
 import { buscarAviso } from '../utiles/avisos'
@@ -153,10 +153,6 @@ export function BloqueAvisos({ avisos }: { avisos: AvisoTexto[] }) {
 }
 
 export function BloqueMetodologia({ inputs, resultado, avisos }: PropsCierre) {
-  const protegido =
-    inputs.cribado_tca === 'positivo' ||
-    inputs.cribado_tca === 'evitado' ||
-    inputs.condiciones.includes('tca')
   const somatotipo = buscarAviso(avisos, 'INFO_SOMATOTIPO')
   const clasicas = resultado.peso_objetivo.referencias.clasicas
 
@@ -189,8 +185,8 @@ export function BloqueMetodologia({ inputs, resultado, avisos }: PropsCierre) {
         </>
       ) : null}
 
-      {!protegido ? (
-        <div className="referencias">
+      {/* v1.1 (decisión A): el bloque de referencias se muestra a todo el mundo, sin guardas. */}
+      <div className="referencias">
           <h3>Otras referencias, no son un objetivo</h3>
           <ul className="lista-referencias cifra">
             <li>Grasa corporal por CUN-BAE: {numCorto(resultado.grasa.referencias.cunbae, 1)} %</li>
@@ -204,25 +200,34 @@ export function BloqueMetodologia({ inputs, resultado, avisos }: PropsCierre) {
               {resultado.ffmi.categoria ? ` — ${CATEGORIA_FFMI[resultado.ffmi.categoria]}` : ''}
             </li>
             <li>Peso para un IMC de 22: {numCorto(resultado.peso_objetivo.referencias.imc22, 1)} kg</li>
-            {clasicas
-              ? Object.entries(clasicas).map(([clave, valor]) => (
-                  <li key={clave}>
-                    Peso ideal {NOMBRE_CLASICAS[clave] ?? clave}: {numCorto(valor, 1)} kg
-                  </li>
-                ))
-              : null}
-          </ul>
-        </div>
-      ) : null}
+          {clasicas
+            ? Object.entries(clasicas).map(([clave, valor]) => (
+                <li key={clave}>
+                  Peso ideal {NOMBRE_CLASICAS[clave] ?? clave}: {numCorto(valor, 1)} kg
+                </li>
+              ))
+            : null}
+        </ul>
+      </div>
     </Plegable>
   )
 }
 
+/**
+ * §2.10. La línea de ADANER es literal, fija y para todo el mundo: es lo único que queda del
+ * cribado retirado en la v1.1, y va en el mismo tamaño que el resto del disclaimer.
+ */
 export function BloqueDisclaimer() {
   return (
     <section className="disclaimer">
       <p>{DISCLAIMER}</p>
-      <p className="disclaimer-ayuda">{AYUDA_TCA}</p>
+      <p className="disclaimer-ayuda">
+        Si la comida o el peso te generan ansiedad, puedes hablar gratis con ADANER (
+        <a href="https://adaner.org" target="_blank" rel="noopener noreferrer">
+          adaner.org
+        </a>
+        ) o con tu centro de salud.
+      </p>
     </section>
   )
 }

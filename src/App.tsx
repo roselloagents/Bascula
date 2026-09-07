@@ -5,10 +5,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { calcular, textoError, textosAvisos } from './engine'
 import type {
+  AjusteMacros,
   AvisoTexto,
   CodigoExclusion,
   Ejemplos,
   InputCalculo,
+  Pesaje,
   Resultado,
 } from './engine/types'
 import { PantallaExcluido } from './components/PantallaExcluido'
@@ -26,24 +28,44 @@ import {
   type Borrador,
   type PasoId,
 } from './components/wizard/borrador'
+import {
+  aplicarAjuste,
+  borrarAjuste,
+  cargarAjuste,
+  firmaDeInputs,
+  guardarAjuste,
+} from './components/resultados/ajuste'
+import { cargarPesajes, guardarPesajes } from './components/resultados/seguimiento'
 import { Logotipo } from './components/ui/Iconos'
 import { CLAIM, MARCA, PIE } from './components/utiles/copy'
 
 type Fase =
   | { nombre: 'wizard' }
   | { nombre: 'calculando' }
-  | { nombre: 'resultados'; inputs: InputCalculo; resultado: Resultado; ejemplos: Ejemplos; avisos: AvisoTexto[] }
+  | {
+      nombre: 'resultados'
+      inputs: InputCalculo
+      /** Plan recomendado por el motor, tal cual: los límites del ajuste salen de aquí. */
+      base: Resultado
+      /** Plan que se muestra: el recomendado, o el que devuelve `ajustarMacros` (§2.2b). */
+      resultado: Resultado
+      ejemplos: Ejemplos
+      avisos: AvisoTexto[]
+      ajuste: AjusteMacros | null
+    }
   | { nombre: 'excluido'; codigo: CodigoExclusion; aviso: AvisoTexto; errores?: string[] }
 
 export default function App() {
   const [borrador, setBorrador] = useState<Borrador>(() => cargarBorrador())
   const [fase, setFase] = useState<Fase>({ nombre: 'wizard' })
   const sesionInicial = useRef(cargarSesion())
-  // Al recargar, se vuelve al paso donde estaba el usuario. Si ya tenía plan, se vuelve al
-  // cribado del paso 5b, que es lo único que no se persiste (CONTRATO.md).
+  // Al recargar, se vuelve al paso donde estaba el usuario. Si ya tenía plan, al último paso:
+  // el plan no se persiste, así que desde ahí se recupera con una sola pulsación.
   const [pasoInicial, setPasoInicial] = useState<PasoId>(
-    sesionInicial.current.planGenerado ? 'cribado' : (sesionInicial.current.paso ?? 'sexo'),
+    sesionInicial.current.planGenerado ? 'preferencias' : (sesionInicial.current.paso ?? 'sexo'),
   )
+  // Seguimiento local (§2.6c): solo en este dispositivo, nunca sale del navegador.
+  const [pesajes, setPesajes] = useState<Pesaje[]>(() => cargarPesajes())
   const [camposMarcados, setCamposMarcados] = useState<string[]>([])
   const [variante, setVariante] = useState(0)
   // Clave del wizard: cambia en cada "Empezar de cero" para volver a montarlo desde la primera pregunta.
@@ -66,6 +88,11 @@ export default function App() {
     setCamposMarcados((previos) => (previos.length > 0 ? [] : previos))
   }, [])
 
+  const cambiarPesajes = (nuevos: Pesaje[]) => {
+    setPesajes(nuevos)
+    guardarPesajes(nuevos)
+  }
+
   const irAResultados = (inputs: InputCalculo) => {
     setFase({ nombre: 'calculando' })
     setVariante(0)
@@ -86,12 +113,27 @@ export default function App() {
             })
             return
           }
+          // El ajuste manual guardado solo vale si el plan se calculó con los mismos datos
+          // (§2.2b): si el usuario editó algo, los límites del plan nuevo son otros.
+          const firma = firmaDeInputs(inputs)
+          const ajuste = firma === cargarSesion().firmaPlan ? cargarAjuste() : null
+          if (!ajuste) borrarAjuste()
+          const ajustado = aplicarAjuste(resultado, ajuste)
+
           const { generarEjemplos } = await menus
-          const ejemplos = generarEjemplos(inputs, resultado)
-          const avisos = textosAvisos(resultado, inputs)
+          const ejemplos = generarEjemplos(inputs, ajustado)
+          const avisos = textosAvisos(ajustado, inputs)
           setCamposMarcados([])
-          guardarSesion({ paso: null, planGenerado: true })
-          setFase({ nombre: 'resultados', inputs, resultado, ejemplos, avisos })
+          guardarSesion({ paso: null, planGenerado: true, firmaPlan: firma })
+          setFase({
+            nombre: 'resultados',
+            inputs,
+            base: resultado,
+            resultado: ajustado,
+            ejemplos,
+            avisos,
+            ajuste,
+          })
         } catch {
           setFase({
             nombre: 'excluido',
@@ -101,6 +143,31 @@ export default function App() {
         }
       })()
     }, 700)
+  }
+
+  /**
+   * Panel "Ajusta tus macros" (§2.2b): el motor rehace el plan y aquí se rehace todo lo que
+   * depende de él —reparto, menú, lista de la compra, cronograma, proyección y PDF—.
+   */
+  const cambiarAjuste = (ajuste: AjusteMacros | null) => {
+    if (fase.nombre !== 'resultados') return
+    const { inputs, base } = fase
+    const ajustado = aplicarAjuste(base, ajuste)
+    guardarAjuste(ajuste)
+    const avisos = textosAvisos(ajustado, inputs)
+    void import('./meals').then(({ generarEjemplos }) => {
+      setFase((previa) =>
+        previa.nombre === 'resultados'
+          ? {
+              ...previa,
+              resultado: ajustado,
+              ejemplos: generarEjemplos(inputs, ajustado, variante),
+              avisos,
+              ajuste,
+            }
+          : previa,
+      )
+    })
   }
 
   /** "Ver otro ejemplo" (§2.5): otra plantilla del mismo banco, sin volver a llamar al motor. */
@@ -125,6 +192,9 @@ export default function App() {
   const reiniciar = () => {
     borrarBorrador()
     borrarSesion()
+    // El ajuste pertenece a un plan que ya no existe. Los pesajes NO se borran: son el historial
+    // del usuario en este dispositivo y sobreviven a un cuestionario nuevo.
+    borrarAjuste()
     setBorrador(borradorInicial())
     setPasoInicial('sexo')
     setCamposMarcados([])
@@ -138,7 +208,9 @@ export default function App() {
 
   const volverAlWizard = (campos?: string[]) => {
     const primero = campos?.map(pasoDeCampo).find((paso) => paso !== null)
-    setPasoInicial(primero ?? 'cribado')
+    // Sin campo que corregir se entra por la primera pregunta; desde ahí el índice "Ir a una
+    // pregunta" del wizard permite saltar a cualquier paso sin repetirlas todas.
+    setPasoInicial(primero ?? 'sexo')
     setFase({ nombre: 'wizard' })
     window.scrollTo(0, 0)
   }
@@ -179,8 +251,13 @@ export default function App() {
           <Resultados
             inputs={fase.inputs}
             resultado={fase.resultado}
+            base={fase.base}
             ejemplos={fase.ejemplos}
             avisos={fase.avisos}
+            ajuste={fase.ajuste}
+            pesajes={pesajes}
+            onAjustar={cambiarAjuste}
+            onPesajes={cambiarPesajes}
             onEditar={() => volverAlWizard()}
             onOtroEjemplo={otroEjemplo}
           />

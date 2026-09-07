@@ -891,3 +891,363 @@ li[data-macro='carbo'] .leyenda-punto {
 .plegable-cuerpo .caja-aviso:last-child {
   padding-bottom: 0;
 }
+
+/* =====================================================================
+   v1.1 — ajuste manual, ciclo, proyección y seguimiento local
+   ===================================================================== */
+
+/* ---- Bloques plegables nativos (<details>) --------------------------- */
+
+.panel-ajuste,
+.panel-seguimiento {
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+  background: var(--papel);
+}
+
+.panel-ajuste > summary,
+.panel-seguimiento > summary,
+.tabla-proyeccion > summary {
+  display: grid;
+  gap: var(--e-2);
+  min-height: var(--toque);
+  padding: var(--e-8);
+  cursor: pointer;
+  list-style: none;
+}
+
+.panel-ajuste > summary::-webkit-details-marker,
+.panel-seguimiento > summary::-webkit-details-marker,
+.tabla-proyeccion > summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel-ajuste-titulo {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--e-4);
+  font-family: var(--display);
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+/* Triángulo propio: los nativos varían mucho entre navegadores. */
+.panel-ajuste-titulo::after,
+.tabla-proyeccion > summary::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--tinta-suave);
+  border-bottom: 2px solid var(--tinta-suave);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 200ms var(--salida);
+}
+
+.panel-ajuste[open] .panel-ajuste-titulo::after,
+.panel-seguimiento[open] .panel-ajuste-titulo::after,
+.tabla-proyeccion[open] > summary::after {
+  transform: rotate(-135deg) translate(-2px, -2px);
+}
+
+.panel-ajuste-sub {
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.panel-ajuste-cuerpo {
+  display: grid;
+  gap: var(--e-12);
+  padding: var(--e-8);
+  border-top: 1px solid var(--linea);
+}
+
+/* ---- Distintivos ----------------------------------------------------- */
+
+.etiqueta-ajustado,
+.distintivo-local {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--verde-borde);
+  border-radius: 999px;
+  background: var(--verde-velo);
+  color: var(--verde);
+  font-family: var(--texto);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.cabecera-unidad .etiqueta-ajustado {
+  margin-left: var(--e-4);
+  vertical-align: middle;
+}
+
+/* ---- Controles del panel de ajuste ----------------------------------- */
+
+.ajuste-control {
+  display: grid;
+  gap: var(--e-4);
+}
+
+.ajuste-control-cabecera {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--e-8);
+  font-weight: 600;
+  font-size: var(--t-md);
+}
+
+.ajuste-valor {
+  font-family: var(--display);
+  font-size: var(--t-md);
+  font-weight: 700;
+  color: var(--verde);
+}
+
+.ajuste-control input[type='range'] {
+  width: 100%;
+  height: 44px;
+  appearance: none;
+  background: none;
+  margin: 0;
+}
+
+.ajuste-control input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--linea-fuerte);
+}
+
+.ajuste-control input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--linea-fuerte);
+}
+
+.ajuste-control input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  margin-top: -12px;
+  border-radius: 999px;
+  background: var(--carbo);
+  border: 3px solid var(--papel);
+  box-shadow: 0 0 0 1px var(--carbo);
+}
+
+.ajuste-control input[type='range']::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--carbo);
+  border: 3px solid var(--papel);
+  box-shadow: 0 0 0 1px var(--carbo);
+}
+
+.ajuste-pasos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--e-6);
+}
+
+.ajuste-paso {
+  min-height: var(--toque);
+  font-variant-numeric: tabular-nums;
+  justify-content: center;
+}
+
+.ajuste-resumen {
+  display: grid;
+  gap: var(--e-2);
+  padding: var(--e-8);
+  border-radius: var(--r-md);
+  background: var(--hueso-hundido);
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+.ajuste-resumen-kcal {
+  font-family: var(--display);
+  font-size: var(--t-lg);
+  font-weight: 700;
+  color: var(--verde);
+}
+
+.ajuste-acciones {
+  display: grid;
+  gap: var(--e-6);
+}
+
+@media (min-width: 30rem) {
+  .ajuste-acciones {
+    grid-template-columns: auto auto;
+    justify-content: start;
+  }
+}
+
+/* ---- Proyección (§2.6b) ---------------------------------------------- */
+
+.grafica-proyeccion {
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  overflow: visible;
+}
+
+.grafica-rejilla {
+  stroke: var(--linea);
+  stroke-width: 1;
+}
+
+.grafica-banda {
+  fill: var(--verde);
+  opacity: 0.18;
+}
+
+.grafica-curva {
+  fill: none;
+  stroke: var(--verde);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.grafica-hito {
+  fill: var(--verde);
+}
+
+.grafica-objetivo {
+  stroke: var(--tinta-suave);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+
+.grafica-pesajes {
+  fill: none;
+  stroke: var(--proteina);
+  stroke-width: 1.2;
+}
+
+.grafica-pesaje {
+  fill: var(--proteina);
+}
+
+.grafica-marca,
+.grafica-eje-titulo,
+.grafica-etiqueta {
+  fill: var(--tinta-suave);
+  font-family: var(--texto);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.grafica-etiqueta {
+  fill: var(--tinta-media);
+  font-weight: 600;
+}
+
+.leyenda-proyeccion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-8);
+  list-style: none;
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.leyenda-proyeccion li::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: var(--e-4);
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.leyenda-curva::before {
+  background: var(--verde);
+}
+
+.leyenda-banda::before {
+  background: var(--verde);
+  opacity: 0.25;
+}
+
+.leyenda-real::before {
+  background: var(--proteina);
+}
+
+.tabla-proyeccion > summary {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+}
+
+/* ---- Seguimiento local (§2.6c) --------------------------------------- */
+
+.pesaje-formulario {
+  display: grid;
+  gap: var(--e-8);
+}
+
+.pesaje-formulario .btn {
+  align-self: end;
+}
+
+@media (min-width: 30rem) {
+  .pesaje-formulario {
+    grid-template-columns: 1fr 1fr auto;
+    align-items: end;
+  }
+}
+
+.lista-pesajes {
+  display: grid;
+  gap: var(--e-4);
+  list-style: none;
+}
+
+.lista-pesajes li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-8);
+  padding: var(--e-4) var(--e-6);
+  border-bottom: 1px solid var(--linea);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-icono {
+  display: inline-grid;
+  place-items: center;
+  width: var(--toque);
+  height: var(--toque);
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--tinta-suave);
+  cursor: pointer;
+}
+
+.btn-icono:hover {
+  color: var(--error);
+  background: var(--error-velo);
+}
+
+.balance {
+  display: grid;
+  gap: var(--e-4);
+  padding: var(--e-8);
+  border-left: 3px solid var(--verde);
+  border-radius: var(--r-sm);
+  background: var(--hueso-hundido);
+}
+
+.balance[data-estado='por_delante'],
+.balance[data-estado='por_detras'],
+.balance[data-estado='fuera_banda'] {
+  border-left-color: var(--aviso);
+}

@@ -35,7 +35,7 @@ function borradorCompleto(cambios: Partial<Borrador> = {}): Borrador {
     entrena: false,
     objetivo: 'mantener',
     quierePesoObjetivo: false,
-    preferencia: 'omnivoro',
+    preferencia_base: 'omnivoro',
     n_comidas: 4,
     sinCondiciones: true,
     ...cambios,

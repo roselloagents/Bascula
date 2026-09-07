@@ -6,17 +6,20 @@ import type {
   ActividadDiaria,
   CategoriaVisual,
   Condicion,
-  CribadoTCA,
   Experiencia,
   FuenteGrasa,
   InputCalculo,
   InputSomatotipo,
   Intensidad,
+  Menstruacion,
   MetodoGrasa,
   Momento,
   NComidas,
   Objetivo,
   Preferencia,
+  PreferenciaBase,
+  RecomposicionPrioridad,
+  Restriccion,
   Ritmo,
   Sexo,
   TipoEntrenamiento,
@@ -25,15 +28,16 @@ import { hoyIso, leerNumero } from '../utiles/formato'
 
 export const CLAVE_ALMACEN = 'bascula:inputs:v1'
 
-export type RespuestaCribado = 'si' | 'prefiero_no' | 'no'
+/** Orden canónico de las restricciones combinables (SPEC-calculo §1.1, regla de traducción). */
+export const ORDEN_RESTRICCIONES: Restriccion[] = ['sin_lactosa', 'sin_gluten']
 
 export type PasoId =
   | 'sexo'
   | 'edad'
   | 'embarazo'
+  | 'regla'
   | 'medidas'
   | 'condiciones'
-  | 'cribado'
   | 'grasa'
   | 'somatotipo'
   | 'actividad'
@@ -47,11 +51,12 @@ export interface Borrador {
   sexo: Sexo | null
   edad: string
   embarazo_lactancia: boolean | null
+  /** Paso 3b, solo mujeres. `null` = no contestado, que vale igual que "prefiero no decirlo". */
+  menstruacion: Menstruacion | null
   altura_cm: string
   peso_kg: string
   condiciones: Condicion[]
   sinCondiciones: boolean
-  cribado: { q1: RespuestaCribado | null; q2: RespuestaCribado | null }
   grasa: {
     metodo: MetodoGrasa | null
     valor: string
@@ -75,16 +80,33 @@ export interface Borrador {
     momentoRespondido: boolean
   }
   objetivo: Objetivo | null
+  /** Subpregunta del paso 10 (SPEC-ux §1 paso 10). Preseleccionada en `equilibrado`, que es el
+   *  comportamiento de la v1.0 y no cambia ningún número. Solo viaja con `objetivo` de recomposición. */
+  recomposicion_prioridad: RecomposicionPrioridad
   /** Sin preseleccionar (QA §1): el ritmo cambia el tamaño del déficit y el cronograma,
    *  así que no es un valor por defecto razonable como el número de comidas o el clima. */
   ritmo: Ritmo | null
   quierePesoObjetivo: boolean | null
   peso_objetivo: string
-  preferencia: Preferencia | null
+  /** Paso 13, base excluyente (SPEC-ux §1 paso 13, 1a). Preseleccionada en "como de todo". */
+  preferencia_base: PreferenciaBase
+  /** Paso 13, restricciones combinables (varias a la vez). */
+  restricciones: Restriccion[]
+  /** Paso 13, interruptor "bajo en hidratos". Este sí cambia los números (SPEC-calculo §1.1). */
+  low_carb: boolean
   n_comidas: NComidas
   clima_caluroso: boolean
   /** "¿Quieres comidas sencillas?" del paso 13 (SPEC-ux §3.7.1). Desactivado por defecto. */
   menu_sencillo: boolean
+  /**
+   * Día en que empezó el plan (`InputCalculo.fecha_inicio`). **No se pregunta**: se fija la
+   * primera vez que se pide el plan y se conserva mientras el peso no cambie. Si se recalculara
+   * a hoy en cada visita, la semana 0 de la proyección se movería cada día, los pesajes de §2.6c
+   * quedarían "antes del principio" y el ajuste guardado se descartaría por cambio de datos.
+   */
+  fecha_inicio: string
+  /** Peso con el que se fijó `fecha_inicio`: al cambiarlo, el plan (y la proyección) empiezan hoy. */
+  peso_inicio: string
 }
 
 export function borradorInicial(): Borrador {
@@ -92,11 +114,11 @@ export function borradorInicial(): Borrador {
     sexo: null,
     edad: '',
     embarazo_lactancia: null,
+    menstruacion: null,
     altura_cm: '',
     peso_kg: '',
     condiciones: [],
     sinCondiciones: false,
-    cribado: { q1: null, q2: null },
     grasa: {
       metodo: null,
       valor: '',
@@ -120,43 +142,95 @@ export function borradorInicial(): Borrador {
       momentoRespondido: false,
     },
     objetivo: null,
+    recomposicion_prioridad: 'equilibrado',
     ritmo: null,
     quierePesoObjetivo: null,
     peso_objetivo: '',
-    preferencia: null,
+    preferencia_base: 'omnivoro',
+    restricciones: [],
+    low_carb: false,
     n_comidas: 3,
     clima_caluroso: false,
     menu_sencillo: false,
+    fecha_inicio: '',
+    peso_inicio: '',
   }
 }
 
+/**
+ * Fija el arranque del plan antes de calcularlo: la primera vez, y cada vez que el usuario dice
+ * un peso distinto (la proyección arranca en el peso actual, así que con un peso nuevo el plan
+ * empieza hoy). Mientras no cambie, la fecha se conserva y el seguimiento sigue teniendo sentido.
+ */
+export function anclarPlan(b: Borrador): Borrador {
+  if (b.fecha_inicio !== '' && b.peso_inicio === b.peso_kg) return b
+  return { ...b, fecha_inicio: hoyIso(), peso_inicio: b.peso_kg }
+}
+
 // ---- Persistencia -------------------------------------------------------
-// El cribado del paso 5b nunca se guarda (CONTRATO.md, UI): se vuelve a preguntar.
 
 export function guardarBorrador(borrador: Borrador): void {
   try {
-    const resto: Partial<Borrador> = { ...borrador }
-    delete resto.cribado
-    window.localStorage.setItem(CLAVE_ALMACEN, JSON.stringify(resto))
+    window.localStorage.setItem(CLAVE_ALMACEN, JSON.stringify(borrador))
   } catch {
     // Modo privado o almacenamiento lleno: seguir sin persistir.
   }
 }
+
+/**
+ * Un borrador guardado con la v1.0 trae una sola `preferencia` y el cribado del paso 5b. Se
+ * normaliza sin perder respuestas: la preferencia antigua se reparte en base + restricciones +
+ * interruptor con la **regla de traducción** de `SPEC-calculo.md` §1.1, y el cribado se descarta
+ * (desde la v1.1 la UI escribe siempre `cribado_tca: null`).
+ */
+function normalizarPreferencias(datos: Record<string, unknown>): Partial<Borrador> {
+  if (typeof datos.preferencia_base === 'string') {
+    const elegida = datos.preferencia_base as PreferenciaBase
+    const guardadas = Array.isArray(datos.restricciones) ? (datos.restricciones as Restriccion[]) : []
+    return {
+      preferencia_base: BASES.includes(elegida) ? elegida : 'omnivoro',
+      restricciones: ORDEN_RESTRICCIONES.filter((r) => guardadas.includes(r)),
+      low_carb: datos.low_carb === true,
+    }
+  }
+  const antigua = datos.preferencia as Preferencia | undefined
+  if (typeof antigua !== 'string') return {}
+  return {
+    preferencia_base: antigua === 'vegetariano' || antigua === 'vegano' ? antigua : 'omnivoro',
+    restricciones:
+      antigua === 'sin_lactosa' ? ['sin_lactosa'] : antigua === 'sin_gluten' ? ['sin_gluten'] : [],
+    low_carb: antigua === 'low_carb',
+  }
+}
+
+const BASES: PreferenciaBase[] = ['omnivoro', 'vegetariano', 'vegano']
+const MENSTRUACIONES: Menstruacion[] = ['regular', 'irregular', 'ausente', 'no_dice']
+const PRIORIDADES: RecomposicionPrioridad[] = ['perder', 'equilibrado', 'ganar']
 
 export function cargarBorrador(): Borrador {
   const base = borradorInicial()
   try {
     const crudo = window.localStorage.getItem(CLAVE_ALMACEN)
     if (!crudo) return base
-    const datos = JSON.parse(crudo) as Partial<Borrador>
+    const datos = JSON.parse(crudo) as Partial<Borrador> & Record<string, unknown>
+    const prioridad = datos.recomposicion_prioridad as RecomposicionPrioridad | undefined
+    const menstruacion = datos.menstruacion as Menstruacion | undefined
+    // Campos de la v1.0 que ya no existen: se leen (para traducir la preferencia) y se tiran,
+    // para no volver a guardarlos en el borrador nuevo.
+    const heredado = { ...datos }
+    delete heredado.cribado
+    delete heredado.preferencia
     return {
       ...base,
-      ...datos,
-      cribado: base.cribado,
+      ...heredado,
       grasa: { ...base.grasa, ...(datos.grasa ?? {}) },
       somatotipo: { ...(datos.somatotipo ?? {}) },
       entrenamiento: { ...base.entrenamiento, ...(datos.entrenamiento ?? {}) },
       condiciones: Array.isArray(datos.condiciones) ? datos.condiciones : [],
+      menstruacion: menstruacion && MENSTRUACIONES.includes(menstruacion) ? menstruacion : null,
+      recomposicion_prioridad:
+        prioridad && PRIORIDADES.includes(prioridad) ? prioridad : 'equilibrado',
+      ...normalizarPreferencias(datos),
     }
   } catch {
     return base
@@ -172,6 +246,13 @@ export const CLAVE_SESION = 'bascula:sesion:v1'
 export interface Sesion {
   paso: PasoId | null
   planGenerado: boolean
+  /**
+   * Huella de los `InputCalculo` con los que se calculó el último plan. Sirve para decidir si el
+   * ajuste manual guardado (`bascula:ajuste:v1`) sigue valiendo: si el usuario edita sus datos y
+   * recalcula, los límites del plan nuevo no tienen por qué parecerse a los del anterior y el
+   * ajuste se descarta (SPEC-ux §2.2b).
+   */
+  firmaPlan?: string
 }
 
 export function guardarSesion(sesion: Sesion): void {
@@ -190,6 +271,7 @@ export function cargarSesion(): Sesion {
     return {
       paso: typeof datos.paso === 'string' ? (datos.paso as PasoId) : null,
       planGenerado: datos.planGenerado === true,
+      firmaPlan: typeof datos.firmaPlan === 'string' ? datos.firmaPlan : undefined,
     }
   } catch {
     return { paso: null, planGenerado: false }
@@ -214,21 +296,6 @@ export function borrarBorrador(): void {
 
 // ---- Ramificación -------------------------------------------------------
 
-/** Cribado del paso 5b: "prefiero no responder" cuenta igual que un "sí". */
-export function cribadoDe(borrador: Borrador): CribadoTCA | null {
-  const { q1, q2 } = borrador.cribado
-  if (q1 === null || q2 === null) return null
-  if (q1 === 'si' || q2 === 'si') return 'positivo'
-  if (q1 === 'prefiero_no' || q2 === 'prefiero_no') return 'evitado'
-  return 'negativo'
-}
-
-/** `true` cuando el cribado activa las protecciones (siluetas, %grasa, peso objetivo). */
-export function proteccionActiva(borrador: Borrador): boolean {
-  const cribado = cribadoDe(borrador)
-  return cribado === 'positivo' || cribado === 'evitado'
-}
-
 function objetivoUsaRitmo(objetivo: Objetivo | null): boolean {
   return objetivo === null || objetivo === 'perder' || objetivo === 'ganar' || objetivo === 'no_se'
 }
@@ -236,10 +303,11 @@ function objetivoUsaRitmo(objetivo: Objetivo | null): boolean {
 /** Pasos que aplican con las respuestas dadas hasta ahora (SPEC-ux §1.0). */
 export function pasosVisibles(borrador: Borrador): PasoId[] {
   const pasos: PasoId[] = ['sexo', 'edad']
-  if (borrador.sexo === 'mujer') pasos.push('embarazo')
-  pasos.push('medidas', 'condiciones', 'cribado', 'grasa', 'somatotipo', 'actividad', 'entrenamiento', 'objetivo')
-  if (objetivoUsaRitmo(borrador.objetivo)) pasos.push('ritmo')
-  if (objetivoUsaRitmo(borrador.objetivo) && !proteccionActiva(borrador)) pasos.push('pesoObjetivo')
+  // La regla va justo detrás de embarazo/lactancia y solo se pregunta a mujeres (§1 paso 3b).
+  if (borrador.sexo === 'mujer') pasos.push('embarazo', 'regla')
+  pasos.push('medidas', 'condiciones', 'grasa', 'somatotipo', 'actividad', 'entrenamiento', 'objetivo')
+  // El peso objetivo ya no depende de ningún cribado (v1.1, decisión A): solo del objetivo.
+  if (objetivoUsaRitmo(borrador.objetivo)) pasos.push('ritmo', 'pesoObjetivo')
   pasos.push('preferencias')
   return pasos
 }
@@ -249,15 +317,6 @@ export function pasosVisibles(borrador: Borrador): PasoId[] {
 export interface EstadoPaso {
   completo: boolean
   errores: Record<string, string>
-}
-
-/**
- * Método de grasa que de verdad se usa. Con la protección del cribado activa, el método `visual`
- * no existe (§1.2.6): ni la pantalla lo ofrece, ni la validación lo acepta, ni llega al motor.
- */
-export function metodoEfectivo(b: Borrador): MetodoGrasa | null {
-  if (proteccionActiva(b) && b.grasa.metodo === 'visual') return null
-  return b.grasa.metodo
 }
 
 function enRango(texto: string, min: number, max: number): 'vacio' | 'fuera' | 'ok' {
@@ -285,6 +344,10 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
     case 'embarazo':
       return { completo: b.embarazo_lactancia !== null, errores }
 
+    // Se puede saltar: sin respuesta viaja `null`, con el mismo efecto que "prefiero no decirlo".
+    case 'regla':
+      return { completo: true, errores }
+
     case 'medidas': {
       const altura = enRango(b.altura_cm, 130, 230)
       const peso = enRango(b.peso_kg, 35, 300)
@@ -300,14 +363,7 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
     case 'condiciones':
       return { completo: b.sinCondiciones || b.condiciones.length > 0, errores }
 
-    case 'cribado':
-      return { completo: b.cribado.q1 !== null && b.cribado.q2 !== null, errores }
-
     case 'grasa': {
-      // Con el cribado positivo o evitado el bloque de siluetas "no existe" (§1.2.6): un método
-      // `visual` guardado antes del cribado se ignora, y si no se elige ninguno se avanza con
-      // `desconocido` en vez de dejar el botón muerto.
-      if (metodoEfectivo(b) === null) return { completo: proteccionActiva(b), errores }
       if (b.grasa.metodo === null) return { completo: false, errores }
       if (b.grasa.metodo === 'conocido') {
         const pct = enRango(b.grasa.valor, 3, 70)
@@ -326,7 +382,7 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
         if (cadera === 'fuera') errores.cadera_cm = 'La cadera suele medir entre 60 y 200 cm.'
         return { completo: cuello === 'ok' && cintura === 'ok' && cadera === 'ok', errores }
       }
-      if (metodoEfectivo(b) === 'visual') {
+      if (b.grasa.metodo === 'visual') {
         return { completo: b.grasa.categoria !== null, errores }
       }
       return { completo: true, errores }
@@ -368,8 +424,10 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
       return { completo: objetivo === 'ok', errores }
     }
 
+    // La base viene preseleccionada en "como de todo" y el resto de controles tienen valor por
+    // defecto (§1 paso 13), así que este paso nunca bloquea el botón.
     case 'preferencias':
-      return { completo: b.preferencia !== null, errores }
+      return { completo: true, errores }
   }
 }
 
@@ -380,8 +438,25 @@ export function estaMarcado(marcados: string[] | undefined, campo: string): bool
 
 // ---- Conversión a los inputs del motor ----------------------------------
 
+/**
+ * Regla inversa de `SPEC-calculo.md` §1.1: el valor del campo antiguo `preferencia` que
+ * corresponde al trío (base, restricciones, interruptor). El motor lo ignora en cuanto ve
+ * `preferencia_base`, pero se envía igualmente para el código que todavía lo lea.
+ */
+export function preferenciaHeredada(
+  base: PreferenciaBase,
+  restricciones: Restriccion[],
+  lowCarb: boolean,
+): Preferencia {
+  if (lowCarb) return 'low_carb'
+  if (base !== 'omnivoro') return base
+  if (restricciones.includes('sin_gluten')) return 'sin_gluten'
+  if (restricciones.includes('sin_lactosa')) return 'sin_lactosa'
+  return 'omnivoro'
+}
+
 export function aInputs(b: Borrador): InputCalculo {
-  const metodo: MetodoGrasa = metodoEfectivo(b) ?? 'desconocido'
+  const metodo: MetodoGrasa = b.grasa.metodo ?? 'desconocido'
   const grasa: InputCalculo['grasa'] = { metodo }
   if (metodo === 'conocido') {
     grasa.valor = leerNumero(b.grasa.valor) ?? 0
@@ -390,7 +465,7 @@ export function aInputs(b: Borrador): InputCalculo {
     grasa.cuello_cm = leerNumero(b.grasa.cuello_cm) ?? 0
     grasa.cintura_cm = leerNumero(b.grasa.cintura_cm) ?? 0
     if (b.sexo === 'mujer') grasa.cadera_cm = leerNumero(b.grasa.cadera_cm) ?? 0
-  } else if (metodo === 'visual' && b.grasa.categoria && !proteccionActiva(b)) {
+  } else if (metodo === 'visual' && b.grasa.categoria) {
     grasa.categoria = b.grasa.categoria
   }
 
@@ -424,6 +499,10 @@ export function aInputs(b: Borrador): InputCalculo {
   const pesoObjetivo =
     pasos.includes('pesoObjetivo') && b.quierePesoObjetivo ? leerNumero(b.peso_objetivo) : null
 
+  // Paso 13 (§1.1): se envían los tres campos nuevos y también el antiguo `preferencia`.
+  const restricciones = ORDEN_RESTRICCIONES.filter((r) => b.restricciones.includes(r))
+  const lowCarb = b.low_carb === true
+
   return {
     sexo: b.sexo ?? 'hombre',
     edad: leerNumero(b.edad) ?? 0,
@@ -438,15 +517,26 @@ export function aInputs(b: Borrador): InputCalculo {
     // se resuelve aquí, como el resto de campos que el cuestionario puede no preguntar.
     ritmo: (pasos.includes('ritmo') ? b.ritmo : null) ?? 'moderado',
     peso_objetivo: pesoObjetivo,
-    preferencia: b.preferencia ?? 'omnivoro',
+    preferencia: preferenciaHeredada(b.preferencia_base, restricciones, lowCarb),
+    preferencia_base: b.preferencia_base,
+    restricciones,
+    low_carb: lowCarb,
+    // Solo se envía con el objetivo que la pregunta (§1 paso 10); en el resto viaja `null`,
+    // que el motor trata como 'equilibrado'.
+    recomposicion_prioridad: b.objetivo === 'recomposicion' ? b.recomposicion_prioridad : null,
+    // Solo se pregunta a mujeres; en hombres el motor la ignora, pero no la enviamos siquiera.
+    menstruacion: b.sexo === 'mujer' ? b.menstruacion : null,
     n_comidas: b.n_comidas,
     clima_caluroso: b.clima_caluroso,
     // Solo lo lee el generador de menús; el motor lo ignora por completo (§3.7.1).
     menu_sencillo: b.menu_sencillo === true,
     embarazo_lactancia: b.embarazo_lactancia === true,
     condiciones: b.sinCondiciones ? [] : b.condiciones,
-    cribado_tca: cribadoDe(b),
-    fecha_inicio: hoyIso(),
+    // v1.1 (decisión A): el paso 5b ya no existe y la UI escribe siempre `null`. Ningún camino
+    // de la interfaz puede producir 'positivo' ni 'evitado', y por tanto tampoco 'tca'.
+    cribado_tca: null,
+    // Lo fija `anclarPlan` al pedir el plan; el respaldo es para un borrador de la v1.0.
+    fecha_inicio: b.fecha_inicio || hoyIso(),
   }
 }
 
@@ -460,8 +550,9 @@ export function pasoDeCampo(campo: string): PasoId | null {
     case 'peso_kg':
       return 'medidas'
     case 'condiciones':
-    case 'cribado_tca':
       return 'condiciones'
+    case 'menstruacion':
+      return 'regla'
     case 'grasa':
       return 'grasa'
     case 'actividad_diaria':
@@ -469,12 +560,16 @@ export function pasoDeCampo(campo: string): PasoId | null {
     case 'entrenamiento':
       return 'entrenamiento'
     case 'objetivo':
+    case 'recomposicion_prioridad':
       return 'objetivo'
     case 'ritmo':
       return 'ritmo'
     case 'peso_objetivo':
       return 'pesoObjetivo'
     case 'preferencia':
+    case 'preferencia_base':
+    case 'restricciones':
+    case 'low_carb':
     case 'n_comidas':
       return 'preferencias'
     default:
