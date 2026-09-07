@@ -175,6 +175,19 @@
 
 /* ---- Barra de navegación (siempre visible) --------------------------- */
 
+/* Qué falta por contestar cuando el botón está apagado (pasos con varias subpreguntas). */
+.nota-falta {
+  margin-top: var(--e-8);
+  text-align: center;
+  color: var(--tinta-media);
+}
+
+/* Línea del último paso cuando el plan guardado corresponde a estas mismas respuestas. */
+.nota-plan-guardado {
+  margin-top: var(--e-8);
+  text-align: center;
+}
+
 .barra-navegacion {
   position: sticky;
   bottom: 0;

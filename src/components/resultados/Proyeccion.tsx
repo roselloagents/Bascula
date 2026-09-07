@@ -411,7 +411,15 @@ export function BloqueSeguimiento({
               {balance.nota ? <p className="nota">{balance.nota}</p> : null}
               <p className="nota">{balance.cierre}</p>
             </div>
-          ) : null}
+          ) : (
+            // La frase de balance necesita dos pesajes. El día que se crea el plan solo cabe uno
+            // (la fecha mínima y la máxima son la misma), así que sin esta línea el usuario apunta
+            // su peso, no pasa nada visible y no sabe por qué.
+            <p className="nota">
+              Con dos pesajes en semanas distintas te decimos si vas por delante o por detrás de la
+              previsión.
+            </p>
+          )}
 
           {recientes.length > 0 ? (
             <button

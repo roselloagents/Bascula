@@ -70,6 +70,9 @@ interface WizardProps {
   onReiniciar: () => void
   /** Avisa del paso visible para poder recuperarlo tras recargar la página. */
   onPaso?: (paso: PasoId) => void
+  /** `true` si el plan guardado en este dispositivo corresponde a estas mismas respuestas: el
+   *  último paso lo dice y el botón cambia de rótulo (SPEC-ux §2.0). */
+  planGuardado?: boolean
   pasoInicial?: PasoId
   /** Campos que el motor ha devuelto en `ERR_INPUT_RANGO`: se marcan en rojo. */
   camposMarcados?: string[]
@@ -84,6 +87,7 @@ export function Wizard({
   onPaso,
   pasoInicial = 'sexo',
   camposMarcados = [],
+  planGuardado = false,
 }: WizardProps) {
   const [pasoActual, setPasoActual] = useState<PasoId>(pasoInicial)
   // "Empezar de cero" borra todas las respuestas: se pide confirmación antes (el botón está en
@@ -94,7 +98,7 @@ export function Wizard({
   const pasos = pasosVisibles(borrador)
   const indice = Math.max(0, pasos.indexOf(pasoActual))
   const paso = pasos[indice]
-  const { completo, errores } = estadoPaso(borrador, paso)
+  const { completo, errores, falta } = estadoPaso(borrador, paso)
   const esUltimo = indice === pasos.length - 1
   const Componente = COMPONENTES[paso]
 
@@ -202,6 +206,18 @@ export function Wizard({
           <Componente b={borrador} set={set} errores={errores} marcados={camposMarcados} />
         </div>
 
+        {!completo && falta !== undefined && Object.keys(errores).length === 0 ? (
+          <p className="nota nota-falta" role="status" aria-live="polite">
+            Para seguir, falta {falta}.
+          </p>
+        ) : null}
+
+        {esUltimo && planGuardado ? (
+          <p className="nota nota-plan-guardado">
+            Tu plan sigue guardado en este móvil, con tu ajuste manual y tus pesajes.
+          </p>
+        ) : null}
+
         <div className="barra-navegacion" data-solo={indice === 0}>
           {indice > 0 ? (
             <button type="button" className="btn btn-secundario" onClick={retroceder}>
@@ -214,7 +230,7 @@ export function Wizard({
             className="btn btn-principal"
             disabled={!completo || Object.keys(errores).length > 0}
           >
-            {esUltimo ? 'Ver mi plan' : 'Siguiente'}
+            {esUltimo ? (planGuardado ? 'Volver a mi plan' : 'Ver mi plan') : 'Siguiente'}
             <IconoFlecha />
           </button>
         </div>

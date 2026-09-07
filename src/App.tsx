@@ -2,7 +2,7 @@
 // La interfaz no implementa ninguna fórmula: consume `calcular`, `textosAvisos`,
 // `textoError` (motor) y `generarEjemplos` (menús, cargado en diferido).
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { calcular, textoError, textosAvisos } from './engine'
 import type {
   AjusteMacros,
@@ -17,6 +17,8 @@ import { PantallaExcluido } from './components/PantallaExcluido'
 import { Resultados } from './components/resultados/Resultados'
 import { Wizard } from './components/wizard/Wizard'
 import {
+  aInputs,
+  anclarPlan,
   borradorInicial,
   borrarBorrador,
   borrarSesion,
@@ -82,6 +84,21 @@ export default function App() {
   // Estable a propósito: el `useEffect` del wizard que mueve el foco y el scroll depende de esta
   // función, y una identidad nueva por render la dispararía en cada pulsación de tecla.
   const guardarPaso = useCallback((paso: PasoId) => guardarPasoSesion(paso), [])
+
+  // Al recargar con un plan hecho se aterriza en la última pregunta, y sin decir nada eso se lee
+  // como "he perdido mi plan". Sigue guardado en este móvil: si las respuestas son exactamente las
+  // que lo calcularon, el último paso lo dice y el botón devuelve el plan tal cual, con su ajuste
+  // manual y sus pesajes. Con cualquier respuesta cambiada el plan se rehace, y entonces no se
+  // promete nada.
+  const planGuardado = useMemo(() => {
+    const firma = sesionInicial.current.firmaPlan
+    if (firma === undefined) return false
+    try {
+      return firma === firmaDeInputs(aInputs(anclarPlan(borrador)))
+    } catch {
+      return false
+    }
+  }, [borrador])
 
   // El motor marca los campos de `ERR_INPUT_RANGO`; la marca se retira en cuanto el usuario edita.
   const cambiarBorrador = useCallback((actualizar: (previo: Borrador) => Borrador) => {
@@ -238,6 +255,7 @@ export default function App() {
             onPaso={guardarPaso}
             pasoInicial={pasoInicial}
             camposMarcados={camposMarcados}
+            planGuardado={planGuardado}
           />
         ) : null}
 

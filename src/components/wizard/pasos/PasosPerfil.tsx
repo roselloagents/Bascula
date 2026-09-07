@@ -86,15 +86,17 @@ const REGLAS: { valor: Menstruacion; titulo: string }[] = [
 
 /**
  * Paso 3b (SPEC-ux §1). No cambia calorías ni macros: produce la tarjeta "Tu ciclo y tu plan" y,
- * con regla irregular o ausente junto a un déficit, el aviso de seguridad. Se puede dejar sin
+ * con regla irregular o ausente junto a un déficit, el aviso de seguridad. Lo único numérico que sí
+ * cambia es el ritmo (paso 6.7bis del motor), y por eso el copy lo dice: prometer "no cambia ningún
+ * número" y luego mover el ritmo en la cabecera del resultado es mentir. Se puede dejar sin
  * contestar: `null` vale exactamente igual que "prefiero no decirlo".
  */
 export function PasoRegla({ b, set }: PropsPaso) {
   return (
     <Pantalla
       titulo="¿Cómo es tu regla?"
-      intro="Puedes saltarte esta pregunta: no cambia ningún número de tu plan."
-      ayuda="No cambia tus calorías ni tus macros: el gasto energético varía muy poco a lo largo del ciclo. Lo preguntamos por dos motivos. Uno, para explicarte por qué la báscula sube un par de kilos la semana antes de la regla sin que hayas hecho nada mal. Y dos, porque una regla irregular o ausente junto con un déficit puede ser una señal de que estás comiendo demasiado poco, y eso sí conviene mirarlo."
+      intro="Puedes saltarte esta pregunta: no cambia tus calorías ni tus macros. Lo único que puede cambiar: si has elegido ritmo agresivo y tu regla es irregular o no la tienes, lo suavizamos a moderado por seguridad."
+      ayuda="No cambia tus macros: el gasto energético varía muy poco a lo largo del ciclo. Lo preguntamos por dos motivos. Uno, para explicarte por qué la báscula sube un par de kilos la semana antes de la regla sin que hayas hecho nada mal. Y dos, porque una regla irregular o ausente junto con un déficit puede ser una señal de que estás comiendo demasiado poco, y eso sí conviene mirarlo: en ese caso, si habías pedido ritmo agresivo, lo suavizamos a moderado (y con él cambian las calorías del plan)."
     >
       <div className="opciones">
         {REGLAS.map(({ valor, titulo }) => (
