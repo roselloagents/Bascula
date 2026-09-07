@@ -46,6 +46,8 @@ export default function App() {
   )
   const [camposMarcados, setCamposMarcados] = useState<string[]>([])
   const [variante, setVariante] = useState(0)
+  // Clave del wizard: cambia en cada "Empezar de cero" para volver a montarlo desde la primera pregunta.
+  const [generacion, setGeneracion] = useState(0)
   const temporizador = useRef<number | undefined>(undefined)
 
   useEffect(() => {
@@ -127,6 +129,10 @@ export default function App() {
     setPasoInicial('sexo')
     setCamposMarcados([])
     setFase({ nombre: 'wizard' })
+    // El wizard guarda su paso actual en estado propio y solo lee `pasoInicial` al montarse:
+    // cambiar la clave lo vuelve a montar, y así "Empezar de cero" lleva de verdad a la primera
+    // pregunta en vez de dejar al usuario en el mismo paso con los campos vacíos.
+    setGeneracion((g) => g + 1)
     window.scrollTo(0, 0)
   }
 
@@ -150,6 +156,7 @@ export default function App() {
       <main className="contenido">
         {fase.nombre === 'wizard' ? (
           <Wizard
+            key={generacion}
             borrador={borrador}
             onCambio={cambiarBorrador}
             onTerminar={irAResultados}

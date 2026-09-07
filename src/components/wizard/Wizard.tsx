@@ -3,16 +3,11 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react'
 import type { CodigoExclusion, InputCalculo } from '../../engine/types'
+import { Confirmacion } from '../ui/Confirmacion'
 import { Plegable } from '../ui/Controles'
 import { IconoAtras, IconoFlecha } from '../ui/Iconos'
 import { leerNumero } from '../utiles/formato'
-import {
-  aInputs,
-  estadoPaso,
-  pasosVisibles,
-  type Borrador,
-  type PasoId,
-} from './borrador'
+import { aInputs, estadoPaso, pasosVisibles, type Borrador, type PasoId } from './borrador'
 import {
   PasoCondiciones,
   PasoCribado,
@@ -91,6 +86,9 @@ export function Wizard({
   camposMarcados = [],
 }: WizardProps) {
   const [pasoActual, setPasoActual] = useState<PasoId>(pasoInicial)
+  // "Empezar de cero" borra todas las respuestas: se pide confirmación antes (el botón está en
+  // todas las pantallas y un toque accidental tiraba el cuestionario entero).
+  const [confirmarReinicio, setConfirmarReinicio] = useState(false)
   const contenedor = useRef<HTMLDivElement>(null)
 
   const pasos = pasosVisibles(borrador)
@@ -144,65 +142,79 @@ export function Wizard({
   }
 
   return (
-    <form className="wizard" onSubmit={avanzar} noValidate>
-      <div className="progreso">
-        <div className="progreso-regla" aria-hidden="true">
-          {pasos.map((p, i) => (
-            <span key={p} data-hecho={i <= indice} />
-          ))}
+    <>
+      <Confirmacion
+        abierto={confirmarReinicio}
+        titulo="¿Empezar de cero?"
+        texto="Se borrarán todas tus respuestas y volverás a la primera pregunta. Esto no se puede deshacer."
+        confirmar="Sí, empezar de cero"
+        cancelar="No, seguir donde estaba"
+        onCancelar={() => setConfirmarReinicio(false)}
+        onConfirmar={() => {
+          setConfirmarReinicio(false)
+          onReiniciar()
+        }}
+      />
+      <form className="wizard" onSubmit={avanzar} noValidate>
+        <div className="progreso">
+          <div className="progreso-regla" aria-hidden="true">
+            {pasos.map((p, i) => (
+              <span key={p} data-hecho={i <= indice} />
+            ))}
+          </div>
+          <div className="progreso-pie">
+            <p className="progreso-texto">
+              Paso {indice + 1} de {pasos.length}
+            </p>
+            <button type="button" className="btn-plano" onClick={() => setConfirmarReinicio(true)}>
+              Empezar de cero
+            </button>
+          </div>
         </div>
-        <div className="progreso-pie">
-          <p className="progreso-texto">
-            Paso {indice + 1} de {pasos.length}
-          </p>
-          <button type="button" className="btn-plano" onClick={onReiniciar}>
-            Empezar de cero
-          </button>
-        </div>
-      </div>
 
-      {todoContestado ? (
-        <div className="indice-pasos">
-          <Plegable titulo="Ir a una pregunta">
-            <ul className="indice-lista">
-              {pasos.map((p, i) => (
-                <li key={p}>
-                  <button
-                    type="button"
-                    className="indice-boton"
-                    data-actual={p === paso}
-                    onClick={() => setPasoActual(p)}
-                  >
-                    <span className="cifra indice-numero">{i + 1}</span>
-                    {TITULO_PASO[p]}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </Plegable>
-        </div>
-      ) : null}
-
-      <div className="paso" key={paso} ref={contenedor} tabIndex={-1}>
-        <Componente b={borrador} set={set} errores={errores} marcados={camposMarcados} />
-      </div>
-
-      <div className="barra-navegacion" data-solo={indice === 0}>
-        {indice > 0 ? (
-          <button type="button" className="btn btn-secundario" onClick={retroceder}>
-            <IconoAtras />
-            Atrás
-          </button>
+        {todoContestado ? (
+          <div className="indice-pasos">
+            <Plegable titulo="Ir a una pregunta">
+              <ul className="indice-lista">
+                {pasos.map((p, i) => (
+                  <li key={p}>
+                    <button
+                      type="button"
+                      className="indice-boton"
+                      data-actual={p === paso}
+                      onClick={() => setPasoActual(p)}
+                    >
+                      <span className="cifra indice-numero">{i + 1}</span>
+                      {TITULO_PASO[p]}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Plegable>
+          </div>
         ) : null}
-        <button
-          type="submit"
-          className="btn btn-principal"
-          disabled={!completo || Object.keys(errores).length > 0}
-        >
-          {esUltimo ? 'Ver mi plan' : 'Siguiente'}
-          <IconoFlecha />
-        </button>
-      </div>
-    </form>
+
+        <div className="paso" key={paso} ref={contenedor} tabIndex={-1}>
+          <Componente b={borrador} set={set} errores={errores} marcados={camposMarcados} />
+        </div>
+
+        <div className="barra-navegacion" data-solo={indice === 0}>
+          {indice > 0 ? (
+            <button type="button" className="btn btn-secundario" onClick={retroceder}>
+              <IconoAtras />
+              Atrás
+            </button>
+          ) : null}
+          <button
+            type="submit"
+            className="btn btn-principal"
+            disabled={!completo || Object.keys(errores).length > 0}
+          >
+            {esUltimo ? 'Ver mi plan' : 'Siguiente'}
+            <IconoFlecha />
+          </button>
+        </div>
+      </form>
+    </>
   )
 }
