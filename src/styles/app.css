@@ -141,6 +141,18 @@
   gap: var(--e-12);
 }
 
+/* Un item de rejilla o de flex tiene min-width:auto y no se encoge por debajo
+   del ancho intrínseco de los campos numéricos que contiene: sin esto, a 360 px
+   la pantalla desbordaba a lo ancho y aparecía scroll horizontal. */
+.pantalla-cuerpo,
+.pantalla-cuerpo > *,
+.campo,
+.campo-caja,
+.pareja-campos,
+.pareja-campos > * {
+  min-width: 0;
+}
+
 .sub-bloque {
   display: grid;
   gap: var(--e-12);
