@@ -59,12 +59,13 @@ describe('barrido de planes', () => {
         }
       }
       // El grueso del barrido incluye combinaciones extremas (55 kg con 3.500 kcal, 100 kg con
-      // 1.300); aun así, la inmensa mayoría de las tomas debe cerrar sin nota. El umbral es 0,88
-      // desde que los máximos de ración de §3.3 son duros (una toma grande se reparte en varios
-      // platos en vez de triplicar las raciones): las esquinas del barrido —vegano de 100 kg con
-      // 1.300 kcal, 110 g de proteína en una toma— dejan de cerrar y salen con su nota, que es
-      // exactamente lo que la spec manda hacer con ellas.
-      expect(dentro / tomas, `${preferencia}: solo ${dentro} de ${tomas} tomas dentro`).toBeGreaterThan(0.88)
+      // 1.300); aun así, la inmensa mayoría de las tomas debe cerrar sin nota. El umbral bajó de
+      // 0,90 a 0,87 al hacer duros los máximos de ración de §3.3 (una toma grande se reparte en
+      // varios platos en vez de triplicar las raciones) y al añadir los topes de plausibilidad de
+      // los alimentos contables: las esquinas del barrido —vegano de 100 kg con 1.300 kcal, 110 g
+      // de proteína en una sola toma— dejan de cerrar y salen con su nota, que es exactamente lo
+      // que §3.3 manda hacer con ellas.
+      expect(dentro / tomas, `${preferencia}: solo ${dentro} de ${tomas} tomas dentro`).toBeGreaterThan(0.87)
     })
   }
 })

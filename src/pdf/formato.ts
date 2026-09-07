@@ -1,6 +1,11 @@
 // Formato de números y fechas en español de España para el PDF.
 // Regla dura: ningún campo opcional puede acabar imprimiendo "NaN" ni "undefined".
 
+// Helvetica con WinAnsiEncoding no tiene el signo menos tipográfico U+2212: se codifica como el
+// byte de control 0x12 y DESAPARECE de la página, así que un número negativo se imprimiría con su
+// valor absoluto. Se usa el guion ASCII, que sí existe en WinAnsi.
+const MENOS = '-'
+
 /** Guion largo que sustituye a cualquier valor no imprimible. */
 export const SIN_DATO = '—'
 
@@ -16,7 +21,7 @@ export function num(valor: number | null | undefined, decimales = 0): string {
   const [entera, decimal] = fijo.split('.')
   const conMillares = entera.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   const cuerpo = decimal ? `${conMillares},${decimal}` : conMillares
-  return negativo ? `−${cuerpo}` : cuerpo
+  return negativo ? `${MENOS}${cuerpo}` : cuerpo
 }
 
 /** `2.190 kcal`. */

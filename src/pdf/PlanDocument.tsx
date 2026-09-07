@@ -11,6 +11,7 @@ import type {
   EjemploComida,
   EjemploDia,
   Macros,
+  TablasEquivalencia,
 } from '../engine/types'
 import { etiqueta, NOMBRE_FORMULA_CLASICA } from './etiquetas'
 import {
@@ -54,9 +55,9 @@ const s = StyleSheet.create({
     color: C.tinta,
     fontFamily: 'Helvetica',
     fontSize: 10,
-    paddingTop: 58,
-    paddingBottom: 56,
-    paddingHorizontal: 46,
+    paddingTop: 50,
+    paddingBottom: 46,
+    paddingHorizontal: 42,
   },
   cabecera: {
     position: 'absolute',
@@ -89,17 +90,18 @@ const s = StyleSheet.create({
   h1: { fontFamily: 'Helvetica-Bold', fontSize: 22, color: C.acento, marginBottom: 6 },
   h2: {
     fontFamily: 'Helvetica-Bold',
-    fontSize: 13,
+    fontSize: 12.5,
     color: C.acento,
-    marginBottom: 6,
-    paddingBottom: 3,
+    marginBottom: 5,
+    paddingBottom: 2.5,
     borderBottomWidth: 1.5,
     borderBottomColor: C.acento,
   },
   h3: { fontFamily: 'Helvetica-Bold', fontSize: 10.5, marginBottom: 3 },
-  p: { marginBottom: 4, lineHeight: 1.35 },
+  p: { marginBottom: 3.5, lineHeight: 1.3 },
   small: { fontSize: 8.5, color: C.suave, lineHeight: 1.4 },
-  seccion: { marginBottom: 12 },
+  equivalencias: { fontSize: 8.5, color: C.tinta, lineHeight: 1.5 },
+  seccion: { marginBottom: 9 },
 
   tarjeta: {
     borderWidth: 0.75,
@@ -336,6 +338,24 @@ function BloqueDia({ dia, titulo }: { dia: EjemploDia; titulo: string }) {
   )
 }
 
+/** Tablas de equivalencias (§2.5 y §4.4): mismo bloque que la pantalla. */
+function BloqueEquivalencias({ tablas }: { tablas: TablasEquivalencia }) {
+  return (
+    <View>
+      <Text style={s.p}>{tablas.cabecera}</Text>
+      {tablas.tablas.map((t) => (
+        <View key={t.titulo} style={{ marginBottom: 8 }} wrap={false}>
+          <Text style={[s.h3, { marginBottom: 3 }]}>{t.titulo}</Text>
+          <Text style={s.equivalencias}>
+            {t.filas.map((f) => `${f.nombre} ${f.gramos} g`).join('  ·  ')}
+          </Text>
+        </View>
+      ))}
+      <Text style={s.small}>{tablas.nota_verdura_fruta}</Text>
+    </View>
+  )
+}
+
 // ---------- Textos fijos ----------
 const AVISOS_DESTACADOS = [
   'WARN_DIABETES',
@@ -410,6 +430,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
     (a) => AVISOS_DESTACADOS.includes(a.codigo) || (inputs.edad >= 65 && a.codigo === 'INFO_AGUA_MAYORES'),
   )
   const objetivoAjustado = inputs.objetivo === 'no_se' || inputs.objetivo !== resultado.objetivo_efectivo
+  const avisoAdaptacion = avisos.find((a) => a.codigo === 'INFO_ADAPTACION')
   const avisoAjuste = avisos.find(
     (a) => a.codigo === 'INFO_OBJETIVO_RESUELTO' || a.codigo.startsWith('WARN_OBJETIVO'),
   )
@@ -715,13 +736,19 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
               )}
               <Text style={[s.small, { marginTop: 6 }]}>
                 Son ejemplos para orientarte, no un menú obligatorio. Puedes sustituir cualquier alimento por otro
-                de la misma familia sin descuadrar tus macros de forma relevante.
+                de la misma familia sin descuadrar tus macros de forma relevante: mira la tabla de equivalencias.
               </Text>
             </View>
           ) : (
             <Text style={s.p}>{SIN_MENU}</Text>
           )}
         </Seccion>
+
+        {hayMenu ? (
+          <Seccion titulo="Equivalencias">
+            <BloqueEquivalencias tablas={ejemplos.equivalencias} />
+          </Seccion>
+        ) : null}
       </Marco>
 
       {/* ---------- Página 5: peso objetivo, consejos y referencias ---------- */}
@@ -788,7 +815,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                     ultima
                   />
                 ) : null}
-              </View>
+                </View>
             ) : (
               <Text style={s.p}>
                 {avisoCronograma?.texto ??
@@ -796,6 +823,10 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                     'rendimiento cada 8-12 semanas.'}
               </Text>
             )}
+            {/* §4.5: la nota INFO_ADAPTACION va bajo la línea de tiempo, no solo en la página de avisos. */}
+            {crono && avisoAdaptacion ? (
+              <Text style={[s.small, { marginTop: 6 }]}>{avisoAdaptacion.texto}</Text>
+            ) : null}
           </Seccion>
         )}
 
@@ -854,10 +885,9 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             </Text>
           </Seccion>
         )}
-      </Marco>
 
-      {/* ---------- Última página: avisos y disclaimer ---------- */}
-      <Marco fecha={fecha}>
+        {/* ---------- Avisos y disclaimer: siguen en el mismo flujo, sin salto forzado, para no
+            dejar media página en blanco (§4.0 pide compacidad). ---------- */}
         {warns.length > 0 ? (
           <Seccion titulo="Avisos importantes">
             {warns.map((a) => (

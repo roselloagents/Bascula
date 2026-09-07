@@ -34,6 +34,18 @@ export interface LimiteRacion {
 const IDS_CREMAS = ['mantequilla_cacahuete']
 
 /**
+ * Topes de plausibilidad de los alimentos contables (§3.5): un gramaje puede caber en la fila de
+ * `clampRacion` y aun así no parecerse a un plato real. Siete claras de huevo o cuatro latas de
+ * atún son técnicamente válidas y nadie las come así.
+ */
+const TOPE_UNIDADES: Record<string, number> = {
+  clara_huevo: 5,
+  atun_natural: 2,
+  atun_aceite: 2,
+  tortitas_arroz: 8,
+}
+
+/**
  * Límites de ración de la tabla de §3.3. Los predicados son mutuamente excluyentes:
  * todo alimento de la base encaja en exactamente una fila (lo comprueba el test de la base).
  */
@@ -70,7 +82,9 @@ export function limiteRacion(a: Alimento): LimiteRacion {
   const base = filaRacion(a)
   if (!esContable(a)) return base
   const u = a.unidad_g
-  return { min: u, max: Math.max(u, Math.floor(base.max / u) * u) }
+  const tope = TOPE_UNIDADES[a.id]
+  const maxFila = tope === undefined ? base.max : Math.min(base.max, tope * u)
+  return { min: u, max: Math.max(u, Math.floor(maxFila / u) * u) }
 }
 
 /** Paso de báscula: múltiplos de 5 g por debajo de 100 g, de 10 g a partir de 100 g (§3.3). */
