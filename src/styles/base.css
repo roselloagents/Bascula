@@ -282,6 +282,51 @@ input[inputmode='decimal'] {
   display: none;
 }
 
+/* ---- Interruptor (tarjeta de sí/no) --------------------------------- */
+
+.interruptor {
+  align-items: center;
+}
+
+.interruptor-carril {
+  display: block;
+  position: relative;
+  width: 52px;
+  height: 30px;
+  flex: none;
+  border: 1.5px solid var(--linea-fuerte);
+  border-radius: 999px;
+  background: var(--hueso-hundido);
+  transition: background-color 150ms var(--salida), border-color 150ms var(--salida);
+}
+
+.interruptor-bola {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 21px;
+  height: 21px;
+  border-radius: 999px;
+  background: var(--papel);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.22);
+  transition: transform 180ms var(--salida);
+}
+
+.interruptor[data-sel='true'] .interruptor-carril {
+  background: var(--verde);
+  border-color: var(--verde);
+}
+
+.interruptor[data-sel='true'] .interruptor-bola {
+  transform: translateX(22px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .interruptor-bola {
+    transition: none;
+  }
+}
+
 /* ---- Campos numéricos ---------------------------------------------- */
 
 .campo {

@@ -81,6 +81,8 @@ export interface Borrador {
   preferencia: Preferencia | null
   n_comidas: NComidas
   clima_caluroso: boolean
+  /** "¿Quieres comidas sencillas?" del paso 13 (SPEC-ux §3.7.1). Desactivado por defecto. */
+  menu_sencillo: boolean
 }
 
 export function borradorInicial(): Borrador {
@@ -122,6 +124,7 @@ export function borradorInicial(): Borrador {
     preferencia: null,
     n_comidas: 3,
     clima_caluroso: false,
+    menu_sencillo: false,
   }
 }
 
@@ -434,6 +437,8 @@ export function aInputs(b: Borrador): InputCalculo {
     preferencia: b.preferencia ?? 'omnivoro',
     n_comidas: b.n_comidas,
     clima_caluroso: b.clima_caluroso,
+    // Solo lo lee el generador de menús; el motor lo ignora por completo (§3.7.1).
+    menu_sencillo: b.menu_sencillo === true,
     embarazo_lactancia: b.embarazo_lactancia === true,
     condiciones: b.sinCondiciones ? [] : b.condiciones,
     cribado_tca: cribadoDe(b),

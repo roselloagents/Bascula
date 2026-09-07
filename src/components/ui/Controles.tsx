@@ -87,6 +87,52 @@ export function OpcionAccion({
   )
 }
 
+/**
+ * Interruptor de sí/no con el aspecto de tarjeta seleccionable (SPEC-ux §3.7.1). Es un
+ * `checkbox` con `role="switch"`: una sola pulsación cambia la respuesta, sin dos tarjetas
+ * que compitan por el mismo dato.
+ */
+export function Interruptor({
+  titulo,
+  detalle,
+  activo,
+  onCambiar,
+}: {
+  titulo: string
+  detalle?: ReactNode
+  activo: boolean
+  onCambiar: (activo: boolean) => void
+}) {
+  const id = useId()
+  return (
+    <label className="opcion interruptor" data-sel={activo}>
+      <input
+        className="visualmente-oculto"
+        type="checkbox"
+        role="switch"
+        checked={activo}
+        aria-labelledby={detalle ? `${id}-t ${id}-d` : `${id}-t`}
+        onChange={(evento) => onCambiar(evento.target.checked)}
+      />
+      <span className="opcion-cuerpo">
+        <span>
+          <span className="opcion-titulo" id={`${id}-t`}>
+            {titulo}
+          </span>
+          {detalle ? (
+            <span className="opcion-detalle" id={`${id}-d`}>
+              {detalle}
+            </span>
+          ) : null}
+        </span>
+      </span>
+      <span className="interruptor-carril" aria-hidden="true">
+        <span className="interruptor-bola" />
+      </span>
+    </label>
+  )
+}
+
 interface GrupoProps {
   etiqueta: string
   children: ReactNode

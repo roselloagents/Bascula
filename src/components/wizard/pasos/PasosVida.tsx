@@ -12,7 +12,7 @@ import type {
   Ritmo,
   TipoEntrenamiento,
 } from '../../../engine/types'
-import { CampoNumero, Deslizador, Grupo, Opcion } from '../../ui/Controles'
+import { CampoNumero, Deslizador, Grupo, Interruptor, Opcion } from '../../ui/Controles'
 import { numCorto, leerNumero } from '../../utiles/formato'
 import { estaMarcado } from '../borrador'
 import { Pantalla, type PropsPaso } from './comun'
@@ -406,6 +406,21 @@ export function PasoPreferencias({ b, set }: PropsPaso) {
           onElegir={() => set({ clima_caluroso: false })}
         />
       </Grupo>
+
+      {/* [SPEC] SPEC-ux §3.7.1: título y descripción literales. Desactivado por defecto. */}
+      <Interruptor
+        titulo="¿Quieres comidas sencillas?"
+        detalle="Menos alimentos distintos, comidas que se repiten y una compra fácil. Ideal si no quieres pensar."
+        activo={b.menu_sencillo}
+        onCambiar={(menu_sencillo) => set({ menu_sencillo })}
+      />
+      {b.menu_sencillo ? (
+        <p className="nota nota-recuadro">
+          Tu menú usará como mucho 12 alimentos distintos en toda la semana, con dos versiones de cada
+          comida que se van alternando. Tus calorías y tus macros no cambian: solo cambia la variedad
+          del menú y, con ella, la lista de la compra.
+        </p>
+      ) : null}
     </Pantalla>
   )
 }
