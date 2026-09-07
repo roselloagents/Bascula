@@ -668,3 +668,175 @@ describe('Paso 18 — ajustarMacros (decisión B)', () => {
     expect(casos).toBeGreaterThan(200)
   })
 })
+// ---------------------------------------------------------------------------------------------
+// Correcciones de la revisión de cierre de la v1.1.
+// ---------------------------------------------------------------------------------------------
+
+describe('paso 18 — el cierre de kcal nunca se sale del 2 %', () => {
+  // El techo de hidratos se calculaba contra el suelo de grasa SIN redondear, pero el punto 3
+  // sube la grasa a `roundUp5(suelo)`: ese salto de hasta 5 g (45 kcal) desbordaba la tolerancia
+  // con kcal bajas, y el panel lanzaba justo donde cae quien pulsa cuatro veces "−50 kcal".
+  const PERFIL: Inputs = con({
+    sexo: 'mujer',
+    edad: 30,
+    altura_cm: 165,
+    peso_kg: 70,
+    entrenamiento: ent({ tipo: 'fuerza', dias_semana: 3, minutos_sesion: 60, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+    objetivo: 'perder',
+    ritmo: 'moderado',
+  })
+
+  it('el caso que reventaba (kcal_min con los hidratos en su techo) ya no lanza', () => {
+    const r = calcular(PERFIL)
+    const L = r.limites_ajuste
+    expect(L).toBeDefined()
+    if (!L) return
+    const ajustado = ajustarMacros(r, { kcal: L.kcal_min, hc_g: 105 })
+    expect(Math.abs(ajustado.kcal_cierre - ajustado.kcal)).toBeLessThanOrEqual(0.02 * ajustado.kcal)
+  })
+
+  it('barrido de todo el rectángulo (kcal, HC) que el panel puede alcanzar', () => {
+    let casos = 0
+    let peor = 0
+    for (const perfil of [PERFIL, CASO_15, CASO_16, PERFIL_BASE]) {
+      const r = calcular(perfil)
+      const L = r.limites_ajuste
+      if (!L) continue
+      const suelo = (kcal: number): number => Math.max(L.suelo_grasa_abs_g, (0.2 * kcal) / 9)
+      for (let kcal = L.kcal_min; kcal <= L.kcal_max; kcal += 10) {
+        for (let hc = 0; hc <= 600; hc += 5) {
+          const a = ajustarMacros(r, { kcal, hc_g: hc })
+          casos += 1
+          peor = Math.max(peor, Math.abs(a.kcal_cierre - a.kcal))
+          expect(Math.abs(a.kcal_cierre - a.kcal)).toBeLessThanOrEqual(0.02 * a.kcal)
+          // El suelo de grasa es inviolable: es lo que fija el techo de hidratos.
+          expect(a.macros.grasa_g).toBeGreaterThanOrEqual(suelo(a.kcal) - 1e-9)
+        }
+      }
+    }
+    expect(casos).toBeGreaterThan(10_000)
+    // Solo se redondea a 5 g la grasa, así que la nota de "hasta 25 kcal" es cierta.
+    expect(peor).toBeLessThanOrEqual(22.5)
+  })
+})
+
+describe('paso 18 — un ajuste vacío devuelve el plan recomendado, avisos incluidos', () => {
+  // `WARN_KCAL_AJUSTE_ALTA` miraba solo `TDEE − kcal`: en un plan de perder cuyo déficit
+  // recomendado ya es de 50-99 kcal se emitía sin que el usuario tocara las calorías, y por la
+  // tabla de supresión borraba el `WARN_DEFICIT_MINIMO` honesto que venía del motor.
+  const PERFIL: Inputs = con({
+    sexo: 'hombre',
+    edad: 43,
+    altura_cm: 145,
+    peso_kg: 48,
+    grasa: { metodo: 'conocido', valor: 52, fuente: 'fiable' },
+    actividad_diaria: 'muy_alto',
+    entrenamiento: ent({ tipo: 'fuerza', dias_semana: 2, minutos_sesion: 13, intensidad: 'media', experiencia: 'novato', momento: 'tarde' }),
+    objetivo: 'perder',
+    ritmo: 'suave',
+  })
+
+  it('con déficit recomendado de 50-99 kcal el aviso no acusa al usuario', () => {
+    const r = calcular(PERFIL)
+    expect(r.tdee.valor - r.kcal).toBeGreaterThanOrEqual(50)
+    expect(r.tdee.valor - r.kcal).toBeLessThan(100)
+    expect(r.avisos).toContain('WARN_DEFICIT_MINIMO')
+    expect(normalizado(ajustarMacros(r, {}))).toEqual(normalizado(r))
+    // Mover solo los hidratos tampoco emite un aviso sobre unas calorías que nadie ha tocado.
+    const soloHc = ajustarMacros(r, { hc_g: 100 })
+    expect(soloHc.avisos).not.toContain('WARN_KCAL_AJUSTE_ALTA')
+    expect(soloHc.avisos).toContain('WARN_DEFICIT_MINIMO')
+  })
+})
+
+describe('paso 6.7bis — la regla solo suaviza planes que restan calorías', () => {
+  const GANAR: Inputs = con({
+    sexo: 'mujer',
+    edad: 46,
+    altura_cm: 177,
+    peso_kg: 54,
+    grasa: { metodo: 'conocido', valor: 39, fuente: 'fiable' },
+    actividad_diaria: 'alto',
+    entrenamiento: ent({ tipo: 'mixto', dias_semana: 6, minutos_sesion: 60, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+    objetivo: 'ganar',
+    ritmo: 'agresivo',
+    peso_objetivo: 60,
+    menstruacion: 'ausente',
+  })
+
+  it('en ganar no se recorta el superávit', () => {
+    const r = calcular(GANAR)
+    expect(r.objetivo_efectivo).toBe('ganar')
+    expect(r.ritmo_efectivo).toBe('agresivo')
+  })
+
+  it('en perder sí se suaviza (caso 15: mujer, perder agresivo, regla irregular)', () => {
+    const r = calcular(CASO_15)
+    expect(r.objetivo_efectivo).toBe('perder')
+    expect(CASO_15.ritmo).toBe('agresivo')
+    expect(r.ritmo_efectivo).toBe('moderado')
+  })
+
+  it('el aviso de RED-S no habla de déficit en un plan de superávit', () => {
+    const inputs = { ...GANAR, menstruacion: 'irregular' as const }
+    const r = calcular(inputs)
+    const aviso = textosAvisos(r, inputs).find((a) => a.codigo === 'WARN_CICLO_AUSENTE')
+    expect(aviso).toBeDefined()
+    expect(aviso?.texto).not.toContain('déficit')
+    expect(aviso?.texto).not.toContain('Hemos suavizado el ritmo')
+    expect(aviso?.texto).toContain('pide cita con tu médico.')
+  })
+})
+
+describe('paso 17 — la prioridad de recomposición no sobrevive a otro objetivo', () => {
+  it('con el objetivo reescrito a mantener, el aviso desaparece', () => {
+    const inputs = con({
+      sexo: 'hombre',
+      edad: 54,
+      altura_cm: 167,
+      peso_kg: 68,
+      grasa: { metodo: 'conocido', valor: 46, fuente: 'fiable' },
+      actividad_diaria: 'sedentario',
+      objetivo: 'no_se',
+      peso_objetivo: 70,
+      recomposicion_prioridad: 'perder',
+    })
+    const r = calcular(inputs)
+    expect(r.objetivo_efectivo).not.toBe('recomposicion')
+    expect(r.recomposicion_prioridad).toBeUndefined()
+    expect(r.avisos).not.toContain('INFO_RECOMP_PRIORIDAD_PERDER')
+    expect(r.avisos).not.toContain('INFO_RECOMP_PRIORIDAD_GANAR')
+  })
+})
+
+describe('INFO_CICLO — el hierro respeta la base dietética', () => {
+  const MUJER = (base: 'omnivoro' | 'vegetariano' | 'vegano'): Inputs =>
+    con({
+      sexo: 'mujer',
+      edad: 34,
+      altura_cm: 165,
+      peso_kg: 72,
+      actividad_diaria: 'ligero',
+      objetivo: 'perder',
+      ritmo: 'moderado',
+      menstruacion: 'regular',
+      preferencia_base: base,
+      restricciones: [],
+      low_carb: false,
+    })
+
+  const textoCiclo = (inputs: Inputs): string =>
+    textosAvisos(calcular(inputs), inputs).find((a) => a.codigo === 'INFO_CICLO')?.texto ?? ''
+
+  it('a una vegetariana o vegana no se le recomienda carne roja', () => {
+    for (const base of ['vegetariano', 'vegano'] as const) {
+      const texto = textoCiclo(MUJER(base))
+      expect(texto).not.toContain('carne roja')
+      expect(texto).toContain('legumbre, verdura de hoja y frutos secos')
+    }
+  })
+
+  it('a una omnívora sí', () => {
+    expect(textoCiclo(MUJER('omnivoro'))).toContain('carne roja')
+  })
+})

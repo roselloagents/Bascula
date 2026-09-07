@@ -427,8 +427,11 @@ function calcular(I) {
     w('WARN_PERDIDA_MAYOR_65');
   }
   // 6.7bis REGLA (solo mujeres): unico efecto numerico, el ritmo agresivo pasa a moderado.
+  // Solo en planes que restan calorias (perder / recomposicion): el motivo es la baja
+  // disponibilidad energetica (RED-S) y ahi el remedio es comer MAS, no recortar un superavit.
   // El aviso WARN_CICLO_AUSENTE se evalua en el paso 17, contra el objetivo efectivo FINAL.
-  if (menstruacion === 'irregular' || menstruacion === 'ausente') {
+  if ((menstruacion === 'irregular' || menstruacion === 'ausente')
+      && (obj === 'perder' || obj === 'recomposicion')) {
     if (ritmo_ef === 'agresivo') ritmo_ef = 'moderado';
   }
 
@@ -780,6 +783,10 @@ function calcular(I) {
   // reevaluacion contra objetivo_efectivo (los avisos del paso 6 vieron el objetivo intermedio)
   let avisos = A.slice();
   if (objetivo_efectivo !== 'perder') avisos = avisos.filter(c => c !== 'WARN_PERDIDA_MAYOR_65');
+  // el paso 10bis puede reescribir el objetivo a 'mantener' despues del paso 7: entonces
+  // `recomposicion_prioridad` no se publica y el aviso hablaria de un deficit que ya no existe
+  if (objetivo_efectivo !== 'recomposicion')
+    avisos = avisos.filter(c => c !== 'INFO_RECOMP_PRIORIDAD_PERDER' && c !== 'INFO_RECOMP_PRIORIDAD_GANAR');
 
   // supresion de avisos contradictorios
   for (const [trigger, suprimidos] of SUPRESION) {
@@ -863,9 +870,13 @@ function ajustarMacros(R, ajuste) {
 
   // 2) hidratos: multiplo de 5, entre 30 g y lo que deja el SUELO de grasa del paso 9
   const suelo_g = Math.max(L.suelo_grasa_abs_g, 0.20 * kcal / 9);
+  // el techo se calcula contra el suelo YA REDONDEADO, que es el valor que el punto 3 acaba
+  // poniendo en la grasa: contra el suelo exacto se colaban hasta 5 g (45 kcal) y el cierre se
+  // salia del 2 % con kcal bajas. Asi G nunca cae por debajo del suelo.
+  const suelo_red_g = roundUp5(suelo_g);
   // el redondeo a 5 g del paso 10 puede dejar `hc_recomendado_g` hasta 2,5 g por encima de la cota
   // exacta: sin esta linea, "volver a lo recomendado" no devolvia el plan recomendado.
-  let hc_max = roundDown5((kcal - 4*P - 9*suelo_g) / 4);
+  let hc_max = roundDown5((kcal - 4*P - 9*suelo_red_g) / 4);
   if (kcal === L.kcal_recomendada) hc_max = Math.max(hc_max, L.hc_recomendado_g);
   const hc_lo  = Math.min(L.hc_min_ui_g, hc_max);          // el suelo de grasa manda sobre los 30 g
   const hc_ped = (ajuste && ajuste.hc_g !== undefined && ajuste.hc_g !== null) ? ajuste.hc_g : L.hc_recomendado_g;
@@ -878,7 +889,7 @@ function ajustarMacros(R, ajuste) {
   // 3) grasa = el resto. Sin ajuste se restituye EXACTAMENTE la del plan recomendado.
   let G;
   if (!ajustado) G = L.grasa_recomendada_g;
-  else { G = round5((kcal - 4*P - 4*HC) / 9); if (G < suelo_g) G = roundUp5(suelo_g); }
+  else { G = round5((kcal - 4*P - 4*HC) / 9); if (G < suelo_red_g) G = suelo_red_g; }
   const kcal_cierre = 4*P + 4*HC + 9*G;
   if (Math.abs(kcal_cierre - kcal) > 0.02 * kcal) throw new Error('paso 18: cierre kcal fuera del 2 %');
 
@@ -912,7 +923,9 @@ function ajustarMacros(R, ajuste) {
   // avisos propios del paso 18
   if (ajustado) w('INFO_AJUSTE_MANUAL');
   if (HC < L.hc_min_motor_g) w('WARN_HC_BAJO_MINIMO');
-  if (obje === 'perder' && TDEE - kcal < 100) w('WARN_KCAL_AJUSTE_ALTA');
+  // solo si el usuario ha movido de verdad la palanca de las kcal: si no, el plan es el del motor
+  // y este aviso borraria por supresion el WARN_DEFICIT_MINIMO honesto que venia de calcular()
+  if (cambia_kcal && obje === 'perder' && TDEE - kcal < 100) w('WARN_KCAL_AJUSTE_ALTA');
   if (obje === 'perder' && TDEE - kcal >= 50 && TDEE - kcal < 100) w('WARN_DEFICIT_MINIMO');
 
   for (const [t, sup] of SUPRESION)
@@ -1370,8 +1383,18 @@ for (let iter = 0; iter < 200000; iter++) {
     if (!(L.kcal_min <= L.kcal_max)) viol('S27 limites de kcal invertidos', { ...ctx, L });
     if (L.kcal_min % 10 !== 0 || L.kcal_max % 10 !== 0) viol('S27a limites de kcal no multiplos de 10', { ...ctx, L });
     if (L.kcal_min < (hom?1500:1200)) viol('S27b kcal_min por debajo del suelo por sexo', { ...ctx, L });
-    const aj = pick(ajustes);
-    if (aj !== null) {
+    // Ademas del ajuste aleatorio se prueban SIEMPRE los extremos que el panel alcanza de verdad:
+    // el ajuste vacio (identidad bit a bit), el suelo de kcal —donde el cierre se salia del 2 %— y
+    // ese suelo con el techo del deslizador. Cada 32 perfiles, el barrido entero del deslizador.
+    const techoHc = (kc) => {
+      const s = Math.max(L.suelo_grasa_abs_g, 0.20 * kc / 9);
+      const t = roundDown5((kc - 4*m.proteina_g - 9*roundUp5(s)) / 4);
+      return kc === L.kcal_recomendada ? Math.max(t, L.hc_recomendado_g) : t;
+    };
+    const lista = [pick(ajustes), {}, { kcal: L.kcal_min }, { kcal: L.kcal_min, hc_g: techoHc(L.kcal_min) }];
+    if (n % 32 === 0)
+      for (let h = 30; h <= techoHc(L.kcal_min); h += 5) lista.push({ kcal: L.kcal_min, hc_g: h });
+    for (const aj of lista) if (aj !== null) {
       let ra;
       try { ra = ajustarMacros(r, aj); } catch (e) { viol('EXCEPCION ajustarMacros: ' + e.message, { ...ctx, aj }); ra = null; }
       if (ra) {
@@ -1392,16 +1415,29 @@ for (let iter = 0; iter < 200000; iter++) {
         const doble = ajustarMacros(ra, aj);
         if (JSON.stringify(doble.macros) !== JSON.stringify(ma) || doble.kcal !== ra.kcal)
           viol('S27l ajustarMacros no es idempotente', { ...ctx, aj });
+        // Se compara el `Resultado` ENTERO, no tres campos: los avisos tambien tienen que volver
+        // a ser los del motor (el orden de emision no es significativo, por eso se ordenan).
+        const norm = (x) => JSON.stringify({ ...x, avisos: [...x.avisos].sort() });
         const vuelta = ajustarMacros(ra, {});
-        if (vuelta.ajuste !== undefined || vuelta.kcal !== r.kcal || vuelta.macros.grasa_g !== m.grasa_g || vuelta.macros.hc_g !== m.hc_g)
+        if (vuelta.ajuste !== undefined || norm(vuelta) !== norm(r))
           viol('S27m volver a lo recomendado no restituye el plan', { ...ctx, aj });
       }
     }
   } else if (!I.condiciones.includes('tca')) viol('S27n falta limites_ajuste sin tca', ctx);
 
-  // S28 regla (D): la combinacion irregular/ausente nunca deja un ritmo agresivo
-  if (I.sexo === 'mujer' && (I.menstruacion === 'irregular' || I.menstruacion === 'ausente') && r.ritmo_efectivo === 'agresivo')
-    viol('S28 ritmo agresivo con regla irregular/ausente', ctx);
+  // S28 regla (D): irregular/ausente nunca deja un ritmo agresivo EN UN PLAN QUE RESTA CALORIAS.
+  // En 'ganar' y 'mantener' el ritmo se respeta: el motivo del suavizado es la baja disponibilidad
+  // energetica, y ahi recortar un superavit iria en contra de su propio motivo.
+  if (I.sexo === 'mujer' && (I.menstruacion === 'irregular' || I.menstruacion === 'ausente')
+      && deficit && r.ritmo_efectivo === 'agresivo')
+    viol('S28 ritmo agresivo con regla irregular/ausente en un plan con deficit', ctx);
+  // 'ganar' es el unico objetivo final que garantiza que el paso 6 tampoco lo vio como deficit
+  // (los pasos 7 y 10bis solo reescriben HACIA 'mantener'), asi que es donde se puede comprobar
+  // que el suavizado no ha entrado: recortar un superavit iria contra el propio motivo de la regla.
+  if (I.sexo === 'mujer' && (I.menstruacion === 'irregular' || I.menstruacion === 'ausente')
+      && obje === 'ganar' && I.ritmo === 'agresivo' && r.ritmo_efectivo !== 'agresivo'
+      && !I.condiciones.includes('tca'))
+    viol('S28c ritmo suavizado en un plan de superavit', ctx);
   if (I.sexo === 'hombre' && (r.avisos.includes('INFO_CICLO') || r.avisos.includes('WARN_CICLO_AUSENTE')))
     viol('S28b aviso de ciclo en un hombre', ctx);
 

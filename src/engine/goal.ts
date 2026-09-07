@@ -154,7 +154,12 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
   // 6.7bis — REGLA (solo mujeres). Es el ÚNICO efecto numérico de `menstruacion`.
   // `WARN_CICLO_AUSENTE` NO se emite aquí: su condición mira el objetivo FINAL (que los pasos 7
   // y 10bis todavía pueden reescribir) y el ritmo ELEGIDO por el usuario, no este ya suavizado.
-  if (e.menstruacion === 'irregular' || e.menstruacion === 'ausente') {
+  // Solo en planes que restan calorías: el motivo del suavizado es la baja disponibilidad
+  // energética (RED-S) y ahí el remedio es comer MÁS, así que recortar un superávit iría en contra.
+  if (
+    (e.menstruacion === 'irregular' || e.menstruacion === 'ausente') &&
+    (obj === 'perder' || obj === 'recomposicion')
+  ) {
     if (ritmo_efectivo === 'agresivo') ritmo_efectivo = 'moderado'
   }
 

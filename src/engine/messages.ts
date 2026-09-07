@@ -611,18 +611,37 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
   INFO_CICLO: {
     severidad: 'info',
     titulo: 'Tu ciclo y tu plan',
-    texto:
-      'Tu gasto energético cambia poco a lo largo del ciclo, así que no ajustamos tus calorías por eso. Lo que sí cambia es lo que marca la báscula: la semana antes de la regla es normal retener 1-2 kg de agua y tener más hambre (unas 100-300 kcal). Pésate siempre en la misma fase del ciclo si quieres comparar, no te asustes con el peso de esa semana, y si comes 100-200 kcal más esos días, compénsalo en el resto de la semana sin cambiar el total. En los días de regla, cuida el hierro: carne roja, legumbre o verdura de hoja acompañadas de algo de vitamina C.',
+    // La lista de alimentos con hierro respeta la base dietética: a una vegetariana o vegana no se
+    // le recomienda carne roja en su propio plan.
+    texto: (ctx) => {
+      const base = ctx.resultado.preferencia_base
+      const hierro =
+        base === 'vegetariano' || base === 'vegano'
+          ? 'legumbre, verdura de hoja y frutos secos'
+          : 'carne roja, legumbre o verdura de hoja'
+      return `Tu gasto energético cambia poco a lo largo del ciclo, así que no ajustamos tus calorías por eso. Lo que sí cambia es lo que marca la báscula: la semana antes de la regla es normal retener 1-2 kg de agua y tener más hambre (unas 100-300 kcal). Pésate siempre en la misma fase del ciclo si quieres comparar, no te asustes con el peso de esa semana, y si comes 100-200 kcal más esos días, compénsalo en el resto de la semana sin cambiar el total. En los días de regla, cuida el hierro: ${hierro} acompañados de algo de vitamina C.`
+    },
   },
   WARN_CICLO_AUSENTE: {
     severidad: 'warn',
     titulo: 'Regla y déficit: ojo',
-    // El fragmento del ritmo se omite cuando el paso 6.7bis no ha suavizado nada, es decir,
-    // cuando el usuario no había elegido `agresivo`.
-    texto: (ctx) =>
-      `Nos has dicho que tu regla es irregular o que no la tienes, y a la vez tu plan lleva déficit, poca grasa corporal o un ritmo rápido. Esa combinación puede indicar baja disponibilidad energética (lo que se llama RED-S): comer por debajo de lo que gastas durante meses altera las hormonas, el hueso y el propio ciclo.${
-        ctx.inputs.ritmo === 'agresivo' ? ' Hemos suavizado el ritmo a moderado.' : ''
-      } Si llevas tres meses o más sin regla y no es por anticonceptivos ni por la menopausia, pide cita con tu médico antes de seguir con el déficit.`,
+    // El fragmento del ritmo se omite cuando el paso 6.7bis no ha suavizado nada. El del déficit,
+    // cuando el plan no lo lleva: la condición del paso 17 también se dispara con poca grasa
+    // corporal o ritmo agresivo, y entonces el aviso puede caer sobre un plan de superávit.
+    texto: (ctx) => {
+      const obj = ctx.resultado.objetivo_efectivo
+      const con_deficit = obj === 'perder' || obj === 'recomposicion'
+      const suavizado = ctx.inputs.ritmo === 'agresivo' && ctx.resultado.ritmo_efectivo === 'moderado'
+      return `Nos has dicho que tu regla es irregular o que no la tienes, y a la vez ${
+        con_deficit
+          ? 'tu plan lleva déficit, poca grasa corporal o un ritmo rápido'
+          : 'tienes poca grasa corporal o has pedido un ritmo rápido'
+      }. Esa combinación puede indicar baja disponibilidad energética (lo que se llama RED-S): comer por debajo de lo que gastas durante meses altera las hormonas, el hueso y el propio ciclo.${
+        suavizado ? ' Hemos suavizado el ritmo a moderado.' : ''
+      } Si llevas tres meses o más sin regla y no es por anticonceptivos ni por la menopausia, pide cita con tu médico${
+        con_deficit ? ' antes de seguir con el déficit' : ''
+      }.`
+    },
   },
   INFO_PROYECCION_PLANA: {
     severidad: 'info',

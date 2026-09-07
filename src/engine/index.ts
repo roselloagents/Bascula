@@ -2,7 +2,7 @@
 // TypeScript puro, sin React ni dependencias, determinista. Las firmas exportadas son las de
 // CONTRATO.md y no deben cambiar: la UI, el generador de comidas y el PDF las consumen tal cual.
 
-import { ajustarMacros } from './adjust'
+import { ajustarMacros, techoHidratosAjuste } from './adjust'
 import { calcularGrasa } from './bodyfat'
 import { calcularBmr, calcularMlg } from './bmr'
 import { calcularCalorias } from './calories'
@@ -46,7 +46,7 @@ import type {
 } from './types'
 
 export type * from './types'
-export { ajustarMacros, textoError, textosAvisos }
+export { ajustarMacros, techoHidratosAjuste, textoError, textosAvisos }
 
 /** Paso 1 — categoría de IMC (OMS). Bordes estrictos por arriba, no estrictos por abajo. */
 function categoriaImc(imc: number): ImcCategoria {
@@ -298,6 +298,14 @@ export function calcular(inputs: Inputs): Resultado {
   // Reevaluación contra `objetivo_efectivo`: el paso 6 lo emitió contra el objetivo intermedio.
   let avisos: CodigoAviso[] = emitidos
   if (objetivo_efectivo !== 'perder') avisos = avisos.filter((c) => c !== 'WARN_PERDIDA_MAYOR_65')
+  // El paso 10bis puede reescribir `objetivo_efectivo` a 'mantener' después de que el paso 7 haya
+  // emitido la prioridad de recomposición: entonces `recomposicion_prioridad` no se publica y el
+  // aviso hablaría de un déficit que ya no existe.
+  if (objetivo_efectivo !== 'recomposicion') {
+    avisos = avisos.filter(
+      (c) => c !== 'INFO_RECOMP_PRIORIDAD_PERDER' && c !== 'INFO_RECOMP_PRIORIDAD_GANAR',
+    )
+  }
   const tiene_tca = condiciones.includes('tca')
   avisos = filtrarAvisos(avisos, tiene_tca)
 

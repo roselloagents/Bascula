@@ -27,7 +27,24 @@ import type { CodigoAviso, EmitirAviso } from './messages'
 import { AVISOS_REEVALUADOS_AJUSTE, SUPRESIONES } from './messages'
 import { clamp, round10, round5, roundDown5, roundUp5 } from './round'
 import { calcularPaso14 } from './timeline'
-import type { AjusteMacros, Comida, Resultado } from './types'
+import type { AjusteMacros, Comida, LimitesAjuste, Resultado } from './types'
+
+/**
+ * Techo del deslizador de hidratos con unas kcal dadas (SPEC Paso 18, punto 2). Lo usan el motor
+ * y el panel de la pantalla: si cada uno calculase el suyo, el deslizador podría ofrecer un valor
+ * que `ajustarMacros` recorta después.
+ *
+ * Se calcula contra el suelo de grasa **ya redondeado** (`roundUp5`), que es el valor que el punto
+ * 3 acaba poniendo en la grasa. Contra el suelo exacto se colaban hasta 5 g (45 kcal) de más y el
+ * cierre se salía del 2 % con kcal bajas.
+ */
+export function techoHidratosAjuste(L: LimitesAjuste, proteina_g: number, kcal: number): number {
+  const suelo_g = Math.max(L.suelo_grasa_abs_g, GRASA_SUELO_PCT_KCAL * kcal / 9)
+  const techo = roundDown5((kcal - 4 * proteina_g - 9 * roundUp5(suelo_g)) / 4)
+  // El redondeo a 5 g del paso 10 puede dejar `hc_recomendado_g` por encima de la cota exacta:
+  // sin esta línea "volver a lo recomendado" no devolvía el plan recomendado.
+  return kcal === L.kcal_recomendada ? Math.max(techo, L.hc_recomendado_g) : techo
+}
 
 /** Índice del mayor valor de `vec`, ignorando `omitir`; en empate, el índice más bajo. */
 function indiceMayor(vec: readonly number[], omitir: number): number {
@@ -62,10 +79,10 @@ export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resul
 
   // ---------------- 2. hidratos: múltiplo de 5, entre 30 g y lo que deja el SUELO de grasa
   const suelo_g = Math.max(L.suelo_grasa_abs_g, GRASA_SUELO_PCT_KCAL * kcal / 9)
-  let hc_max = roundDown5((kcal - 4 * P - 9 * suelo_g) / 4)
-  // El redondeo a 5 g del paso 10 puede dejar `hc_recomendado_g` hasta 2,5 g por encima de la
-  // cota exacta: sin esta línea "volver a lo recomendado" no devolvía el plan recomendado.
-  if (kcal === L.kcal_recomendada) hc_max = Math.max(hc_max, L.hc_recomendado_g)
+  // Con el techo calculado contra el suelo ya redondeado, `G` nunca cae por debajo del suelo y la
+  // única desviación del cierre es el redondeo a 5 g de la propia grasa (≤ 22,5 kcal).
+  const suelo_red_g = roundUp5(suelo_g)
+  const hc_max = techoHidratosAjuste(L, P, kcal)
   const hc_lo = Math.min(L.hc_min_ui_g, hc_max) // el suelo de grasa manda sobre los 30 g
   const hc_pedidos = ajuste?.hc_g ?? L.hc_recomendado_g
   const HC = clamp(round5(hc_pedidos), hc_lo, hc_max)
@@ -80,7 +97,8 @@ export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resul
     G = L.grasa_recomendada_g
   } else {
     G = round5((kcal - 4 * P - 4 * HC) / 9)
-    if (G < suelo_g) G = roundUp5(suelo_g) // redondeo dirigido (§0.1); el suelo es inviolable
+    // Red de seguridad: con el techo de hidratos del punto 2 ya no puede dispararse.
+    if (G < suelo_red_g) G = suelo_red_g // redondeo dirigido (§0.1); el suelo es inviolable
   }
   const kcal_cierre = 4 * P + 4 * HC + 9 * G
   if (Math.abs(kcal_cierre - kcal) > 0.02 * kcal) {
@@ -146,7 +164,12 @@ export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resul
   // ---------------- 5b. avisos propios del paso 18
   if (ajustado) emitir('INFO_AJUSTE_MANUAL')
   if (HC < L.hc_min_motor_g) emitir('WARN_HC_BAJO_MINIMO')
-  if (obje === 'perder' && TDEE - kcal < AJUSTE_DEFICIT_MIN) emitir('WARN_KCAL_AJUSTE_ALTA')
+  // Solo si el usuario ha movido de verdad la palanca de las kcal: si no, el plan es el del motor
+  // y acusarle de un déficit que no ha puesto borraría el WARN_DEFICIT_MINIMO honesto (invariante
+  // S27: con `ajuste` vacío se devuelve el plan recomendado bit a bit, avisos incluidos).
+  if (cambia_kcal && obje === 'perder' && TDEE - kcal < AJUSTE_DEFICIT_MIN) {
+    emitir('WARN_KCAL_AJUSTE_ALTA')
+  }
   if (obje === 'perder' && TDEE - kcal >= 50 && TDEE - kcal < AJUSTE_DEFICIT_MIN) {
     emitir('WARN_DEFICIT_MINIMO')
   }
