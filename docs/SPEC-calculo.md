@@ -1754,7 +1754,7 @@ Input: hombre, 68, 175 cm, 78 kg; grasa `conocido` 24 % `fiable`; somatotipo med
 | Comida | 14:00 | 35 | 50 | 30 | 80 | 790 | no |
 | Cena | 21:00 | 35 | 55 | 30 | 90 | 850 | no |
 
-17. Avisos: `INFO_AGUA_MAYORES`, `INFO_MAYOR_60`, `INFO_SIN_CRONOGRAMA`, `WARN_PROTEINA_TOMA_ALTA`.
+17. Avisos: `INFO_AGUA_MAYORES`, `INFO_MAYOR_60`, `INFO_PROYECCION_PLANA`, `INFO_SIN_CRONOGRAMA`, `WARN_PROTEINA_TOMA_ALTA`.
 
 ### Caso 6 — Mujer 35 años, delgada, %grasa estimado (no fiable), gana músculo, peso objetivo 60 kg
 
@@ -1931,7 +1931,7 @@ Input: hombre, 25, 195 cm, 100 kg; grasa `conocido` 8 % `fiable`; somatotipo `nu
 | Comida | 14:00 | 35 | 45 | 35 | 150 | 1095 | no |
 | Cena | 21:00 | 35 | 40 | 40 | 145 | 1100 | no |
 
-17. Avisos: `INFO_IMC_MUSCULADO`, `INFO_SIN_CRONOGRAMA`, `WARN_SIN_MARGEN_DEFICIT`. (`WARN_SIN_MARGEN_DEFICIT` suprime `WARN_YA_MAGRO` y `WARN_RECOMPOSICION_SIN_FUERZA`: el plan final es `mantener` y esos dos textos prometen una recomposición.)
+17. Avisos: `INFO_IMC_MUSCULADO`, `INFO_PROYECCION_PLANA`, `INFO_SIN_CRONOGRAMA`, `WARN_SIN_MARGEN_DEFICIT`. (`WARN_SIN_MARGEN_DEFICIT` suprime `WARN_YA_MAGRO` y `WARN_RECOMPOSICION_SIN_FUERZA`: el plan final es `mantener` y esos dos textos prometen una recomposición.)
 
 ### Caso 12 — Hombre 35 años en el borde exacto de la banda `medio` sin peso objetivo — `WARN_YA_EN_OBJETIVO`
 
@@ -1961,7 +1961,7 @@ Input: hombre, 35, 180 cm, 80 kg; grasa `conocido` 15 % `estimado`; somatotipo `
 | Merienda | 17:30 | 15 | 25 | 10 | 55 | 410 | sí |
 | Cena | 21:00 | 30 | 50 | 25 | 85 | 765 | no |
 
-17. Avisos: `INFO_SIN_CRONOGRAMA`, `WARN_PROTEINA_TOMA_ALTA`, `WARN_YA_EN_OBJETIVO`.
+17. Avisos: `INFO_PROYECCION_PLANA`, `INFO_SIN_CRONOGRAMA`, `WARN_PROTEINA_TOMA_ALTA`, `WARN_YA_EN_OBJETIVO`.
 
 ### Caso 13 — Hombre 62 años con enfermedad renal e IMC ≥ 30 — cap renal como último filtro
 
@@ -2020,7 +2020,7 @@ Input: mujer, 70, 158 cm, 75 kg; grasa `desconocido`; somatotipo `null`; activid
 | Merienda | 17:30 | 15 | 20 | 10 | 20 | 250 | no |
 | Cena | 21:00 | 30 | 35 | 20 | 40 | 480 | no |
 
-17. Avisos: `INFO_AGUA_MAYORES`, `INFO_CRONOGRAMA_FUERA_DE_HORIZONTE`, `INFO_DEFICIT_CAPADO_TDEE`, `INFO_FIBRA_AJUSTADA`, `INFO_GRASA_ESTIMADA`, `INFO_MAYOR_60`, `INFO_PROTEINA_CAPADA`, `WARN_DEFICIT_INFACTIBLE`, `WARN_OBJETIVO_MUY_LEJANO`, `WARN_PERDIDA_MAYOR_65`. (`INFO_DEFICIT_CAPADO_TDEE` imprime aquí **20 %**, no 25 ni 30: `cap_pct = min(0,30, 0,20) = 0,20` por la edad, y `deficit_cap = 0,20 · 1781,7 = 356,3` frente a los 618,8 kcal del ritmo pedido. `WARN_PERDIDA_MAYOR_65` **sí** imprime el fragmento «{ y suavizado el ritmo}», porque el ritmo `agresivo` se ha suavizado a `moderado`. `WARN_OBJETIVO_MUY_LEJANO` entra por la corrección de la ronda 2: la meta la propone la app y supone perder el 25,3 % del peso.)
+17. Avisos: `INFO_AGUA_MAYORES`, `INFO_CRONOGRAMA_FUERA_DE_HORIZONTE`, `INFO_DEFICIT_CAPADO_TDEE`, `INFO_FIBRA_AJUSTADA`, `INFO_GRASA_ESTIMADA`, `INFO_MAYOR_60`, `INFO_PROTEINA_CAPADA`, `INFO_PROYECCION_PLANA`, `WARN_DEFICIT_INFACTIBLE`, `WARN_OBJETIVO_MUY_LEJANO`, `WARN_PERDIDA_MAYOR_65`. (`INFO_DEFICIT_CAPADO_TDEE` imprime aquí **20 %**, no 25 ni 30: `cap_pct = min(0,30, 0,20) = 0,20` por la edad, y `deficit_cap = 0,20 · 1781,7 = 356,3` frente a los 618,8 kcal del ritmo pedido. `WARN_PERDIDA_MAYOR_65` **sí** imprime el fragmento «{ y suavizado el ritmo}», porque el ritmo `agresivo` se ha suavizado a `moderado`. `WARN_OBJETIVO_MUY_LEJANO` entra por la corrección de la ronda 2: la meta la propone la app y supone perder el 25,3 % del peso.)
 
 ### Caso 15 — Mujer 34 años, `perder` agresivo, regla irregular, omnívora sin lactosa (D, E, F)
 

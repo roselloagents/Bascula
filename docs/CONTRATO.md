@@ -14,7 +14,7 @@ export function textoError(codigo: string, inputs?: Inputs): AvisoTexto         
 export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resultado  // v1.1, SPEC Paso 18
 ```
 
-**`ajustarMacros` (v1.1).** Es el panel "Ajusta tus macros" de `SPEC-ux-comidas-pdf.md` §2.2b. Pura, determinista y **sin `Inputs`**: todo lo que necesita viaja en `Resultado.limites_ajuste`, que `calcular` rellena siempre (salvo con `'tca' ∈ condiciones`, donde queda `undefined` y `ajustarMacros` devuelve el `Resultado` tal cual). Nunca toca la proteína ni el peso objetivo; rehace la grasa, la fibra, el reparto por comidas, el cronograma y la proyección. Es **idempotente respecto al origen** —no lee `macros.grasa_g` ni `macros.hc_g` del resultado que recibe, sino los valores recomendados de `limites_ajuste`—, así que `ajustarMacros(ajustarMacros(R, a₁), a₂) === ajustarMacros(R, a₂)` y `ajustarMacros(R, {})` devuelve el plan recomendado bit a bit. Por eso la UI guarda en `localStorage` **solo el ajuste** (`bascula:ajuste:v1`), no el `Resultado` ajustado.
+**`ajustarMacros` (v1.1).** Es el panel "Ajusta tus macros" de `SPEC-ux-comidas-pdf.md` §2.2b. Pura, determinista y **sin `Inputs`**: todo lo que necesita viaja en `Resultado.limites_ajuste`, que `calcular` rellena siempre (salvo con `'tca' ∈ condiciones`, donde queda `undefined` y `ajustarMacros` devuelve el `Resultado` tal cual). Nunca toca la proteína ni el peso objetivo; rehace la grasa, la fibra, el reparto por comidas, el cronograma y la proyección. Es **idempotente respecto al origen** —no lee `macros.grasa_g` ni `macros.hc_g` del resultado que recibe, sino los valores recomendados de `limites_ajuste`—, así que `ajustarMacros(ajustarMacros(R, a₁), a₂) === ajustarMacros(R, a₂)` y `ajustarMacros(R, {})` devuelve el plan recomendado bit a bit **en todo lo que son números** (kcal, macros, fibra, agua, peso objetivo, comidas, cronograma, proyección y `limites_ajuste`). La única salvedad es el **orden** de `avisos`: un aviso que un ajuste retira y el siguiente vuelve a emitir queda al final del array. Como la §4 declara que el orden no es significativo, la igualdad de `avisos` se comprueba **como conjunto**, no elemento a elemento. Por eso la UI guarda en `localStorage` **solo el ajuste** (`bascula:ajuste:v1`), no el `Resultado` ajustado.
 
 - TypeScript puro, sin React ni dependencias. Determinista (mismos inputs → misma salida).
 - `Inputs` es un alias de `InputCalculo` y `Salida` un alias de `Resultado`: existen para no romper el código
@@ -168,6 +168,15 @@ export function nombreFicheroPdf(datos: DatosPdf): string
   ajustado: se recalcula con `ajustarMacros`) y `bascula:pesajes:v1` con `Pesaje[]` (el seguimiento de
   §2.6c, que viaja al PDF en `DatosPdf.pesajes`). El ajuste se descarta cuando el usuario recalcula con
   datos distintos: los límites del plan nuevo no tienen por qué parecerse a los del anterior.
+- **Cómo se sabe que los datos son "los mismos".** La UI guarda además su propia clave de navegación,
+  `bascula:sesion:v1`, con el paso en el que estaba el usuario y una **huella** (`firmaPlan`) de los
+  `InputCalculo` del último plan. Al recalcular, el ajuste guardado solo se restaura si la huella coincide;
+  si no, se borra. Escribir el paso actual **no puede** perder esa huella: el wizard guarda su paso nada más
+  montarse, y si esa escritura la borrase, "Editar tus datos" o una simple recarga tirarían un ajuste válido.
+- **Arranque del plan.** El borrador guarda también `fecha_inicio` (y el peso con el que se fijó). No se
+  pregunta: se ancla la primera vez que se pide el plan y solo se renueva cuando el usuario dice otro peso.
+  Si se recalculara a hoy en cada visita, la semana 0 de la proyección se movería cada día, los pesajes de
+  §2.6c quedarían "antes del principio" y la huella del plan cambiaría sola.
 - Flujo y copy: `docs/SPEC-ux-comidas-pdf.md` §1-2. Diseño: `docs/DESIGN-brief.md`.
 
 ## Reglas de convivencia (varios agentes en paralelo en el mismo repo)
