@@ -158,6 +158,47 @@ export function cargarBorrador(): Borrador {
   }
 }
 
+// ---- Sesión: paso actual y plan ya calculado ----------------------------
+// Van en su propia clave para no mezclarse con las respuestas: al recargar la página el usuario
+// volvía a la primera pantalla y tenía que pulsar "Siguiente" trece veces para recuperar su plan.
+
+export const CLAVE_SESION = 'bascula:sesion:v1'
+
+export interface Sesion {
+  paso: PasoId | null
+  planGenerado: boolean
+}
+
+export function guardarSesion(sesion: Sesion): void {
+  try {
+    window.localStorage.setItem(CLAVE_SESION, JSON.stringify(sesion))
+  } catch {
+    // Modo privado: se sigue sin persistir.
+  }
+}
+
+export function cargarSesion(): Sesion {
+  try {
+    const crudo = window.localStorage.getItem(CLAVE_SESION)
+    if (!crudo) return { paso: null, planGenerado: false }
+    const datos = JSON.parse(crudo) as Partial<Sesion>
+    return {
+      paso: typeof datos.paso === 'string' ? (datos.paso as PasoId) : null,
+      planGenerado: datos.planGenerado === true,
+    }
+  } catch {
+    return { paso: null, planGenerado: false }
+  }
+}
+
+export function borrarSesion(): void {
+  try {
+    window.localStorage.removeItem(CLAVE_SESION)
+  } catch {
+    // Nada que hacer.
+  }
+}
+
 export function borrarBorrador(): void {
   try {
     window.localStorage.removeItem(CLAVE_ALMACEN)
@@ -205,6 +246,15 @@ export interface EstadoPaso {
   errores: Record<string, string>
 }
 
+/**
+ * Método de grasa que de verdad se usa. Con la protección del cribado activa, el método `visual`
+ * no existe (§1.2.6): ni la pantalla lo ofrece, ni la validación lo acepta, ni llega al motor.
+ */
+export function metodoEfectivo(b: Borrador): MetodoGrasa | null {
+  if (proteccionActiva(b) && b.grasa.metodo === 'visual') return null
+  return b.grasa.metodo
+}
+
 function enRango(texto: string, min: number, max: number): 'vacio' | 'fuera' | 'ok' {
   const valor = leerNumero(texto)
   if (valor === null) return 'vacio'
@@ -249,6 +299,10 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
       return { completo: b.cribado.q1 !== null && b.cribado.q2 !== null, errores }
 
     case 'grasa': {
+      // Con el cribado positivo o evitado el bloque de siluetas "no existe" (§1.2.6): un método
+      // `visual` guardado antes del cribado se ignora, y si no se elige ninguno se avanza con
+      // `desconocido` en vez de dejar el botón muerto.
+      if (metodoEfectivo(b) === null) return { completo: proteccionActiva(b), errores }
       if (b.grasa.metodo === null) return { completo: false, errores }
       if (b.grasa.metodo === 'conocido') {
         const pct = enRango(b.grasa.valor, 3, 70)
@@ -267,7 +321,7 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
         if (cadera === 'fuera') errores.cadera_cm = 'La cadera suele medir entre 60 y 200 cm.'
         return { completo: cuello === 'ok' && cintura === 'ok' && cadera === 'ok', errores }
       }
-      if (b.grasa.metodo === 'visual') {
+      if (metodoEfectivo(b) === 'visual') {
         return { completo: b.grasa.categoria !== null, errores }
       }
       return { completo: true, errores }
@@ -314,10 +368,15 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
   }
 }
 
+/** `true` si el motor marcó ese campo como fuera de rango (`ERR_INPUT_RANGO`). */
+export function estaMarcado(marcados: string[] | undefined, campo: string): boolean {
+  return (marcados ?? []).some((c) => c.split('+').includes(campo))
+}
+
 // ---- Conversión a los inputs del motor ----------------------------------
 
 export function aInputs(b: Borrador): InputCalculo {
-  const metodo: MetodoGrasa = b.grasa.metodo ?? 'desconocido'
+  const metodo: MetodoGrasa = metodoEfectivo(b) ?? 'desconocido'
   const grasa: InputCalculo['grasa'] = { metodo }
   if (metodo === 'conocido') {
     grasa.valor = leerNumero(b.grasa.valor) ?? 0
@@ -326,7 +385,7 @@ export function aInputs(b: Borrador): InputCalculo {
     grasa.cuello_cm = leerNumero(b.grasa.cuello_cm) ?? 0
     grasa.cintura_cm = leerNumero(b.grasa.cintura_cm) ?? 0
     if (b.sexo === 'mujer') grasa.cadera_cm = leerNumero(b.grasa.cadera_cm) ?? 0
-  } else if (metodo === 'visual' && b.grasa.categoria) {
+  } else if (metodo === 'visual' && b.grasa.categoria && !proteccionActiva(b)) {
     grasa.categoria = b.grasa.categoria
   }
 

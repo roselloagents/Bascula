@@ -73,7 +73,11 @@ interface WizardProps {
   onTerminar: (inputs: InputCalculo) => void
   onExclusion: (codigo: CodigoExclusion) => void
   onReiniciar: () => void
+  /** Avisa del paso visible para poder recuperarlo tras recargar la página. */
+  onPaso?: (paso: PasoId) => void
   pasoInicial?: PasoId
+  /** Campos que el motor ha devuelto en `ERR_INPUT_RANGO`: se marcan en rojo. */
+  camposMarcados?: string[]
 }
 
 export function Wizard({
@@ -82,7 +86,9 @@ export function Wizard({
   onTerminar,
   onExclusion,
   onReiniciar,
+  onPaso,
   pasoInicial = 'sexo',
+  camposMarcados = [],
 }: WizardProps) {
   const [pasoActual, setPasoActual] = useState<PasoId>(pasoInicial)
   const contenedor = useRef<HTMLDivElement>(null)
@@ -94,14 +100,16 @@ export function Wizard({
   const esUltimo = indice === pasos.length - 1
   const Componente = COMPONENTES[paso]
 
-  // Índice de navegación: solo aparece cuando ya se ha contestado todo, para
-  // poder corregir una respuesta sin repetir el cuestionario entero.
-  const todoContestado = pasos.every((p) => estadoPaso(borrador, p).completo)
+  // Índice de navegación: aparece cuando está todo contestado salvo el cribado, que nunca se
+  // persiste (se vuelve a preguntar en cada sesión). Sin esa excepción, quien recargaba la página
+  // con el cuestionario entero relleno no tenía forma de saltar a una pregunta.
+  const todoContestado = pasos.every((p) => p === 'cribado' || estadoPaso(borrador, p).completo)
 
   useEffect(() => {
     window.scrollTo(0, 0)
     contenedor.current?.focus({ preventScroll: true })
-  }, [pasoActual])
+    onPaso?.(pasoActual)
+  }, [pasoActual, onPaso])
 
   const set = (parche: ParcheBorrador) =>
     onCambio((previo) => ({
@@ -176,7 +184,7 @@ export function Wizard({
       ) : null}
 
       <div className="paso" key={paso} ref={contenedor} tabIndex={-1}>
-        <Componente b={borrador} set={set} errores={errores} />
+        <Componente b={borrador} set={set} errores={errores} marcados={camposMarcados} />
       </div>
 
       <div className="barra-navegacion" data-solo={indice === 0}>

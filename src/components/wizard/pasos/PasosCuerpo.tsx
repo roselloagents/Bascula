@@ -1,13 +1,13 @@
 // Pasos 6 y 7: porcentaje de grasa corporal (cuatro métodos) y somatotipo.
 
 import type { CategoriaVisual, MetodoGrasa, Sexo } from '../../../engine/types'
-import { CampoNumero, Grupo, Opcion } from '../../ui/Controles'
+import { CampoNumero, Grupo, Opcion, OpcionAccion } from '../../ui/Controles'
 import {
   IlustracionMedidas,
   SiluetaGrasa,
   TrioSomatotipos,
 } from '../../graficos/Siluetas'
-import { proteccionActiva } from '../borrador'
+import { estaMarcado, metodoEfectivo, proteccionActiva } from '../borrador'
 import { Pantalla, type PropsPaso } from './comun'
 
 const METODOS: { valor: MetodoGrasa; titulo: string; detalle: string }[] = [
@@ -49,12 +49,19 @@ const VISUAL_MUJER: { valor: CategoriaVisual; titulo: string; detalle: string }[
   { valor: 'obesidad_visible', titulo: 'Con obesidad visible', detalle: 'Acumulación evidente y generalizada' },
 ]
 
-export function PasoGrasa({ b, set, errores }: PropsPaso) {
+function visualesDe(sexo: Sexo) {
+  return sexo === 'mujer' ? VISUAL_MUJER : VISUAL_HOMBRE
+}
+
+export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
   const sexo: Sexo = b.sexo ?? 'hombre'
   const protegido = proteccionActiva(b)
   const metodos = protegido ? METODOS.filter((m) => m.valor !== 'visual') : METODOS
-  const metodo = protegido && b.grasa.metodo === 'visual' ? null : b.grasa.metodo
-  const visuales = sexo === 'mujer' ? VISUAL_MUJER : VISUAL_HOMBRE
+  // Mismo criterio que la validación y que `aInputs`: con la protección activa el método visual
+  // no existe, y no elegir ninguno equivale a `desconocido` (§1.2.6).
+  const metodo = metodoEfectivo(b)
+  const visualElegida = visualesDe(sexo).find((v) => v.valor === b.grasa.categoria)
+  const visuales = visualesDe(sexo)
 
   return (
     <Pantalla
@@ -82,6 +89,7 @@ export function PasoGrasa({ b, set, errores }: PropsPaso) {
             valor={b.grasa.valor}
             onCambio={(valor) => set((previo) => ({ grasa: { ...previo.grasa, valor } }))}
             error={errores.valor}
+            marcado={estaMarcado(marcados, 'grasa.valor')}
           />
           <Grupo etiqueta="¿Cómo lo has obtenido?">
             <Opcion
@@ -124,6 +132,7 @@ export function PasoGrasa({ b, set, errores }: PropsPaso) {
             valor={b.grasa.cuello_cm}
             onCambio={(cuello_cm) => set((previo) => ({ grasa: { ...previo.grasa, cuello_cm } }))}
             error={errores.cuello_cm}
+            marcado={estaMarcado(marcados, 'grasa.cuello_cm')}
             pista="Mide justo debajo de la laringe (la «nuez»), con la cinta ligeramente inclinada hacia abajo por delante."
           />
           <CampoNumero
@@ -132,6 +141,7 @@ export function PasoGrasa({ b, set, errores }: PropsPaso) {
             valor={b.grasa.cintura_cm}
             onCambio={(cintura_cm) => set((previo) => ({ grasa: { ...previo.grasa, cintura_cm } }))}
             error={errores.cintura_cm}
+            marcado={estaMarcado(marcados, 'grasa.cintura_cm')}
             pista="Mide a la altura del ombligo, después de soltar el aire, sin apretar la cinta."
           />
           {sexo === 'mujer' ? (
@@ -141,6 +151,7 @@ export function PasoGrasa({ b, set, errores }: PropsPaso) {
               valor={b.grasa.cadera_cm}
               onCambio={(cadera_cm) => set((previo) => ({ grasa: { ...previo.grasa, cadera_cm } }))}
               error={errores.cadera_cm}
+              marcado={estaMarcado(marcados, 'grasa.cadera_cm')}
               pista="Mide en el punto de mayor anchura de las caderas y los glúteos."
             />
           ) : null}
@@ -158,10 +169,16 @@ export function PasoGrasa({ b, set, errores }: PropsPaso) {
                 detalle={detalle}
                 seleccionada={b.grasa.categoria === valor}
                 onElegir={() => set((previo) => ({ grasa: { ...previo.grasa, categoria: valor } }))}
-                ilustracion={<SiluetaGrasa sexo={sexo} categoria={valor} alto={78} />}
+                ilustracion={<SiluetaGrasa sexo={sexo} categoria={valor} alto={128} />}
               />
             ))}
           </Grupo>
+          {visualElegida ? (
+            <p className="nota nota-recuadro">
+              Has elegido «{visualElegida.titulo}»: lo traduciremos a un rango de grasa corporal, no a
+              una cifra exacta.
+            </p>
+          ) : null}
           <p className="nota">
             Es normal dudar entre dos opciones: elige la que se parezca más. El margen de error de este
             método es de unos ±5 puntos, y te lo indicaremos siempre como rango.
@@ -228,21 +245,19 @@ export function PasoSomatotipo({ b, set }: PropsPaso) {
     return (
       <Pantalla
         titulo="Esto es opcional, y no es una prescripción científica"
+        ayuda="Lo preguntamos solo para ajustar el reparto entre hidratos y grasa a lo que te suele sentar mejor. No cambia ni tus calorías ni tu proteína, y puedes saltarlo sin perder nada."
         intro="El somatotipo (ectomorfo, mesomorfo, endomorfo) es una forma antigua de describir la silueta corporal. La ciencia actual no ha demostrado que sirva para calcular calorías o macros con precisión. Si lo rellenas, lo usaremos solo como un ajuste ligero entre carbohidratos y grasa, nunca para decidir cuántas calorías o cuánta proteína necesitas."
       >
         <TrioSomatotipos sexo={sexo} />
+        {/* Son dos acciones de navegación, no una respuesta: botones, no radios. */}
         <div className="opciones">
-          <Opcion
-            nombre="somatotipo-modo"
+          <OpcionAccion
             titulo="Vale, son solo 4 preguntas"
-            seleccionada={false}
             onElegir={() => set({ somatotipoElegido: 'responder' })}
           />
-          <Opcion
-            nombre="somatotipo-modo"
+          <OpcionAccion
             titulo="Prefiero saltarlo"
             detalle="Tu plan se calcula igual; solo cambia un ajuste fino entre hidratos y grasa."
-            seleccionada={b.somatotipoElegido === 'saltar'}
             onElegir={() => set({ somatotipoElegido: 'saltar', somatotipo: {} })}
           />
         </div>

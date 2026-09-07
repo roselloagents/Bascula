@@ -445,29 +445,27 @@ li[data-macro='carbo'] .leyenda-punto {
 
 /* ---- Menús ----------------------------------------------------------- */
 
-.conmutador {
-  display: inline-flex;
-  padding: 3px;
-  gap: 3px;
-  border: 1px solid var(--linea-fuerte);
-  border-radius: 999px;
-  background: var(--papel);
+.lista-equivalencias {
+  display: grid;
+  gap: var(--e-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.conmutador-opcion {
-  min-height: 40px;
-  padding: 0 var(--e-8);
-  border: none;
-  border-radius: 999px;
-  background: none;
-  color: var(--tinta-media);
-  font-size: var(--t-sm);
-  font-weight: 600;
+.lista-equivalencias li {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: var(--e-4);
+  align-items: baseline;
 }
 
-.conmutador-opcion[data-activo='true'] {
-  background: var(--verde);
-  color: var(--papel);
+.lista-equivalencias .menu-medida {
+  grid-column: 2;
+}
+
+.acciones-menu {
+  margin-top: var(--e-8);
 }
 
 .lista-menu {

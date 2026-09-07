@@ -11,6 +11,8 @@ export interface PropsPaso {
   /** Acepta un parche directo o una función del estado anterior (actualizaciones anidadas). */
   set: (parche: ParcheBorrador) => void
   errores: Record<string, string>
+  /** Campos que el motor devolvió en `ERR_INPUT_RANGO` ("revisa el dato marcado"). */
+  marcados?: string[]
 }
 
 interface PantallaProps {

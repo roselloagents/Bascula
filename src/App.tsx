@@ -1,6 +1,6 @@
 // Báscula — orquestación de las tres fases: cuestionario, cálculo y resultados.
 // La interfaz no implementa ninguna fórmula: consume `calcular`, `textosAvisos`,
-// `textoError` (motor) y `generarEjemplos` (menús).
+// `textoError` (motor) y `generarEjemplos` (menús, cargado en diferido).
 
 import { useEffect, useRef, useState } from 'react'
 import { calcular, textoError, textosAvisos } from './engine'
@@ -11,15 +11,17 @@ import type {
   InputCalculo,
   Resultado,
 } from './engine/types'
-import { generarEjemplos } from './meals'
 import { PantallaExcluido } from './components/PantallaExcluido'
 import { Resultados } from './components/resultados/Resultados'
 import { Wizard } from './components/wizard/Wizard'
 import {
   borradorInicial,
   borrarBorrador,
+  borrarSesion,
   cargarBorrador,
+  cargarSesion,
   guardarBorrador,
+  guardarSesion,
   pasoDeCampo,
   type Borrador,
   type PasoId,
@@ -36,7 +38,14 @@ type Fase =
 export default function App() {
   const [borrador, setBorrador] = useState<Borrador>(() => cargarBorrador())
   const [fase, setFase] = useState<Fase>({ nombre: 'wizard' })
-  const [pasoInicial, setPasoInicial] = useState<PasoId>('sexo')
+  const sesionInicial = useRef(cargarSesion())
+  // Al recargar, se vuelve al paso donde estaba el usuario. Si ya tenía plan, se vuelve al
+  // cribado del paso 5b, que es lo único que no se persiste (CONTRATO.md).
+  const [pasoInicial, setPasoInicial] = useState<PasoId>(
+    sesionInicial.current.planGenerado ? 'cribado' : (sesionInicial.current.paso ?? 'sexo'),
+  )
+  const [camposMarcados, setCamposMarcados] = useState<string[]>([])
+  const [variante, setVariante] = useState(0)
   const temporizador = useRef<number | undefined>(undefined)
 
   useEffect(() => {
@@ -47,30 +56,54 @@ export default function App() {
 
   const irAResultados = (inputs: InputCalculo) => {
     setFase({ nombre: 'calculando' })
-    // Transición corta: el cálculo es instantáneo, pero un salto seco desorienta.
+    setVariante(0)
+    // Transición corta: el cálculo es instantáneo, pero un salto seco desorienta. El módulo de
+    // menús (y su base de alimentos) se descarga aquí, no en el arranque: solo hace falta ahora.
+    const menus = import('./meals')
     temporizador.current = window.setTimeout(() => {
-      try {
-        const resultado = calcular(inputs)
-        if (resultado.excluido) {
+      void (async () => {
+        try {
+          const resultado = calcular(inputs)
+          if (resultado.excluido) {
+            setCamposMarcados(resultado.errores ?? [])
+            setFase({
+              nombre: 'excluido',
+              codigo: resultado.excluido,
+              aviso: textoError(resultado.excluido, inputs),
+              errores: resultado.errores,
+            })
+            return
+          }
+          const { generarEjemplos } = await menus
+          const ejemplos = generarEjemplos(inputs, resultado)
+          const avisos = textosAvisos(resultado, inputs)
+          setCamposMarcados([])
+          guardarSesion({ paso: null, planGenerado: true })
+          setFase({ nombre: 'resultados', inputs, resultado, ejemplos, avisos })
+        } catch {
           setFase({
             nombre: 'excluido',
-            codigo: resultado.excluido,
-            aviso: textoError(resultado.excluido, inputs),
-            errores: resultado.errores,
+            codigo: 'ERR_INPUT_RANGO',
+            aviso: textoError('ERR_INPUT_RANGO', inputs),
           })
-          return
         }
-        const ejemplos = generarEjemplos(inputs, resultado)
-        const avisos = textosAvisos(resultado, inputs)
-        setFase({ nombre: 'resultados', inputs, resultado, ejemplos, avisos })
-      } catch {
-        setFase({
-          nombre: 'excluido',
-          codigo: 'ERR_INPUT_RANGO',
-          aviso: textoError('ERR_INPUT_RANGO', inputs),
-        })
-      }
+      })()
     }, 700)
+  }
+
+  /** "Ver otro ejemplo" (§2.5): otra plantilla del mismo banco, sin volver a llamar al motor. */
+  const otroEjemplo = () => {
+    if (fase.nombre !== 'resultados') return
+    const siguiente = variante + 1
+    setVariante(siguiente)
+    const { inputs, resultado } = fase
+    void import('./meals').then(({ generarEjemplos }) => {
+      setFase((previa) =>
+        previa.nombre === 'resultados'
+          ? { ...previa, ejemplos: generarEjemplos(inputs, resultado, siguiente) }
+          : previa,
+      )
+    })
   }
 
   const excluirDesdeWizard = (codigo: CodigoExclusion) => {
@@ -79,15 +112,17 @@ export default function App() {
 
   const reiniciar = () => {
     borrarBorrador()
+    borrarSesion()
     setBorrador(borradorInicial())
     setPasoInicial('sexo')
+    setCamposMarcados([])
     setFase({ nombre: 'wizard' })
     window.scrollTo(0, 0)
   }
 
   const volverAlWizard = (campos?: string[]) => {
     const primero = campos?.map(pasoDeCampo).find((paso) => paso !== null)
-    setPasoInicial(primero ?? 'sexo')
+    setPasoInicial(primero ?? 'cribado')
     setFase({ nombre: 'wizard' })
     window.scrollTo(0, 0)
   }
@@ -97,7 +132,7 @@ export default function App() {
       <header className="marca">
         <Logotipo tam={30} />
         <div>
-          <p className="marca-nombre">{MARCA}</p>
+          <h1 className="marca-nombre">{MARCA}</h1>
           <p className="marca-claim">{CLAIM}</p>
         </div>
       </header>
@@ -110,7 +145,9 @@ export default function App() {
             onTerminar={irAResultados}
             onExclusion={excluirDesdeWizard}
             onReiniciar={reiniciar}
+            onPaso={(paso) => guardarSesion({ paso, planGenerado: false })}
             pasoInicial={pasoInicial}
+            camposMarcados={camposMarcados}
           />
         ) : null}
 
@@ -128,6 +165,7 @@ export default function App() {
             ejemplos={fase.ejemplos}
             avisos={fase.avisos}
             onEditar={() => volverAlWizard()}
+            onOtroEjemplo={otroEjemplo}
           />
         ) : null}
 

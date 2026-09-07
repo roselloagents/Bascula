@@ -11,7 +11,9 @@
   --papel: oklch(99.2% 0.006 86);
   --tinta: oklch(24% 0.02 62);
   --tinta-media: oklch(45% 0.018 62);
-  --tinta-suave: oklch(58% 0.016 62);
+  /* 4,7:1 sobre --hueso: el 58 % anterior daba 3,96:1 y lo usan textos reales (unidades de los
+     campos, "Paso X de Y", cabeceras de tabla, horas, medidas caseras y el pie). */
+  --tinta-suave: oklch(48% 0.016 62);
   --linea: oklch(87% 0.014 80);
   --linea-fuerte: oklch(78% 0.018 76);
 

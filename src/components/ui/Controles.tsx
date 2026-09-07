@@ -61,6 +61,32 @@ export function Opcion({
   )
 }
 
+/**
+ * Tarjeta con el mismo aspecto que `Opcion` pero que es una ACCIÓN de navegación, no una
+ * respuesta que se guarde: se renderiza como botón. Un radio que nunca puede aparecer marcado
+ * anuncia un estado incoherente a los lectores de pantalla.
+ */
+export function OpcionAccion({
+  titulo,
+  detalle,
+  onElegir,
+}: {
+  titulo: string
+  detalle?: ReactNode
+  onElegir: () => void
+}) {
+  return (
+    <button type="button" className="opcion opcion-accion" onClick={onElegir}>
+      <span className="opcion-cuerpo">
+        <span>
+          <span className="opcion-titulo">{titulo}</span>
+          {detalle ? <span className="opcion-detalle">{detalle}</span> : null}
+        </span>
+      </span>
+    </button>
+  )
+}
+
 interface GrupoProps {
   etiqueta: string
   children: ReactNode
@@ -105,29 +131,34 @@ export function CampoNumero({
 }: CampoNumeroProps) {
   const id = useId()
   const idError = `${id}-error`
+  // El error solo se enseña cuando el campo se ha dejado (o cuando el motor lo ha marcado): al
+  // teclear "178" el usuario veía un error rojo tras el "1" y tras el "17" (§1.0, paso 2).
+  const [tocado, setTocado] = useState(false)
+  const errorVisible = tocado || marcado ? error : undefined
   return (
     <div className="campo">
       <label className="campo-etiqueta" htmlFor={id}>
         {etiqueta}
       </label>
-      <div className={`campo-caja${error || marcado ? ' erroneo' : ''}`}>
+      <div className={`campo-caja${errorVisible || marcado ? ' erroneo' : ''}`}>
         <input
           id={id}
           type="text"
           inputMode={entero ? 'numeric' : 'decimal'}
           autoComplete="off"
           value={valor}
-          aria-invalid={Boolean(error) || marcado}
-          aria-describedby={error ? idError : undefined}
+          aria-invalid={Boolean(errorVisible) || marcado}
+          aria-describedby={errorVisible ? idError : undefined}
           autoFocus={autoFoco}
+          onBlur={() => setTocado(true)}
           onChange={(evento) => onCambio(evento.target.value.replace(/[^\d.,]/g, ''))}
         />
         <span className="campo-unidad">{unidad}</span>
       </div>
-      {pista && !error ? <p className="campo-pista">{pista}</p> : null}
-      {error ? (
+      {pista && !errorVisible ? <p className="campo-pista">{pista}</p> : null}
+      {errorVisible ? (
         <p className="campo-error" id={idError}>
-          {error}
+          {errorVisible}
         </p>
       ) : null}
     </div>
@@ -197,11 +228,11 @@ export function Ayuda({ children }: { children: ReactNode }) {
         <IconoNota tam={17} />
         ¿Por qué lo preguntamos?
       </button>
-      {abierta ? (
-        <p className="ayuda-texto" id={id}>
-          {children}
-        </p>
-      ) : null}
+      {/* El contenedor se renderiza siempre y se oculta con `hidden`: si no, `aria-controls`
+          apunta a un id inexistente mientras la ayuda está plegada. */}
+      <p className="ayuda-texto" id={id} hidden={!abierta}>
+        {children}
+      </p>
     </div>
   )
 }
@@ -229,11 +260,9 @@ export function Plegable({ titulo, children, abiertoInicial = false }: PlegableP
         <span>{titulo}</span>
         <IconoChevron />
       </button>
-      {abierto ? (
-        <div className="plegable-cuerpo" id={id}>
-          {children}
-        </div>
-      ) : null}
+      <div className="plegable-cuerpo" id={id} hidden={!abierto}>
+        {children}
+      </div>
     </div>
   )
 }

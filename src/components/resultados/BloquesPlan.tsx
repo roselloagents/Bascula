@@ -213,16 +213,15 @@ export function BloqueAgua({ inputs, resultado, avisos }: PropsBloque) {
 
 export function BloqueComidas({ resultado, avisos }: PropsBloque) {
   const comidas = resultado.comidas
-  const total = comidas.reduce(
-    (acc, c) => ({
-      proteina: acc.proteina + c.proteina_g,
-      grasa: acc.grasa + c.grasa_g,
-      hc: acc.hc + c.hc_g,
-      kcal: acc.kcal + c.kcal,
-      pct: acc.pct + c.pct_kcal,
-    }),
-    { proteina: 0, grasa: 0, hc: 0, kcal: 0, pct: 0 },
-  )
+  // La fila de totales sale del motor (`macros` y `kcal_cierre`), no de sumar la tabla: el
+  // CONTRATO prohíbe mostrar un número que no venga del motor.
+  const total = {
+    proteina: resultado.macros.proteina_g,
+    grasa: resultado.macros.grasa_g,
+    hc: resultado.macros.hc_g,
+    kcal: resultado.kcal_cierre,
+    pct: comidas.reduce((acc, c) => acc + c.pct_kcal, 0),
+  }
 
   return (
     <Seccion titulo="Cómo repartir el día">
@@ -297,6 +296,9 @@ export function BloqueComidas({ resultado, avisos }: PropsBloque) {
         </table>
       </div>
 
+      <p className="nota">
+        Total de tus macros: {entero(resultado.kcal_cierre)} kcal. {NOTA_CIERRE_KCAL}
+      </p>
       <p className="nota">Las horas {NOTA_HORAS}.</p>
       <p className="nota">{NOTA_COMIDAS}</p>
     </Seccion>

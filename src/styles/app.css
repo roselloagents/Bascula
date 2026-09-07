@@ -330,6 +330,16 @@
   flex: 1 1 12rem;
 }
 
+/* §2.0 punto 11: el informe ocupa varias pantallas en móvil, así que la fila de acciones de
+   abajo queda fija mientras se hace scroll. */
+.acciones-fijas {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  padding: var(--e-6) 0 max(var(--e-8), env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--hueso) 28%);
+}
+
 @media (min-width: 40rem) {
   .pareja-campos {
     grid-template-columns: 1fr 1fr;

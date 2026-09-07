@@ -14,6 +14,7 @@ import type {
 } from '../../../engine/types'
 import { CampoNumero, Deslizador, Grupo, Opcion } from '../../ui/Controles'
 import { numCorto, leerNumero } from '../../utiles/formato'
+import { estaMarcado } from '../borrador'
 import { Pantalla, type PropsPaso } from './comun'
 
 const ACTIVIDADES: { valor: ActividadDiaria; titulo: string; detalle: string }[] = [
@@ -91,7 +92,10 @@ export function PasoEntrenamiento({ b, set }: PropsPaso) {
   const anclas = ANCLAS_INTENSIDAD[e.tipo ?? 'fuerza']
 
   return (
-    <Pantalla titulo="¿Entrenas de forma regular?">
+    <Pantalla
+      titulo="¿Entrenas de forma regular?"
+      ayuda="El entrenamiento cambia dos cosas: cuántas calorías gastas y cuánta proteína necesitas. Con fuerza, además, es lo que hace que el peso que pierdas sea grasa y no músculo."
+    >
       <div className="opciones">
         <Opcion
           nombre="entrena"
@@ -228,7 +232,10 @@ const OBJETIVOS: { valor: Objetivo; titulo: string; detalle: string }[] = [
 
 export function PasoObjetivo({ b, set }: PropsPaso) {
   return (
-    <Pantalla titulo="¿Cuál es tu objetivo principal ahora mismo?">
+    <Pantalla
+      titulo="¿Cuál es tu objetivo principal ahora mismo?"
+      ayuda="Es lo único que decide si sumamos o restamos calorías sobre tu gasto. Puedes cambiarlo después sin repetir el cuestionario: te llevamos de vuelta a esta pregunta."
+    >
       <div className="opciones">
         {OBJETIVOS.map(({ valor, titulo, detalle }) => (
           <Opcion
@@ -277,7 +284,7 @@ export function PasoRitmo({ b, set }: PropsPaso) {
   )
 }
 
-export function PasoPesoObjetivo({ b, set, errores }: PropsPaso) {
+export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
   const altura = leerNumero(b.altura_cm)
   const objetivo = leerNumero(b.peso_objetivo)
   // Previsualización simple del IMC exigida por SPEC-ux §1 paso 12; el cálculo
@@ -312,6 +319,7 @@ export function PasoPesoObjetivo({ b, set, errores }: PropsPaso) {
             valor={b.peso_objetivo}
             onCambio={(peso_objetivo) => set({ peso_objetivo })}
             error={errores.peso_objetivo}
+            marcado={estaMarcado(marcados, 'peso_objetivo')}
           />
           {imc !== null && !errores.peso_objetivo ? (
             <p className="nota nota-recuadro">
@@ -340,7 +348,10 @@ const COMIDAS: NComidas[] = [2, 3, 4, 5, 6]
 
 export function PasoPreferencias({ b, set }: PropsPaso) {
   return (
-    <Pantalla titulo="Cómo comes en tu día a día">
+    <Pantalla
+      titulo="Cómo comes en tu día a día"
+      ayuda="No cambia tus calorías ni tus macros: solo los alimentos del menú de ejemplo y el número de comidas entre las que repartimos el día."
+    >
       <Grupo
         etiqueta="¿Sigues alguna preferencia alimentaria?"
         descripcion="Esto cambia los alimentos de tus menús de ejemplo. En vegano y vegetariano también subimos un poco la proteína total, porque las fuentes vegetales se aprovechan algo peor."

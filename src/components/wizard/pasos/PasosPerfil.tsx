@@ -5,6 +5,7 @@ import type { Condicion } from '../../../engine/types'
 import { CampoNumero, Grupo, Opcion } from '../../ui/Controles'
 import { CONDICION_ETIQUETA, TEXTO_CONDICIONES_FIJO } from '../../utiles/copy'
 import type { RespuestaCribado } from '../borrador'
+import { estaMarcado } from '../borrador'
 import { Pantalla, type PropsPaso } from './comun'
 
 export function PasoSexo({ b, set }: PropsPaso) {
@@ -31,7 +32,7 @@ export function PasoSexo({ b, set }: PropsPaso) {
   )
 }
 
-export function PasoEdad({ b, set, errores }: PropsPaso) {
+export function PasoEdad({ b, set, errores, marcados }: PropsPaso) {
   return (
     <Pantalla
       titulo="¿Cuántos años tienes?"
@@ -45,6 +46,7 @@ export function PasoEdad({ b, set, errores }: PropsPaso) {
         valor={b.edad}
         onCambio={(edad) => set({ edad })}
         error={errores.edad}
+        marcado={estaMarcado(marcados, 'edad')}
       />
     </Pantalla>
   )
@@ -74,7 +76,7 @@ export function PasoEmbarazo({ b, set }: PropsPaso) {
   )
 }
 
-export function PasoMedidas({ b, set, errores }: PropsPaso) {
+export function PasoMedidas({ b, set, errores, marcados }: PropsPaso) {
   return (
     <Pantalla
       titulo="Tu altura y tu peso"
@@ -88,6 +90,7 @@ export function PasoMedidas({ b, set, errores }: PropsPaso) {
           valor={b.altura_cm}
           onCambio={(altura_cm) => set({ altura_cm })}
           error={errores.altura_cm}
+          marcado={estaMarcado(marcados, 'altura_cm')}
         />
         <CampoNumero
           etiqueta="¿Cuánto pesas?"
@@ -95,6 +98,7 @@ export function PasoMedidas({ b, set, errores }: PropsPaso) {
           valor={b.peso_kg}
           onCambio={(peso_kg) => set({ peso_kg })}
           error={errores.peso_kg}
+          marcado={estaMarcado(marcados, 'peso_kg')}
           pista="Puedes actualizarlo cuando quieras: recalcularemos tu plan con tu peso real."
         />
       </div>

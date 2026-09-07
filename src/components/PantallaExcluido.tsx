@@ -1,6 +1,7 @@
 // Pantallas de derivación: el motor no ha devuelto plan y no se muestra ningún
 // otro dato del resultado (CONTRATO.md, "Errores y exclusiones").
 
+import { useEffect, useRef } from 'react'
 import type { AvisoTexto, CodigoExclusion } from '../engine/types'
 import { AYUDA_TCA } from './utiles/copy'
 
@@ -45,8 +46,13 @@ interface Props {
 
 export function PantallaExcluido({ codigo, aviso, errores, onVolver, onCorregir }: Props) {
   const esRango = codigo === 'ERR_INPUT_RANGO'
+  const contenedor = useRef<HTMLElement>(null)
+  useEffect(() => {
+    window.scrollTo(0, 0)
+    contenedor.current?.focus({ preventScroll: true })
+  }, [])
   return (
-    <section className="excluido">
+    <section className="excluido" ref={contenedor} tabIndex={-1}>
       <h2>{TITULOS[codigo]}</h2>
       <p className="excluido-texto">{aviso.texto}</p>
 
@@ -58,20 +64,23 @@ export function PantallaExcluido({ codigo, aviso, errores, onVolver, onCorregir 
         </ul>
       ) : null}
 
+      {/* Botón único en las derivaciones (§1, pasos 2 y 3): invitar a "revisar lo contestado"
+          empuja a cambiar justo la respuesta que activó el corte. Los dos botones se quedan solo
+          en ERR_INPUT_RANGO, donde corregir es exactamente lo que se pide. */}
       <div className="acciones">
         {esRango ? (
-          <button type="button" className="btn btn-principal" onClick={onCorregir}>
-            Corregir mis respuestas
-          </button>
-        ) : (
           <>
-            <button type="button" className="btn btn-principal" onClick={onVolver}>
-              Volver al inicio
+            <button type="button" className="btn btn-principal" onClick={onCorregir}>
+              Corregir mis respuestas
             </button>
-            <button type="button" className="btn btn-secundario" onClick={onCorregir}>
-              Revisar lo que he contestado
+            <button type="button" className="btn btn-secundario" onClick={onVolver}>
+              Empezar de cero
             </button>
           </>
+        ) : (
+          <button type="button" className="btn btn-principal" onClick={onVolver}>
+            Volver al inicio
+          </button>
         )}
       </div>
 

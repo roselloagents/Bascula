@@ -164,6 +164,18 @@ input[inputmode='decimal'] {
   transition: border-color 150ms var(--salida), background-color 150ms var(--salida);
 }
 
+.opcion-accion {
+  grid-template-columns: 1fr;
+  font: inherit;
+  color: inherit;
+  appearance: none;
+}
+
+.opcion-accion:focus-visible {
+  outline: 3px solid var(--verde);
+  outline-offset: 2px;
+}
+
 .opcion:hover {
   border-color: var(--linea-fuerte);
   background: color-mix(in oklch, var(--papel) 80%, var(--verde-velo));
@@ -516,6 +528,12 @@ input[inputmode='decimal'] {
   transform: rotate(180deg);
 }
 
+/* El atributo `hidden` tiene que ganar a los `display` de estos bloques: se renderizan siempre
+   para que el `aria-controls` de su botón apunte a un id que existe. */
+[hidden] {
+  display: none !important;
+}
+
 .plegable-cuerpo {
   padding: 0 var(--e-8) var(--e-8);
   display: grid;
@@ -539,5 +557,18 @@ input[inputmode='decimal'] {
 @media (prefers-reduced-motion: reduce) {
   .cargador {
     animation-duration: 3s;
+  }
+
+  /* Las transiciones sueltas llevaban duraciones fijas (160 ms del botón, 260 ms de la barra de
+     progreso…) que no consultaban `--dur`: con "reducir movimiento" seguían animándose. */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+
+  .btn:active {
+    transform: none;
   }
 }

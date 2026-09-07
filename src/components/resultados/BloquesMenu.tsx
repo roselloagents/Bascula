@@ -1,7 +1,7 @@
 // Ejemplos de menú y consejos accionables (SPEC-ux §2.5 y §2.7).
 
-import { useState } from 'react'
 import type { Ejemplos, InputCalculo } from '../../engine/types'
+import { Plegable } from '../ui/Controles'
 import { IconoBombilla, IconoPesa } from '../ui/Iconos'
 import { NOTA_MENU, NOTA_VERDURA_FRUTA } from '../utiles/copy'
 import { entero } from '../utiles/formato'
@@ -20,11 +20,10 @@ const NOTA_CARDIACA =
 interface PropsMenu {
   inputs: InputCalculo
   ejemplos: Ejemplos
+  onOtroEjemplo?: () => void
 }
 
-export function BloqueMenus({ inputs, ejemplos }: PropsMenu) {
-  const [dia, setDia] = useState<'entreno' | 'descanso'>('entreno')
-  const entrena = inputs.entrenamiento.tipo !== 'ninguno' && inputs.entrenamiento.dias_semana > 0
+export function BloqueMenus({ inputs, ejemplos, onOtroEjemplo }: PropsMenu) {
   const sinMenu =
     inputs.condiciones.includes('renal') ||
     inputs.condiciones.includes('hepatica') ||
@@ -38,36 +37,15 @@ export function BloqueMenus({ inputs, ejemplos }: PropsMenu) {
     )
   }
 
-  const jornada = entrena && dia === 'descanso' ? ejemplos.descanso : ejemplos.entreno
+  // En la v1 el motor devuelve un único reparto (CONTRATO.md), así que el día de entreno y el de
+  // descanso son idénticos: no se muestra un conmutador que promete una variación que no existe.
+  const jornada = ejemplos.entreno
 
   return (
     <Seccion
       titulo="Un día de ejemplo"
       descripcion="Los gramajes ya están escalados a tus macros. Pesa en crudo salvo que ponga otra cosa."
     >
-      {entrena ? (
-        <div className="conmutador" role="group" aria-label="Tipo de día">
-          <button
-            type="button"
-            className="conmutador-opcion"
-            data-activo={dia === 'entreno'}
-            aria-pressed={dia === 'entreno'}
-            onClick={() => setDia('entreno')}
-          >
-            Día de entreno
-          </button>
-          <button
-            type="button"
-            className="conmutador-opcion"
-            data-activo={dia === 'descanso'}
-            aria-pressed={dia === 'descanso'}
-            onClick={() => setDia('descanso')}
-          >
-            Día de descanso
-          </button>
-        </div>
-      ) : null}
-
       {inputs.condiciones.includes('diabetes') ? <p className="nota nota-recuadro">{NOTA_DIABETES}</p> : null}
       {inputs.condiciones.includes('cardiaca') ? <p className="nota nota-recuadro">{NOTA_CARDIACA}</p> : null}
 
@@ -120,6 +98,44 @@ export function BloqueMenus({ inputs, ejemplos }: PropsMenu) {
       ))}
       <p className="nota">{NOTA_MENU}</p>
       <p className="nota">{NOTA_VERDURA_FRUTA}</p>
+
+      {onOtroEjemplo ? (
+        <div className="acciones-menu">
+          <button type="button" className="btn btn-secundario" onClick={onOtroEjemplo}>
+            Ver otro ejemplo
+          </button>
+        </div>
+      ) : null}
+    </Seccion>
+  )
+}
+
+/** Bloque plegable de equivalencias (§2.5). Los gramajes salen del módulo de menús. */
+export function BloqueEquivalencias({ inputs, ejemplos }: PropsMenu) {
+  const sinMenu =
+    inputs.condiciones.includes('renal') ||
+    inputs.condiciones.includes('hepatica') ||
+    ejemplos.entreno.comidas.length === 0
+  const tablas = ejemplos.equivalencias
+  if (sinMenu || !tablas || tablas.tablas.length === 0) return null
+
+  return (
+    <Seccion titulo="Equivalencias" descripcion={tablas.cabecera}>
+      {tablas.tablas.map((tabla) => (
+        <Plegable key={tabla.titulo} titulo={tabla.titulo}>
+          <p className="nota">{tabla.descripcion}</p>
+          <ul className="lista-equivalencias">
+            {tabla.filas.map((fila) => (
+              <li key={fila.id}>
+                <span className="cifra menu-gramos">{entero(fila.gramos)} g</span>
+                <span className="menu-alimento">{fila.nombre}</span>
+                <span className="menu-medida">{fila.medida}</span>
+              </li>
+            ))}
+          </ul>
+        </Plegable>
+      ))}
+      <p className="nota">{tablas.nota_verdura_fruta}</p>
     </Seccion>
   )
 }

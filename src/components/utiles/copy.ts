@@ -63,7 +63,7 @@ export const NOTA_HORAS = 'son horas de referencia: puedes desplazarlas sin que 
 
 /** [SPEC] SPEC-ux §2.5. */
 export const NOTA_MENU =
-  'Son ejemplos para orientarte, no un menú obligatorio. Puedes sustituir cualquier alimento por otro de la misma familia sin descuadrar tus macros de forma relevante.'
+  'Son ejemplos para orientarte, no un menú obligatorio. Puedes sustituir cualquier alimento por otro de la misma familia sin descuadrar tus macros de forma relevante: mira la tabla de equivalencias justo debajo.'
 
 /** [SPEC] SPEC-ux §2.5, verdura y fruta. */
 export const NOTA_VERDURA_FRUTA =
