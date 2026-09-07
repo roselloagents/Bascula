@@ -1,7 +1,7 @@
 // Documento PDF del plan (docs/SPEC-ux-comidas-pdf.md §4).
 // Regla del contrato: aquí no se calcula nada. Todo número sale de `datos.resultado` / `datos.ejemplos`.
 // Fuentes estándar (Helvetica) para no depender de la red.
-import { Circle, Document, Line, Page, Path, Polyline, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
+import { Circle, Document, Font, Line, Page, Path, Polyline, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
 import type { ReactNode } from 'react'
 import type {
   AlimentoPorcion,
@@ -18,6 +18,9 @@ import type {
   SeccionSuper,
   TablasEquivalencia,
 } from '../engine/types'
+// La nota del cierre de kcal es la MISMA función que usa la pantalla: en un plan ajustado el
+// número cambia (§4.0: el PDF es la instantánea de lo que se ve en pantalla).
+import { notaCierreKcal } from '../components/utiles/copy'
 import { NOMBRE_SECCION, ORDEN_SECCIONES } from '../data/secciones'
 // Las celdas de cantidad y el rótulo del modo sencillo salen del mismo helper que usa la
 // pantalla (§4.4b: "las mismas cuatro columnas de §2.5b"). Aquí no se recalcula ningún número.
@@ -50,6 +53,12 @@ import {
   SIN_DATO,
   winAnsi,
 } from './formato'
+
+// El guionado automático de @react-pdf/renderer parte las palabras con patrones INGLESES, y este
+// documento está entero en español: partía "escur-ridos", "rebland-ecen", "de-scongelar" o
+// "solomil-lo", justo en la lista de la compra, que es la página pensada para imprimir. Devolver
+// la palabra entera desactiva el guionado: el texto solo se parte entre palabras.
+Font.registerHyphenationCallback((palabra) => [palabra])
 
 // ---------- Paleta (misma identidad que la pantalla, DESIGN-brief.md) ----------
 const C = {
@@ -446,20 +455,30 @@ function comprarTexto(item: ItemCompra): string {
   return `${cuantos} x ${formato}`
 }
 
-function LineaCompra({ item }: { item: ItemCompra }) {
+/**
+ * Umbral a partir del cual las filas de la compra se aprietan. §4.4b quiere esta página entera y
+ * suelta, para llevarla al súper: con más de 16 líneas se desbordaba y dejaba una fila y las tres
+ * notas fijas solas en la página siguiente.
+ */
+const ITEMS_COMPRA_COMPACTA = 14
+
+function LineaCompra({ item, compacta }: { item: ItemCompra; compacta: boolean }) {
   const consejo = winAnsi(item.consejo ?? '').trim()
+  // Con la lista apretada se recorta el aire de la fila y el interlineado de la letra pequeña:
+  // el contenido no cambia, solo deja de sobrar media página.
+  const menudo = compacta ? [s.compraSmall, { lineHeight: 1.1 }] : [s.compraSmall]
   return (
-    <View style={s.filaCompra} wrap={false}>
+    <View style={compacta ? [s.filaCompra, { paddingVertical: 0 }] : s.filaCompra} wrap={false}>
       <View style={{ flex: 2.3, paddingRight: 6 }}>
         <Text style={[s.celdaCompra, { fontFamily: 'Helvetica-Bold' }]}>{winAnsi(item.producto) || SIN_DATO}</Text>
-        <Text style={s.compraSmall}>
+        <Text style={menudo}>
           {winAnsi(item.nombre) || SIN_DATO}
           {consejo.length > 0 ? ` · ${consejo}` : ''}
         </Text>
       </View>
       <View style={{ flex: 1.25, paddingRight: 6 }}>
         <Text style={s.celdaCompraNum}>{winAnsi(textoCantidadSemana(item))}</Text>
-        <Text style={[s.compraSmall, { textAlign: 'right' }]}>{winAnsi(textoCantidadDia(item))}</Text>
+        <Text style={[...menudo, { textAlign: 'right' }]}>{winAnsi(textoCantidadDia(item))}</Text>
       </View>
       <Text style={[s.celdaCompraNum, { flex: 1.9, paddingRight: 6 }]}>{comprarTexto(item)}</Text>
       <Text style={[s.celdaCompraNum, { flex: 0.75 }]}>{duracionTexto(item.dura_dias)}</Text>
@@ -467,9 +486,17 @@ function LineaCompra({ item }: { item: ItemCompra }) {
   )
 }
 
-function BloqueSeccionCompra({ seccion, items }: { seccion: SeccionSuper; items: readonly ItemCompra[] }) {
+function BloqueSeccionCompra({
+  seccion,
+  items,
+  compacta,
+}: {
+  seccion: SeccionSuper
+  items: readonly ItemCompra[]
+  compacta: boolean
+}) {
   return (
-    <View style={{ marginBottom: 4 }} minPresenceAhead={46}>
+    <View style={{ marginBottom: compacta ? 2 : 4 }} minPresenceAhead={46}>
       <View style={[s.tablaCabecera, { paddingBottom: 2, marginBottom: 1, alignItems: 'flex-end' }]}>
         <Text style={[s.h3, { color: C.acento, flex: 2.3, marginBottom: 0 }]}>{NOMBRE_SECCION[seccion]}</Text>
         <Text style={[s.cabeceraCelda, { flex: 1.25, textAlign: 'right' }]}>CANTIDAD</Text>
@@ -477,7 +504,7 @@ function BloqueSeccionCompra({ seccion, items }: { seccion: SeccionSuper; items:
         <Text style={[s.cabeceraCelda, { flex: 0.75, textAlign: 'right' }]}>DURA</Text>
       </View>
       {items.map((item, i) => (
-        <LineaCompra key={`${item.alimento_id}-${i}`} item={item} />
+        <LineaCompra key={`${item.alimento_id}-${i}`} item={item} compacta={compacta} />
       ))}
     </View>
   )
@@ -932,17 +959,18 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
         ) : null}
 
         <Seccion titulo="Tus macronutrientes">
-          {/* §4.3 (v1.1, decisión B): banda de plan ajustado, encima de las cuatro tarjetas. */}
+          {/* §4.3 (v1.1, decisión B): banda de plan ajustado, encima de las cuatro tarjetas.
+              Compacta a propósito: la versión con el título en línea aparte hacía desbordar este
+              marco y partía "Cómo lo calculamos". La marca se repite en la portada (§4.1) y en el
+              pie de cada página, así que aquí basta con una banda de dos líneas bien visible. */}
           {ajustado ? (
             <View
-              style={[s.tarjeta, { marginBottom: 10, borderLeftWidth: 4, borderLeftColor: C.acento, padding: 8 }]}
+              style={[s.tarjeta, { marginBottom: 8, borderLeftWidth: 4, borderLeftColor: C.acento, padding: 6 }]}
               wrap={false}
             >
-              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 13, color: C.acento }}>
-                Plan ajustado por ti
-              </Text>
-              <Text style={[s.p, { marginTop: 3 }]}>
-                Has cambiado{' '}
+              <Text style={s.p}>
+                <Text style={{ fontFamily: 'Helvetica-Bold', color: C.acento }}>Plan ajustado por ti.</Text> Has
+                cambiado{' '}
                 {ajuste?.kcal && ajuste?.hc
                   ? 'las calorías y los hidratos'
                   : ajuste?.kcal
@@ -1001,9 +1029,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             frase="Cuida tu digestión y te ayuda a sentirte saciado/a. Repártela entre varias comidas: verdura, fruta y legumbres."
           />
           <Text style={s.small}>
-            Las calorías de tus macros pueden diferir hasta {ajustado ? '25' : '10'} kcal del objetivo por el
-            redondeo a múltiplos de 5
-            gramos (el cierre real de tu plan son {fmtKcal(resultado.kcal_cierre)}). Como referencia, limita los
+            {notaCierreKcal(ajustado)} El cierre real de tu plan son{' '}
+            {fmtKcal(resultado.kcal_cierre)}. Como referencia, limita los
             azúcares añadidos a menos de {gramos(resultado.macros?.azucares_libres_max_g)} al día.
           </Text>
         </Seccion>
@@ -1037,7 +1064,15 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           </View>
         ) : null}
 
-        <Seccion titulo="Cómo lo calculamos">
+      </Marco>
+
+      {/* ---------- Página 4: método, reparto y menú ----------
+          "Cómo lo calculamos" ABRE esta página en vez de cerrar la de los macros: ahí, con la
+          tarjeta del ciclo (§4.3b) o con la banda de plan ajustado (§4.3), el marco se desbordaba
+          y la sección se partía, dejando su último párrafo solo en una página vacía al 85 %.
+          `sinCortes` para que, si alguna vez no cabe, viaje entera. */}
+      <Marco fecha={fecha} ajustado={ajustado}>
+        <Seccion titulo="Cómo lo calculamos" sinCortes>
           <Text style={s.p}>
             Tu metabolismo basal (las calorías que gastarías en reposo) sale de la ecuación{' '}
             {etiqueta.bmr(resultado.bmr?.ecuacion)}: {fmtKcal(resultado.bmr?.valor)}.
@@ -1055,10 +1090,6 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           </Text>
         </Seccion>
 
-      </Marco>
-
-      {/* ---------- Página 3: reparto y menú ---------- */}
-      <Marco fecha={fecha} ajustado={ajustado}>
         <Seccion titulo="Reparto por comidas">
           <View style={s.tablaCabecera}>
             <Text style={[s.cabeceraCelda, { flex: 2.4 }]}>COMIDA</Text>
@@ -1121,7 +1152,9 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
         </Seccion>
 
         {hayMenu ? (
-          <Seccion titulo="Equivalencias">
+          /* Entera o en la página siguiente: partida dejaba la última tabla y su nota solas en
+             una página casi vacía. §4.4 ya la admite "en la misma página o en la siguiente". */
+          <Seccion titulo="Equivalencias" sinCortes>
             <BloqueEquivalencias tablas={ejemplos.equivalencias} />
           </Seccion>
         ) : null}
@@ -1130,8 +1163,15 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
       {/* ---------- Página 3b: lista de la compra (§4.4b). Sin menú o sin lista, no se imprime. ---------- */}
       {compra ? (
         <Marco fecha={fecha} ajustado={ajustado}>
-          <Text style={[s.h1, { fontSize: 19, marginBottom: 2 }]}>Tu lista de la compra de la semana</Text>
-          <Text style={[s.small, { marginBottom: 6 }]}>{SUBTITULO_COMPRA}</Text>
+          {/* `fixed`: con una lista muy larga (vegano, 6 comidas, 3.000 kcal) no hay forma de que
+              quepa en una página, y §4.4b pide poder imprimirla suelta. Si se parte, el título y el
+              subtítulo se repiten arriba: la segunda hoja se sostiene sola en el súper. */}
+          <Text style={[s.h1, { fontSize: 19, marginBottom: 2 }]} fixed>
+            Tu lista de la compra de la semana
+          </Text>
+          <Text style={[s.small, { marginBottom: 6 }]} fixed>
+            {SUBTITULO_COMPRA}
+          </Text>
           {ejemplos.modo_sencillo ? (
             <View style={[s.tarjeta, { marginBottom: 6, padding: 6, borderLeftWidth: 3, borderLeftColor: C.acento }]} wrap={false}>
               <Text style={{ fontFamily: 'Helvetica-Bold', color: C.acento }}>
@@ -1140,7 +1180,12 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             </View>
           ) : null}
           {seccionesCompra.map((g) => (
-            <BloqueSeccionCompra key={g.seccion} seccion={g.seccion} items={g.items} />
+            <BloqueSeccionCompra
+              key={g.seccion}
+              seccion={g.seccion}
+              items={g.items}
+              compacta={(compra.items ?? []).length > ITEMS_COMPRA_COMPACTA}
+            />
           ))}
           {(compra.notas ?? []).length > 0 ? (
             <View style={[s.nota, { marginTop: 2, padding: 6 }]} wrap={false}>

@@ -4,7 +4,7 @@
 // motor (`limites_ajuste`) y le pide a `ajustarMacros` el plan resultante. La proteína no se toca.
 
 import { useId, useState } from 'react'
-import { textosAvisos } from '../../engine'
+import { techoHidratosAjuste, textosAvisos } from '../../engine'
 import type { AjusteMacros, InputCalculo, LimitesAjuste, Resultado } from '../../engine/types'
 import { entero } from '../utiles/formato'
 import { aplicarAjuste, hayAjuste } from './ajuste'
@@ -28,15 +28,13 @@ const NOTA_RECALCULO =
 const NOTA_SUELO_GRASA =
   'Con estas calorías no puedes bajar más los hidratos sin quedarte por debajo de la grasa mínima. Baja también las calorías si quieres seguir bajándolos.'
 
-function baja5(valor: number): number {
-  return Math.floor(valor / 5) * 5
-}
-
-/** Techo del deslizador de hidratos con las calorías que haya en ese momento (§2.2b). */
+/**
+ * Techo del deslizador de hidratos con las calorías que haya en ese momento (§2.2b). Lo calcula el
+ * MOTOR: si la pantalla se hiciera su propia cuenta, el deslizador podría ofrecer un valor que
+ * `ajustarMacros` recorta después y la cifra de la pantalla dejaría de ser la del plan.
+ */
 function techoHidratos(limites: LimitesAjuste, proteina: number, kcal: number): number {
-  const sueloGrasa = Math.max(limites.suelo_grasa_abs_g, (0.2 * kcal) / 9)
-  const techo = baja5((kcal - 4 * proteina - 9 * sueloGrasa) / 4)
-  return kcal === limites.kcal_recomendada ? Math.max(techo, limites.hc_recomendado_g) : techo
+  return techoHidratosAjuste(limites, proteina, kcal)
 }
 
 /** Solo viajan las palancas que de verdad se han movido; el resto queda en lo recomendado. */

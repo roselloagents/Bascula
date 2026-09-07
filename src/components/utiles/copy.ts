@@ -42,9 +42,17 @@ export const NOTA_AGUA =
 export const NOTA_PESO_OBJETIVO =
   'El peso que te proponemos sale de tu masa magra estimada, y esa estimación tiene un margen de varios kilos. Por eso te damos una franja y no un número exacto: la báscula es una señal más, no el objetivo.'
 
-/** [SPEC] SPEC-calculo §4, nota cierre kcal. */
-export const NOTA_CIERRE_KCAL =
-  'Las calorías de tus macros pueden diferir hasta 10 kcal del objetivo por el redondeo a múltiplos de 5 gramos.'
+/**
+ * [SPEC] SPEC-calculo §4, nota cierre kcal. En el plan recomendado solo se redondea a 5 g un macro
+ * (la grasa del paso 10): hasta 10 kcal. En un plan ajustado a mano el paso 18 redondea los
+ * hidratos Y la grasa, así que la desviación puede llegar a 22,5 kcal. La pantalla y el PDF usan
+ * esta misma función: la nota tiene que decir el mismo número en los dos sitios (SPEC-ux §2.2b).
+ */
+export function notaCierreKcal(ajustado: boolean): string {
+  return `Las calorías de tus macros pueden diferir hasta ${
+    ajustado ? '25' : '10'
+  } kcal del objetivo por el redondeo a múltiplos de 5 gramos.`
+}
 
 /** [SPEC] SPEC-calculo §4 / SPEC-ux §2.10. */
 export const DISCLAIMER =

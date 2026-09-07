@@ -24,8 +24,12 @@ export function aplicarAjuste(resultado: Resultado, ajuste: AjusteMacros | null)
   if (!hayAjuste(ajuste) || resultado.limites_ajuste === undefined) return resultado
   try {
     return ajustarMacros(resultado, ajuste as AjusteMacros)
-  } catch {
-    // El paso 18 lanza si el cierre de kcal no cuadra: mejor el plan recomendado que un plan roto.
+  } catch (error) {
+    // El paso 18 lanza si el cierre de kcal no cuadra. Con el techo de hidratos del punto 2 ya no
+    // debería pasar nunca; si pasara, mejor el plan recomendado que uno roto, pero NO en silencio:
+    // el fallo se deja en la consola (esta función se llama también durante el render del panel,
+    // así que no puede tocar `localStorage` aquí).
+    console.error('paso 18: el ajuste no cuadra, se vuelve al plan recomendado', error)
     return resultado
   }
 }

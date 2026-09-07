@@ -8,7 +8,7 @@ import {
   FRASES_MACRO,
   IMC_CATEGORIA,
   NOTA_AGUA,
-  NOTA_CIERRE_KCAL,
+  notaCierreKcal,
   NOTA_COMIDAS,
   NOTA_GRASA,
   NOTA_HORAS,
@@ -171,7 +171,7 @@ export function BloqueMacros({ resultado, avisos }: PropsBloque) {
         </article>
       </div>
 
-      <p className="nota">{NOTA_CIERRE_KCAL}</p>
+      <p className="nota">{notaCierreKcal(resultado.ajuste !== undefined)}</p>
       <p className="nota">
         Como referencia, limita los azúcares añadidos a menos de{' '}
         <span className="cifra">{entero(m.azucares_libres_max_g)} g</span> al día.
@@ -312,7 +312,8 @@ export function BloqueComidas({ resultado, avisos }: PropsBloque) {
       </div>
 
       <p className="nota">
-        Total de tus macros: {entero(resultado.kcal_cierre)} kcal. {NOTA_CIERRE_KCAL}
+        Total de tus macros: {entero(resultado.kcal_cierre)} kcal.{' '}
+        {notaCierreKcal(resultado.ajuste !== undefined)}
       </p>
       <p className="nota">Las horas {NOTA_HORAS}.</p>
       <p className="nota">{NOTA_COMIDAS}</p>
