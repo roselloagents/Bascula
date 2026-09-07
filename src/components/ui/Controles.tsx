@@ -3,6 +3,7 @@
 
 import { useId, useState, type ReactNode } from 'react'
 import { IconoChevron, IconoMarca, IconoNota } from './Iconos'
+import { leerNumero } from '../utiles/formato'
 
 // ---- Tarjeta de opción --------------------------------------------------
 
@@ -168,6 +169,14 @@ interface CampoNumeroProps {
    * contestado y devuelven el plan de otra persona.
    */
   placeholder?: string
+  /**
+   * Techo del rango válido del campo. Solo se usa para decidir **cuándo** se enseña el error:
+   * un número que ya lo supera no puede volver a ser válido escribiendo más dígitos, así que
+   * esperar al `blur` deja un callejón sin salida (botón gris, sin explicación, y en móvil
+   * pulsarlo ni siquiera saca el foco del campo). El rango normativo sigue estando en
+   * `estadoPaso`, que es quien produce el texto del error.
+   */
+  max?: number
 }
 
 export function CampoNumero({
@@ -181,13 +190,19 @@ export function CampoNumero({
   autoFoco = false,
   marcado = false,
   placeholder,
+  max,
 }: CampoNumeroProps) {
   const id = useId()
   const idError = `${id}-error`
   // El error solo se enseña cuando el campo se ha dejado (o cuando el motor lo ha marcado): al
   // teclear "178" el usuario veía un error rojo tras el "1" y tras el "17" (§1.0, paso 2).
   const [tocado, setTocado] = useState(false)
-  const errorVisible = tocado || marcado ? error : undefined
+  // Excepción: si el número ya se ha pasado del techo del rango, seguir escribiendo solo puede
+  // alejarlo más, así que el error se enseña sin esperar al blur. Sin esto, quien teclea 300 cm
+  // de altura ve el botón deshabilitado y ni una palabra que explique por qué.
+  const escritoNumero = leerNumero(valor)
+  const yaImposible = max !== undefined && escritoNumero !== null && escritoNumero > max
+  const errorVisible = tocado || marcado || yaImposible ? error : undefined
   return (
     <div className="campo">
       <label className="campo-etiqueta" htmlFor={id}>

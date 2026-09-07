@@ -320,6 +320,7 @@ export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
             valor={b.peso_objetivo}
             onCambio={(peso_objetivo) => set({ peso_objetivo })}
             error={errores.peso_objetivo}
+            max={300}
             marcado={estaMarcado(marcados, 'peso_objetivo')}
           />
           {imc !== null && !errores.peso_objetivo ? (

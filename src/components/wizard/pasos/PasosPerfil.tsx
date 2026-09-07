@@ -47,6 +47,7 @@ export function PasoEdad({ b, set, errores, marcados }: PropsPaso) {
         valor={b.edad}
         onCambio={(edad) => set({ edad })}
         error={errores.edad}
+        max={120}
         marcado={estaMarcado(marcados, 'edad')}
       />
     </Pantalla>
@@ -92,6 +93,7 @@ export function PasoMedidas({ b, set, errores, marcados }: PropsPaso) {
           valor={b.altura_cm}
           onCambio={(altura_cm) => set({ altura_cm })}
           error={errores.altura_cm}
+          max={230}
           marcado={estaMarcado(marcados, 'altura_cm')}
         />
         <CampoNumero
@@ -101,6 +103,7 @@ export function PasoMedidas({ b, set, errores, marcados }: PropsPaso) {
           valor={b.peso_kg}
           onCambio={(peso_kg) => set({ peso_kg })}
           error={errores.peso_kg}
+          max={300}
           marcado={estaMarcado(marcados, 'peso_kg')}
           pista="Puedes actualizarlo cuando quieras: recalcularemos tu plan con tu peso real."
         />

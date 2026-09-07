@@ -92,6 +92,7 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
             valor={b.grasa.valor}
             onCambio={(valor) => set((previo) => ({ grasa: { ...previo.grasa, valor } }))}
             error={errores.valor}
+            max={70}
             marcado={estaMarcado(marcados, 'grasa.valor')}
           />
           <Grupo etiqueta="¿Cómo lo has obtenido?">
@@ -136,6 +137,7 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
             valor={b.grasa.cuello_cm}
             onCambio={(cuello_cm) => set((previo) => ({ grasa: { ...previo.grasa, cuello_cm } }))}
             error={errores.cuello_cm}
+            max={60}
             marcado={estaMarcado(marcados, 'grasa.cuello_cm')}
             pista="Mide justo debajo de la laringe (la «nuez»), con la cinta ligeramente inclinada hacia abajo por delante."
           />
@@ -146,6 +148,7 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
             valor={b.grasa.cintura_cm}
             onCambio={(cintura_cm) => set((previo) => ({ grasa: { ...previo.grasa, cintura_cm } }))}
             error={errores.cintura_cm}
+            max={200}
             marcado={estaMarcado(marcados, 'grasa.cintura_cm')}
             pista="Mide a la altura del ombligo, después de soltar el aire, sin apretar la cinta."
           />
@@ -157,6 +160,7 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
               valor={b.grasa.cadera_cm}
               onCambio={(cadera_cm) => set((previo) => ({ grasa: { ...previo.grasa, cadera_cm } }))}
               error={errores.cadera_cm}
+              max={200}
               marcado={estaMarcado(marcados, 'grasa.cadera_cm')}
               pista="Mide en el punto de mayor anchura de las caderas y los glúteos."
             />
