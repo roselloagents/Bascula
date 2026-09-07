@@ -4,7 +4,7 @@
 import type { AvisoTexto, InputCalculo, Resultado } from '../../engine/types'
 import { Plegable } from '../ui/Controles'
 import { TrioSomatotipos } from '../graficos/Siluetas'
-import { DISCLAIMER, NOTA_PESO_OBJETIVO } from '../utiles/copy'
+import { AYUDA_TCA, DISCLAIMER, NOTA_PESO_OBJETIVO } from '../utiles/copy'
 import { entero, fechaLarga, mesYAno, num, numCorto } from '../utiles/formato'
 import { CajaAviso, Seccion } from './comun'
 import { buscarAviso } from '../utiles/avisos'
@@ -215,18 +215,21 @@ export function BloqueMetodologia({ inputs, resultado, avisos }: PropsCierre) {
 
 /**
  * §2.10. La línea de ADANER es literal, fija y para todo el mundo: es lo único que queda del
- * cribado retirado en la v1.1, y va en el mismo tamaño que el resto del disclaimer.
+ * cribado retirado en la v1.1, y va en el mismo tamaño que el resto del disclaimer. El texto
+ * se parte por el dominio para poder enlazarlo, en vez de reescribirlo: así esta pantalla, la
+ * de derivación y el PDF dicen exactamente lo mismo.
  */
 export function BloqueDisclaimer() {
+  const [antes, despues] = AYUDA_TCA.split('adaner.org')
   return (
     <section className="disclaimer">
       <p>{DISCLAIMER}</p>
       <p className="disclaimer-ayuda">
-        Si la comida o el peso te generan ansiedad, puedes hablar gratis con ADANER (
+        {antes}
         <a href="https://adaner.org" target="_blank" rel="noopener noreferrer">
           adaner.org
         </a>
-        ) o con tu centro de salud.
+        {despues}
       </p>
     </section>
   )
