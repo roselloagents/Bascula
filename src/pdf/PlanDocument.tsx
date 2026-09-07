@@ -100,25 +100,25 @@ const s = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     fontSize: 12.5,
     color: C.acento,
-    marginBottom: 5,
-    paddingBottom: 2.5,
+    marginBottom: 4,
+    paddingBottom: 2,
     borderBottomWidth: 1.5,
     borderBottomColor: C.acento,
   },
   h3: { fontFamily: 'Helvetica-Bold', fontSize: 10.5, marginBottom: 3 },
-  p: { marginBottom: 3.5, lineHeight: 1.3 },
-  small: { fontSize: 8.5, color: C.suave, lineHeight: 1.4 },
+  p: { marginBottom: 3, lineHeight: 1.28 },
+  small: { fontSize: 8.5, color: C.suave, lineHeight: 1.32 },
   equivalencias: { fontSize: 8.5, color: C.tinta, lineHeight: 1.5 },
-  seccion: { marginBottom: 9 },
+  seccion: { marginBottom: 7 },
 
   tarjeta: {
     borderWidth: 0.75,
     borderColor: C.linea,
     borderRadius: 4,
     backgroundColor: '#FFFFFF',
-    padding: 9,
+    padding: 8,
   },
-  fila: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 },
+  fila: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 1.5 },
   filaLinea: { borderBottomWidth: 0.5, borderBottomColor: C.linea },
   filaEtiqueta: { color: C.suave, width: '40%' },
   filaValor: { width: '60%', textAlign: 'right' },
@@ -134,7 +134,7 @@ const s = StyleSheet.create({
   },
   tablaFila: {
     flexDirection: 'row',
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderBottomWidth: 0.5,
     borderBottomColor: C.linea,
     alignItems: 'flex-start',
@@ -160,17 +160,17 @@ const s = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: C.avisoBorde,
     backgroundColor: C.avisoFondo,
-    padding: 8,
-    marginBottom: 6,
-    lineHeight: 1.35,
+    padding: 6,
+    marginBottom: 5,
+    lineHeight: 1.3,
   },
   nota: {
     borderLeftWidth: 3,
     borderLeftColor: C.linea,
     backgroundColor: C.infoFondo,
-    padding: 8,
-    marginBottom: 6,
-    lineHeight: 1.35,
+    padding: 6,
+    marginBottom: 5,
+    lineHeight: 1.3,
   },
 })
 
@@ -199,11 +199,19 @@ function Marco({ fecha, children }: { fecha: string; children: ReactNode }) {
   )
 }
 
+/**
+ * Espacio que tiene que quedar por debajo del título para que el título se quede en la página.
+ * Con los 40 pt de antes, «Notas informativas» cabía al pie de la página 6 y su primera caja de
+ * aviso —que es `wrap={false}` y mide unos 65 pt— saltaba sola a la 7 (QA §8). 78 pt es la altura
+ * de la caja de aviso más alta más su margen, así que el título viaja siempre con su contenido.
+ */
+const ESPACIO_TRAS_TITULO = 78
+
 /** `sinCortes` evita que un bloque corto (el aviso legal) se parta a mitad de frase entre dos páginas. */
 function Seccion({ titulo, children, sinCortes }: { titulo: string; children: ReactNode; sinCortes?: boolean }) {
   return (
     <View style={s.seccion} wrap={!sinCortes}>
-      <Text style={s.h2} minPresenceAhead={40}>
+      <Text style={s.h2} minPresenceAhead={ESPACIO_TRAS_TITULO}>
         {titulo}
       </Text>
       {children}
@@ -234,7 +242,7 @@ function Vinetas({ textos }: { textos: readonly string[] }) {
   return (
     <View>
       {textos.map((t, i) => (
-        <View key={i} style={{ flexDirection: 'row', marginBottom: 4 }} wrap={false}>
+        <View key={i} style={{ flexDirection: 'row', marginBottom: 3 }} wrap={false}>
           <Text style={{ width: 12, color: C.acento }}>{'•'}</Text>
           <Text style={{ flex: 1 }}>{t}</Text>
         </View>
@@ -270,7 +278,7 @@ function TarjetaMacro({
   frase: string
 }) {
   return (
-    <View style={[s.tarjeta, { marginBottom: 6, borderLeftWidth: 3, borderLeftColor: color }]} wrap={false}>
+    <View style={[s.tarjeta, { marginBottom: 5, paddingVertical: 6, borderLeftWidth: 3, borderLeftColor: color }]} wrap={false}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 11, color }}>{nombre}</Text>
         <Text style={s.small}>
@@ -309,7 +317,7 @@ function LineaAlimento({ alimento }: { alimento: AlimentoPorcion }) {
 
 function BloqueComidaEjemplo({ comida }: { comida: EjemploComida }) {
   return (
-    <View style={{ marginBottom: 10 }} minPresenceAhead={60}>
+    <View style={{ marginBottom: 8 }} minPresenceAhead={60}>
       <View
         style={{
           flexDirection: 'row',
@@ -567,53 +575,78 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
 
   return (
     <Document title="Báscula — plan nutricional" author="RS Agents" language="es-ES">
-      {/* ---------- Página 1: portada ---------- */}
+      {/* ---------- Página 1: portada con los resultados clave y los datos del usuario ----------
+          Antes la portada gastaba media página en blanco y la página 2 repetía sexo, edad, altura y
+          peso (QA §6). Ahora el plan se resume de un vistazo aquí y el documento tiene una página
+          menos. ---------- */}
       <Marco fecha={fecha}>
-        <View style={{ marginTop: 36 }}>
-          <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 34, color: C.acento }}>Báscula</Text>
-          <Text style={{ fontSize: 12, color: C.suave, marginBottom: 26 }}>Tus macros, bien calculados</Text>
-          <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 20, marginBottom: 22 }}>
+        <View>
+          <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 30, color: C.acento }}>Báscula</Text>
+          <Text style={{ fontSize: 11, color: C.suave, marginBottom: 12 }}>Tus macros, bien calculados</Text>
+          <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 17, marginBottom: 2 }}>
             Tu plan nutricional personalizado
           </Text>
+          <Text style={{ fontSize: 9.5, color: C.suave, marginBottom: 12 }}>{fechaLarga(fecha)}</Text>
 
-          <View style={[s.tarjeta, { marginBottom: 22 }]}>
-            <Fila etiqueta="Sexo" valor={etiqueta.sexo(inputs.sexo)} />
-            <Fila etiqueta="Edad" valor={`${num(inputs.edad)} años`} />
-            <Fila etiqueta="Altura" valor={`${num(inputs.altura_cm)} cm`} />
-            <Fila etiqueta="Peso" valor={kilos(inputs.peso_kg)} />
-            <Fila etiqueta="Fecha del plan" valor={fechaLarga(fecha)} ultima />
+          <View style={[s.tarjeta, { marginBottom: 10 }]}>
+            <Text style={{ fontSize: 9, color: C.suave }}>TU OBJETIVO</Text>
+            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 19, color: C.acento }}>
+              {etiqueta.objetivo(resultado.objetivo_efectivo)}
+              {sufijoObjetivo(datos) ? (
+                <Text style={{ fontFamily: 'Helvetica', fontSize: 11, color: C.suave }}>
+                  {`  ·  ${sufijoObjetivo(datos)}`}
+                </Text>
+              ) : null}
+            </Text>
+
+            <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 0.75, borderTopColor: C.linea }}>
+              <Text style={{ fontSize: 9, color: C.suave }}>CALORÍAS AL DÍA</Text>
+              <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 38, color: C.acento }}>
+                {num(resultado.kcal)}
+                <Text style={{ fontSize: 14, color: C.suave }}> kcal</Text>
+              </Text>
+              {/* Los tres macros en UNA línea, con los mismos colores que la pantalla. */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, marginBottom: 4 }}>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10.5, color: C.proteina }}>
+                  Proteína {gramos(resultado.macros?.proteina_g)}
+                </Text>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10.5, color: C.grasa }}>
+                  Grasa {gramos(resultado.macros?.grasa_g)}
+                </Text>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10.5, color: C.hc }}>
+                  Carbohidratos {gramos(resultado.macros?.hc_g)}
+                </Text>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10.5, color: C.fibra }}>
+                  Fibra {gramos(resultado.macros?.fibra_g)}
+                </Text>
+              </View>
+              <Barra
+                segmentos={[
+                  { color: C.proteina, fraccion: resultado.macros?.pct?.p ?? 0 },
+                  { color: C.grasa, fraccion: resultado.macros?.pct?.g ?? 0 },
+                  { color: C.hc, fraccion: resultado.macros?.pct?.hc ?? 0 },
+                ]}
+              />
+            </View>
+
+            <View style={{ marginTop: 8, paddingTop: 6, borderTopWidth: 0.75, borderTopColor: C.linea }}>
+              <Fila
+                etiqueta="Índice de masa corporal (IMC)"
+                valor={`${num(resultado.imc, 1)} · ${etiqueta.imc(resultado.imc_categoria)}`}
+              />
+              {ocultarGrasa ? null : (
+                <Fila
+                  etiqueta="Grasa corporal estimada"
+                  valor={`${rango(resultado.grasa?.rango, (v) => num(v, 0))} % · ${etiqueta.fiabilidad(
+                    resultado.grasa?.fiabilidad,
+                  )}`}
+                />
+              )}
+              <Fila etiqueta="Gasto energético estimado" valor={`${fmtKcal(resultado.tdee?.valor)} al día`} ultima />
+            </View>
           </View>
 
-          <Text style={{ fontSize: 9, color: C.suave, marginBottom: 2 }}>TU OBJETIVO</Text>
-          <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 26, color: C.acento }}>
-            {etiqueta.objetivo(resultado.objetivo_efectivo)}
-          </Text>
-          {sufijoObjetivo(datos) ? (
-            <Text style={{ fontSize: 11, color: C.suave, marginBottom: 10 }}>{sufijoObjetivo(datos)}</Text>
-          ) : null}
-          {objetivoAjustado ? (
-            <View style={[s.nota, { marginTop: 10 }]}>
-              <Text style={s.h3}>Ajustado automáticamente</Text>
-              <Text style={s.small}>
-                {avisoAjuste?.texto ??
-                  'Hemos elegido este objetivo a partir de tus respuestas para que el plan tenga sentido.'}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={{ position: 'absolute', bottom: 72, left: 46, right: 46 }}>
-          <Text style={s.small}>
-            Documento informativo generado automáticamente. No sustituye una valoración nutricional
-            individualizada. RS Agents / Báscula no se hace responsable del uso que se haga de esta información sin
-            supervisión profesional.
-          </Text>
-        </View>
-      </Marco>
-
-      {/* ---------- Página 2: datos y resultados clave ---------- */}
-      <Marco fecha={fecha}>
-        <Seccion titulo="Tus datos">
+          <Text style={[s.h2, { fontSize: 11.5 }]}>Tus datos</Text>
           <View style={s.tarjeta}>
             <Fila etiqueta="Sexo" valor={etiqueta.sexo(inputs.sexo)} />
             <Fila etiqueta="Edad" valor={`${num(inputs.edad)} años`} />
@@ -629,7 +662,6 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             )}
             <Fila etiqueta="Actividad diaria" valor={etiqueta.actividad(inputs.actividad_diaria)} />
             <Fila etiqueta="Entrenamiento" valor={entrenoTexto} />
-            <Fila etiqueta="Objetivo" valor={etiqueta.objetivo(resultado.objetivo_efectivo)} />
             <Fila
               etiqueta="Ritmo"
               valor={
@@ -642,40 +674,30 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             <Fila etiqueta="Comidas al día" valor={num(inputs.n_comidas)} ultima={condiciones.length === 0} />
             {condiciones.length > 0 ? <Fila etiqueta="Nos has contado" valor={lista(condiciones)} ultima /> : null}
           </View>
-        </Seccion>
 
-        <Seccion titulo="Tus resultados">
-          <View style={[s.tarjeta, { marginBottom: 10 }]}>
-            <Text style={{ fontSize: 9, color: C.suave }}>CALORÍAS AL DÍA</Text>
-            <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 36, color: C.acento }}>
-              {num(resultado.kcal)}
-              <Text style={{ fontSize: 14, color: C.suave }}> kcal</Text>
-            </Text>
-          </View>
-          <View style={s.tarjeta}>
-            <Fila
-              etiqueta="Índice de masa corporal (IMC)"
-              valor={`${num(resultado.imc, 1)} · ${etiqueta.imc(resultado.imc_categoria)}`}
-            />
-            {ocultarGrasa ? null : (
-              <Fila
-                etiqueta="Grasa corporal estimada"
-                valor={`${rango(resultado.grasa?.rango, (v) => num(v, 0))} % · ${etiqueta.fiabilidad(
-                  resultado.grasa?.fiabilidad,
-                )}`}
-              />
-            )}
-            <Fila etiqueta="Gasto energético estimado" valor={`${fmtKcal(resultado.tdee?.valor)} al día`} ultima />
-          </View>
-          <Text style={[s.small, { marginTop: 6 }]}>
+          {objetivoAjustado ? (
+            <View style={[s.nota, { marginTop: 10 }]}>
+              <Text style={s.h3}>Ajustado automáticamente</Text>
+              <Text style={s.small}>
+                {avisoAjuste?.texto ??
+                  'Hemos elegido este objetivo a partir de tus respuestas para que el plan tenga sentido.'}
+              </Text>
+            </View>
+          ) : null}
+
+          <Text style={[s.small, { marginTop: 10 }]}>
             A tu gasto estimado le hemos restado un 5 % como margen de seguridad, porque casi todos sobrestimamos
             lo que nos movemos.
             {ocultarGrasa
               ? ''
-              : ' Ninguna fórmula sin aparato mide la grasa corporal exacta: por eso te damos un rango, no una cifra cerrada.'}
+              : ' Ninguna fórmula sin aparato mide la grasa corporal exacta: por eso te damos un rango, no una cifra cerrada.'}{' '}
+            Documento informativo generado automáticamente. No sustituye una valoración nutricional individualizada.
           </Text>
-        </Seccion>
+        </View>
+      </Marco>
 
+      {/* ---------- Página 2: avisos del caso, macros, agua y método ---------- */}
+      <Marco fecha={fecha}>
         {destacados.length > 0 ? (
           <Seccion titulo="Avisos para tu caso">
             {destacados.map((a) => (
@@ -683,10 +705,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             ))}
           </Seccion>
         ) : null}
-      </Marco>
 
-      {/* ---------- Página 3: macros, agua y método ---------- */}
-      <Marco fecha={fecha}>
         <Seccion titulo="Tus macronutrientes">
           <View style={{ marginBottom: 12 }}>
             <Barra
@@ -779,9 +798,10 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             nunca en tus calorías ni en tu proteína.
           </Text>
         </Seccion>
+
       </Marco>
 
-      {/* ---------- Página 4: reparto y menú ---------- */}
+      {/* ---------- Página 3: reparto y menú ---------- */}
       <Marco fecha={fecha}>
         <Seccion titulo="Reparto por comidas">
           <View style={s.tablaCabecera}>
@@ -851,7 +871,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
         ) : null}
       </Marco>
 
-      {/* ---------- Página 4b: lista de la compra (§4.4b). Sin menú o sin lista, no se imprime. ---------- */}
+      {/* ---------- Página 3b: lista de la compra (§4.4b). Sin menú o sin lista, no se imprime. ---------- */}
       {compra ? (
         <Marco fecha={fecha}>
           <Text style={[s.h1, { fontSize: 19, marginBottom: 2 }]}>Tu lista de la compra de la semana</Text>
@@ -876,7 +896,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
         </Marco>
       ) : null}
 
-      {/* ---------- Página 5: peso objetivo, consejos y referencias ---------- */}
+      {/* ---------- Página 4: peso objetivo, consejos y referencias ---------- */}
       <Marco fecha={fecha}>
         {ocultarGrasa ? null : (
           <Seccion titulo="Peso objetivo y cronograma">

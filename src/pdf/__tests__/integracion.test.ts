@@ -11,8 +11,16 @@ import { elementoPlan } from '../index'
 import { CP1252_EXTRA, winAnsi } from '../formato'
 import type { DatosPdf } from '../../engine/types'
 
-/** Máximo de páginas declarado en SPEC-ux-comidas-pdf.md §4.0, ya con la página de la compra (§4.4b). */
-const PAGINAS_MAX = 9
+/**
+ * Máximo de páginas declarado en SPEC-ux-comidas-pdf.md §4.0, ya con la página de la compra
+ * (§4.4b). Baja de 9 a 8 al fundir la portada con la antigua página de "Tus datos / Tus
+ * resultados", que repetía sexo, edad, altura y peso (QA §6), y al compactar los interlineados y
+ * los márgenes del documento. Los vectores que se quedan en 8 son los extremos de la §5: once
+ * avisos (caso 8), seis comidas y 3.100 kcal (caso 9), diez avisos (caso 14). Nueve de los
+ * catorce casos caben ya en 7 páginas, y el más corto (caso 13, renal y sin menú) en 6.
+ */
+const PAGINAS_MAX = 8
+
 
 /** Tope de alimentos distintos del modo sencillo (SPEC-ux-comidas-pdf.md §3.7.2). */
 const ALIMENTOS_MAX_SENCILLO = 12
@@ -76,6 +84,7 @@ describe('PDF — vectores de la §5 de punta a punta', () => {
       expect(buffer.length, `caso ${v.n}`).toBeGreaterThan(10_000)
     }
   }, 180_000)
+
 
   // El modo sencillo llega al PDF por el mismo camino que a la pantalla: no hay fixture de por
   // medio. Se comprueba que el generador rellena la lista, que respeta su tope, y que la página

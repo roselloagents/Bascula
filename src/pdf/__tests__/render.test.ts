@@ -39,7 +39,7 @@ describe('exportador PDF', () => {
       ejemplos: { ...MUESTRA_COMPLETA.ejemplos, compra: undefined },
     })
     expect(conLista).toBe(sinLista + 1)
-    expect(conLista).toBeLessThanOrEqual(9)
+    expect(conLista).toBeLessThanOrEqual(8)
   }, 120_000)
 
   it('no rompe con una lista de la compra a medio rellenar', async () => {
