@@ -1,171 +1,232 @@
 // =====================================================================
 // CONTRATO COMPARTIDO — Báscula
-// Tipos de entrada/salida del motor de cálculo (docs/SPEC-calculo.md §1.1 y Anexo A),
+// Tipos de entrada/salida del motor de cálculo (docs/SPEC-calculo.md §0.3 y "Salida (Resultado)"),
 // del generador de ejemplos de comidas y del exportador PDF.
-// Cualquier cambio aquí afecta a motor, UI, comidas y PDF: mantener sincronizado con la spec.
+// Fuente única de verdad: docs/SPEC-calculo.md. Cualquier cambio aquí afecta a motor, UI, comidas y PDF.
 // =====================================================================
 
-// ---------- Inputs (SPEC §1.1) ----------
+// ---------- Inputs (SPEC §0.3 / §1) ----------
 export type Sexo = 'hombre' | 'mujer'
-
-export type FuenteGrasa = 'dexa' | 'bia_profesional' | 'plicometria_profesional' | 'bascula_bia_casera' | 'otro'
-export type CategoriaVisual = 'esencial' | 'atleta' | 'fitness' | 'aceptable' | 'obesidad'
-
-export type Grasa =
-  | { metodo: 'conocido'; valor: number; fuente: FuenteGrasa } // valor en % (3–60)
-  | { metodo: 'medidas'; cuello_cm: number; cintura_cm: number; cadera_cm?: number } // cadera obligatoria si mujer
-  | { metodo: 'visual'; categoria: CategoriaVisual }
-  | { metodo: 'desconocido' }
-
-export interface SomatotipoRespuestas {
-  q1: 'fina' | 'media' | 'ancha' // complexión ósea
-  q2: 'poca' | 'moderada' | 'mucha' // facilidad para ganar grasa
-  q3: 'poca' | 'moderada' | 'mucha' // facilidad para ganar músculo
-  q4: 'delgado' | 'atletico' | 'robusto' // apariencia habitual antes de entrenar
-}
-
+export type MetodoGrasa = 'conocido' | 'medidas' | 'visual' | 'desconocido'
+export type FuenteGrasa = 'fiable' | 'estimado'
+export type VisualHombre = 'muy_definido' | 'definido' | 'medio' | 'sobrepeso_visible' | 'obesidad_visible'
+export type VisualMujer = 'muy_definida' | 'tonificada' | 'media' | 'sobrepeso_visible' | 'obesidad_visible'
+export type CategoriaVisual = VisualHombre | VisualMujer
 export type ActividadDiaria = 'sedentario' | 'ligero' | 'moderado' | 'alto' | 'muy_alto'
 export type TipoEntrenamiento = 'ninguno' | 'fuerza' | 'cardio' | 'mixto'
-export type Intensidad = 'baja' | 'moderada' | 'alta'
-
-export interface Entrenamiento {
-  tipo: TipoEntrenamiento
-  dias_semana: number // 0–7 entero
-  minutos_sesion: number // 0–180 entero
-  intensidad: Intensidad
-}
-
-export type Objetivo = 'perder_grasa' | 'mantener' | 'ganar_musculo' | 'recomposicion' | 'no_lo_se'
-export type ObjetivoEfectivo = Exclude<Objetivo, 'no_lo_se'>
+export type Intensidad = 'baja' | 'media' | 'alta'
+export type Experiencia = 'novato' | 'intermedio' | 'avanzado'
+export type Momento = 'manana' | 'mediodia' | 'tarde' | 'noche'
+export type Objetivo = 'perder' | 'mantener' | 'ganar' | 'recomposicion' | 'no_se'
+export type ObjetivoEfectivo = Exclude<Objetivo, 'no_se'>
 export type Ritmo = 'suave' | 'moderado' | 'agresivo'
 export type Preferencia = 'omnivoro' | 'vegetariano' | 'vegano' | 'sin_lactosa' | 'sin_gluten' | 'low_carb'
-export type MomentoEntreno = 'manana' | 'mediodia' | 'tarde' | 'noche'
-export type Condicion = 'ninguna' | 'diabetes' | 'cardiovascular' | 'tiroides' | 'hepatica' | 'renal' | 'tca' | 'otra'
+export type Condicion =
+  | 'diabetes'
+  | 'renal'
+  | 'hepatica'
+  | 'tca'
+  | 'cardiaca'
+  | 'hipertension'
+  | 'tiroides'
+  | 'bariatrica'
+  | 'glp1'
+  | 'otra'
+/** Cribado breve del paso 5b del wizard. 'positivo' y 'evitado' añaden 'tca' a `condiciones` (SPEC Paso 0). */
+export type CribadoTCA = 'positivo' | 'evitado' | 'negativo'
+export type Somatotipo = 'ectomorfo' | 'mesomorfo' | 'endomorfo'
+export type Fiabilidad = 'alta' | 'media' | 'baja'
+export type BandaGrasa = 'muy_bajo' | 'bajo' | 'medio' | 'alto' | 'muy_alto'
+export type Perfil = 'sedentario' | 'cardio' | 'fuerza'
 export type NComidas = 2 | 3 | 4 | 5 | 6
 
-export interface Inputs {
+export interface InputGrasa {
+  metodo: MetodoGrasa
+  valor?: number // metodo 'conocido' (3–70; el paso 2 lo recorta a 4–60 H / 10–60 M)
+  fuente?: FuenteGrasa // metodo 'conocido'
+  cuello_cm?: number // metodo 'medidas'
+  cintura_cm?: number // metodo 'medidas'
+  cadera_cm?: number // metodo 'medidas', obligatorio en mujeres
+  categoria?: CategoriaVisual // metodo 'visual'
+}
+
+export interface InputSomatotipo {
+  q1: 'fina' | 'media' | 'ancha' // estructura ósea
+  q2: 'poca' | 'moderada' | 'mucha' // facilidad histórica para ganar grasa
+  q3: 'poca' | 'moderada' | 'mucha' // facilidad histórica para ganar músculo
+  q4: 'delgado' | 'atletico' | 'robusto' // apariencia habitual sin entrenar
+}
+
+export interface InputEntrenamiento {
+  tipo: TipoEntrenamiento
+  dias_semana: number // 0–7 entero
+  minutos_sesion: number // 10–240 entero (ignorado si tipo = 'ninguno')
+  intensidad: Intensidad
+  experiencia: Experiencia
+  momento: Momento | null
+}
+
+export interface InputCalculo {
   sexo: Sexo
-  edad: number // 18–75 entero
-  altura_cm: number // 140–220
-  peso_kg: number // 35–250
-  grasa: Grasa
-  somatotipo: SomatotipoRespuestas | null // null = prefiero no responder
+  edad: number // 0–120; fuera de 18–75 el paso 0 devuelve EXCL_EDAD
+  altura_cm: number // 130–230
+  peso_kg: number // 35–300
+  grasa: InputGrasa
+  somatotipo: InputSomatotipo | null
   actividad_diaria: ActividadDiaria
-  entrenamiento: Entrenamiento
+  entrenamiento: InputEntrenamiento
   objetivo: Objetivo
   ritmo: Ritmo
-  peso_objetivo: number | null // null = no lo sé
+  peso_objetivo: number | null // 30–300; null = "no lo sé"
   preferencia: Preferencia
   n_comidas: NComidas
-  momento_entreno: MomentoEntreno | null
   clima_caluroso: boolean
   embarazo_lactancia: boolean
   condiciones: Condicion[]
-  fecha_inicio?: string // ISO YYYY-MM-DD; default hoy
+  cribado_tca: CribadoTCA | null
+  fecha_inicio: string // ISO 'YYYY-MM-DD'
 }
 
-// ---------- Salida del motor (SPEC Anexo A) ----------
-export type ImcCategoria = 'bajo_peso' | 'normopeso' | 'sobrepeso' | 'obesidad_I' | 'obesidad_II' | 'obesidad_III'
-export type Fiabilidad = 'alta' | 'media' | 'baja'
+/** Alias histórico usado por la UI, el generador de comidas y el PDF. */
+export type Inputs = InputCalculo
+
+// ---------- Salida del motor (SPEC "Salida (Resultado)") ----------
+export type ImcCategoria = 'bajo_peso' | 'normal' | 'sobrepeso' | 'obesidad_I' | 'obesidad_II' | 'obesidad_III'
 export type BmrEcuacion = 'mifflin' | 'katch_mcardle'
-export type SomatotipoResultado = 'ectomorfo' | 'mesomorfo' | 'endomorfo' | 'no_evaluado'
-export type FfmiCategoria = 'bajo' | 'medio' | 'bueno' | 'muy_alto' | 'excepcional'
+export type FfmiCategoria = 'bajo' | 'medio' | 'bueno' | 'muy_desarrollado' | 'excepcional'
+export type BaseProteina = 'peso_corporal' | 'peso_ajustado'
+export type MetodoPesoObjetivo = 'grasa' | 'ritmo_16_semanas' | 'actual'
+export type PrecisionFecha = 'dia' | 'mes'
+
+/** Códigos que impiden devolver un plan. `ERR_INPUT_RANGO` viaja acompañado de `errores`. */
+export type CodigoExclusion =
+  | 'EXCL_EDAD'
+  | 'EXCL_EMBARAZO_LACTANCIA'
+  | 'EXCL_IMC_MUY_BAJO'
+  | 'EXCL_TCA_RIESGO'
+  | 'ERR_INPUT_RANGO'
+
+export interface ResultadoGrasa {
+  pct: number
+  rango: [number, number]
+  fiabilidad: Fiabilidad
+  metodo_efectivo: MetodoGrasa
+  banda: BandaGrasa
+  referencias: { cunbae: number; deurenberg: number; navy?: number }
+}
+
+export interface ResultadoBmr {
+  valor: number
+  ecuacion: BmrEcuacion
+  referencias: { mifflin: number; katch: number; harris: number }
+}
+
+export interface ResultadoTdee {
+  valor: number
+  bruto: number
+  pal: number
+  ejercicio_dia: number
+  perfil: Perfil
+}
+
+export interface ResultadoMacros {
+  proteina_g: number
+  grasa_g: number
+  hc_g: number
+  fibra_g: number
+  azucares_libres_max_g: number
+  pct: { p: number; g: number; hc: number }
+  gkg: { p: number; g: number; hc: number }
+  base_proteina: BaseProteina
+  base_kg: number
+  somatotipo: Somatotipo
+}
+
+/** `null` con condición `renal` o `cardiaca` (SPEC Paso 12). */
+export type ResultadoAgua = { ml: number; rango: [number, number]; vasos: number } | null
+
+export interface ResultadoPesoObjetivo {
+  efectivo: number | null
+  sugerido: number
+  /** `false` ⇒ la UI y el PDF muestran solo la franja, sin número grande (SPEC Paso 13). */
+  mostrar_central: boolean
+  rango: [number, number]
+  metodo: MetodoPesoObjetivo
+  hito_intermedio: number | null
+  referencias: {
+    imc22: number
+    rango_imc: [number, number]
+    /** `null` fuera de 150–200 cm de altura. */
+    clasicas: Record<string, number> | null
+  }
+}
+
+export interface ResultadoCronograma {
+  ritmo_kg_sem: number
+  ritmo_pct_sem: number
+  delta_kg: number
+  semanas: [number, number]
+  diet_breaks: number
+  fecha_min: string // ISO YYYY-MM-DD
+  fecha_max: string // ISO YYYY-MM-DD
+  /** `'mes'` ⇒ no se imprimen fechas exactas, solo mes y año (SPEC Paso 14). */
+  precision_fecha: PrecisionFecha
+  /** Pérdida/ganancia prevista en las primeras 12 semanas; `null` con horizonte ≤ 16 semanas. */
+  tramo_12sem: [number, number] | null
+}
+
+export interface ResultadoFfmi {
+  valor: number
+  normalizado: number
+  /** `null` cuando la banda de grasa es `alto` o `muy_alto` (SPEC Paso 15). */
+  categoria: FfmiCategoria | null
+}
 
 export interface Comida {
-  comida: string // nombre de la toma (desayuno, media_manana, comida, merienda, cena, recena...)
-  hora: string // hora nominal HH:MM de la plantilla (SPEC §3.10)
-  pct: number // % de kcal de la plantilla
-  prot: number
-  carb: number
-  fat: number
+  /** Nombre de la toma: Desayuno, Media mañana, Comida, Merienda, Cena, Recena (SPEC tabla 3.13). */
+  nombre: string
+  /** Hora nominal fija 'HH:MM' de la tabla 3.13. No interviene en ningún cálculo. */
+  hora: string
+  pct_kcal: number
+  proteina_g: number
+  grasa_g: number
+  hc_g: number
   kcal: number
-  peri: boolean // comida peri-entreno (solo en reparto_entreno)
+  /** Comida de alrededor del entrenamiento (SPEC tabla 3.14). Como mucho una es `true`. */
+  peri: boolean
 }
-
-export interface PesoSugerido {
-  central: number
-  rango: [number, number]
-  peso_min_seguro: number
-  m1?: number
-  m1_rango?: [number, number]
-  m2?: number
-  m2_rango?: [number, number]
-  f?: number
-  delta?: number
-}
-
-export type Cronograma =
-  | {
-      aplica: true
-      kg_semana: number
-      pct_semana: number
-      semanas_teoricas: number
-      semanas_estimadas: number
-      fecha: string // ISO YYYY-MM-DD
-      hitos: [number, number][] // [semana, peso]
-    }
-  | { aplica: false; semanas_revision: 8 }
 
 export interface Resultado {
-  ok: true
+  /** Presente ⇒ no hay plan: el resto de campos no debe leerse ni mostrarse. */
+  excluido?: CodigoExclusion
+  /** Solo con `excluido === 'ERR_INPUT_RANGO'`: nombres de los campos fuera de rango. */
+  errores?: string[]
   imc: number
   imc_categoria: ImcCategoria
-  grasa_pct: number
-  grasa_fiabilidad: Fiabilidad
-  grasa_pct_cunbae: number
-  grasa_pct_deurenberg: number
-  mlg_kg: number
-  mg_kg: number
-  bmr: number
-  bmr_ecuacion: BmrEcuacion
-  bmr_referencia: number
-  pal_base: number
-  met: number
-  eat_sesion: number
-  eat_diario: number
-  gasto_actividad: number
-  tdee: number
-  tdee_rango: [number, number]
+  grasa: ResultadoGrasa
+  mlg: number
+  bmr: ResultadoBmr
+  tdee: ResultadoTdee
   objetivo_efectivo: ObjetivoEfectivo
-  ritmo: Ritmo
-  grasa_objetivo_pct: number
-  peso_sugerido: PesoSugerido
-  peso_objetivo_usado: number
-  kcal_objetivo: number
-  deficit: number
-  superavit: number
-  suelo: number
-  peso_ref_proteina: number
-  proteina_factor: number
-  proteina_g: number
-  proteina_tope: number
-  somatotipo_resultado: SomatotipoResultado
-  grasa_pct_kcal: number | null
-  grasa_g: number
-  carbohidratos_g: number
-  fibra_g: number
-  kcal_reales: number
-  agua_descanso_ml: number
-  agua_entreno_ml: number
-  agua_rango_ml: [number, number]
-  vasos_250: number
-  comidas_peri: string[]
-  reparto_entreno: Comida[]
-  reparto_descanso: Comida[]
-  cronograma: Cronograma
-  ffmi: number
-  ffmi_normalizado: number
-  ffmi_categoria: FfmiCategoria
-  avisos: string[] // códigos SPEC §4, sin duplicados
+  ritmo_efectivo: Ritmo
+  /** Paso 6.8: `diabetes` + `low_carb` -> `omnivoro`. El generador de comidas y el PDF deben usar
+   *  este valor, nunca `inputs.preferencia`. */
+  preferencia_efectiva: Preferencia
+  kcal: number
+  kcal_cierre: number
+  macros: ResultadoMacros
+  agua: ResultadoAgua
+  peso_objetivo: ResultadoPesoObjetivo
+  cronograma: ResultadoCronograma | null
+  ffmi: ResultadoFfmi
+  /** Un único reparto en la v1: no hay día de entreno y día de descanso (SPEC Paso 16). */
+  comidas: Comida[]
+  /** Códigos de la tabla §4, sin duplicados y con las reglas de supresión ya aplicadas. */
+  avisos: string[]
 }
 
-export interface ErrorCalculo {
-  ok: false
-  error: string // código ERR_* (SPEC §2.0 / §1.3)
-  errores?: string[] // detalle de ERR_INPUT_RANGE
-}
-
-export type Salida = Resultado | ErrorCalculo
+/** Alias histórico usado por la UI, el generador de comidas y el PDF. */
+export type Salida = Resultado
 
 // ---------- Textos de avisos (SPEC §4) ----------
 export type Severidad = 'error' | 'warn' | 'info'
@@ -176,7 +237,7 @@ export interface AvisoTexto {
   texto: string // texto completo con los placeholders ya sustituidos
 }
 
-// ---------- Ejemplos de comidas (docs/SPEC-ux-comidas-pdf.md) ----------
+// ---------- Ejemplos de comidas (docs/SPEC-ux-comidas-pdf.md §3) ----------
 export interface Macros {
   kcal: number
   prot: number
@@ -196,7 +257,7 @@ export interface AlimentoPorcion {
 }
 
 export interface EjemploComida {
-  comida: string // mismo nombre que Comida.comida
+  comida: string // mismo valor que Comida.nombre (resultado.comidas[i].nombre)
   hora: string
   peri: boolean
   objetivo: Macros // lo que pide el reparto del motor para esta toma
