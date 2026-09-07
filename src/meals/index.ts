@@ -486,7 +486,7 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
   }
 
   // Modo sencillo: el día B (días pares) usa las variantes `…-B` del mismo banco corto. No viaja
-  // en `Ejemplos` (§3.7.3), solo sirve para promediar los gramos de la lista de la compra.
+  // en `Ejemplos` (§3.7.3), solo sirve para ponderar 4/3 los gramos de la lista de la compra.
   let diaB = sencillo ? construirDia({ ...opciones, banco: bancoSencillo.B }) : null
 
   // Respaldo de §3.7.2: una toma que el banco sencillo no consigue cuadrar se rehace con el banco
@@ -746,7 +746,7 @@ function comidasDeEjemplo(comidas: readonly EjemploComida[]): Comida[] {
  * Lista de la compra semanal del menú (§3.7.3). Es exactamente lo que `generarEjemplos` deja en
  * `Ejemplos.compra`: si ya está calculada se devuelve tal cual, y si no (un `Ejemplos` construido
  * a mano) se calcula desde los gramos del día que sí viaja. En modo sencillo reconstruye el día B
- * con la misma regla determinista de §3.7.2 para promediar los gramos de las dos variantes.
+ * con la misma regla determinista de §3.7.2 y pondera los dos días 4/3 (§3.7.3).
  *
  * Pura y determinista: mismos `Ejemplos` e `Inputs` → misma lista, incluido el orden de `items`.
  */

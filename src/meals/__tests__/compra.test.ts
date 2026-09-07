@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import { ORDEN_SECCIONES, formatoCompra } from '../../data/mercadona'
 import type { Ejemplos, ItemCompra, NComidas, Preferencia } from '../../engine/types'
-import { CONSEJO_FRESCO_DOS_VECES, NOTAS_COMPRA, listaCompraDeDias } from '../compra'
+import { CONSEJO_FRESCO_DOS_VECES, DIAS_A, DIAS_B, NOTAS_COMPRA, listaCompraDeDias } from '../compra'
 import { generarEjemplos, generarListaCompra } from '../index'
 import { inputsDe, resultadoDe } from './fixtures'
 
@@ -40,10 +40,12 @@ function comprobarItem(item: ItemCompra, contexto: string): void {
   expect(item.producto.length).toBeGreaterThan(0)
   expect(item.envase_descripcion.length).toBeGreaterThan(0)
   expect(item.producto).not.toMatch(/€|EUR/)
-  // El consejo del fresco que sobra sustituye al del catálogo (única regla que lo reescribe).
-  if (item.conservacion === 'fresco' && duraBruto > fila!.conservacion_dias) {
+  // El consejo del fresco que sobra sustituye al del catálogo (única regla que lo reescribe), y
+  // solo cuando se compran dos envases o más: con uno solo no hay nada que partir en dos.
+  if (item.conservacion === 'fresco' && duraBruto > fila!.conservacion_dias && item.envases >= 2) {
     expect(item.consejo, contexto).toBe(CONSEJO_FRESCO_DOS_VECES)
   }
+  if (item.envases === 1) expect(item.consejo, contexto).not.toBe(CONSEJO_FRESCO_DOS_VECES)
   // Fuera de esa regla el consejo es el del catálogo, que puede no existir (un yogur o una
   // manzana aguantan de sobra la semana y no necesitan ninguna advertencia).
   if (item.consejo !== undefined) expect(item.consejo.length, contexto).toBeGreaterThan(0)
@@ -111,7 +113,7 @@ describe('lista de la compra: gramos del menú', () => {
     }
   })
 
-  it('modo sencillo: promedia los dos días y por eso puede llevar medio gramo', () => {
+  it('modo sencillo: la lista incluye los alimentos que solo salen el día B', () => {
     const { ejemplos } = plan(2200, 4, 'omnivoro', true)
     const delDia = new Map<string, number>()
     for (const c of ejemplos.entreno.comidas) {
@@ -120,15 +122,15 @@ describe('lista de la compra: gramos del menú', () => {
     // La lista incluye alimentos que solo aparecen el día B (los del par que no viaja en Ejemplos).
     const soloDiaB = ejemplos.compra!.items.filter((i) => !delDia.has(i.alimento_id))
     expect(soloDiaB.length).toBeGreaterThan(0)
-    // Y para los del día A el promedio nunca es mayor que sus propios gramos más los del día B.
     for (const item of ejemplos.compra!.items) {
       const gA = delDia.get(item.alimento_id) ?? 0
-      if (gA > 0) expect(item.gramos_dia).toBeGreaterThan(0)
+      // Nunca se compra menos de lo que pide el día A repetido cuatro veces.
+      expect(item.gramos_semana, item.alimento_id).toBeGreaterThanOrEqual(Math.round(DIAS_A * gA))
       expect(Math.round(item.gramos_dia * 10) / 10).toBe(item.gramos_dia)
     }
   })
 
-  it('la media de dos días se calcula alimento a alimento, contando 0 donde falta', () => {
+  it('la semana se pondera 4 días A + 3 días B, contando 0 donde falta', () => {
     const lista = listaCompraDeDias(
       [
         { id: 'huevo_entero', nombre: 'Huevo entero', gramos: 110 },
@@ -139,10 +141,27 @@ describe('lista de la compra: gramos del menú', () => {
     )
     const huevo = lista.items.find((i) => i.alimento_id === 'huevo_entero')!
     const platano = lista.items.find((i) => i.alimento_id === 'platano')!
-    expect(huevo.gramos_dia).toBe(110) // (165 + 55) / 2
-    expect(huevo.gramos_semana).toBe(770)
-    expect(platano.gramos_dia).toBe(60) // (120 + 0) / 2
-    expect(platano.gramos_semana).toBe(420)
+    expect(DIAS_A).toBe(4)
+    expect(DIAS_B).toBe(3)
+    expect(huevo.gramos_semana).toBe(DIAS_A * 165 + DIAS_B * 55) // 825 g
+    expect(huevo.gramos_dia).toBe(117.9) // 825 / 7, a un decimal
+    expect(platano.gramos_semana).toBe(480) // 4 · 120 + 3 · 0
+    expect(platano.gramos_dia).toBe(68.6)
+  })
+
+  it('un alimento que solo sale el día A se compra para cuatro días, no para tres y medio', () => {
+    // Es el caso que destapó el vector 11: la avena del desayuno del día A cruzaba el borde de
+    // envase (4 · 130 = 520 g > 500 g del paquete) y la media aritmética compraba un paquete.
+    const lista = listaCompraDeDias(
+      [
+        { id: 'avena_copos', nombre: 'Copos de avena', gramos: 65 },
+        { id: 'avena_copos', nombre: 'Copos de avena', gramos: 65 },
+      ],
+      [{ id: 'pan_integral', nombre: 'Pan integral', gramos: 60 }],
+    )
+    const avena = lista.items.find((i) => i.alimento_id === 'avena_copos')!
+    expect(avena.gramos_semana).toBe(520)
+    expect(avena.envases).toBe(2)
   })
 })
 
@@ -194,13 +213,24 @@ describe('generarListaCompra (§3.7.3, API)', () => {
 
 describe('lista de la compra: consejos de conservación', () => {
   it('los frescos que darían para más días de los que aguantan se compran en dos veces', () => {
-    const lista = listaCompraDeDias([{ id: 'pechuga_pollo', nombre: 'Pechuga de pollo', gramos: 100 }], null)
+    const lista = listaCompraDeDias([{ id: 'pechuga_pollo', nombre: 'Pechuga de pollo', gramos: 200 }], null)
     const pollo = lista.items[0]
     expect(pollo.conservacion).toBe('fresco')
-    // 700 g a la semana → 1 bandeja de 1 kg → 10 días brutos, pero el pollo aguanta 3.
-    expect(pollo.envases).toBe(1)
+    // 1.400 g a la semana → 2 bandejas de 1 kg → 10 días brutos, pero el pollo aguanta 3.
+    expect(pollo.envases).toBe(2)
     expect(pollo.dura_dias).toBe(3)
     expect(pollo.consejo).toBe(CONSEJO_FRESCO_DOS_VECES)
+  })
+
+  it('con un solo envase no se manda partir la compra: se conserva el consejo del catálogo', () => {
+    // Una docena de huevos no se puede comprar "en dos veces", y su ficha ya dice que aguanta
+    // tres semanas en la nevera: el consejo fijo del fresco no debe tapar al del catálogo.
+    const lista = listaCompraDeDias([{ id: 'huevo_entero', nombre: 'Huevo entero', gramos: 55 }], null)
+    const huevo = lista.items[0]
+    expect(huevo.conservacion).toBe('fresco')
+    expect(huevo.envases).toBe(1)
+    expect(huevo.consejo).not.toBe(CONSEJO_FRESCO_DOS_VECES)
+    expect(huevo.consejo).toBe(formatoCompra('huevo_entero')!.consejo)
   })
 
   it('un producto de despensa conserva el consejo de su ficha', () => {

@@ -18,7 +18,8 @@ export interface GramosAlimento {
 
 /**
  * Consejo fijo de §3.7.3: un fresco que daría para más días de los que aguanta se compra en dos
- * veces. Es la única regla que reescribe el `consejo` del catálogo.
+ * veces. Es la única regla que reescribe el `consejo` del catálogo, y solo se aplica cuando la
+ * compra se puede partir de verdad: con un único envase la instrucción es imposible de seguir.
  */
 export const CONSEJO_FRESCO_DOS_VECES =
   'Es fresco: cómpralo en dos veces, mitad al principio de la semana y mitad a mitad.'
@@ -49,8 +50,16 @@ export function gramosPorAlimento(dia: readonly GramosAlimento[]): Map<string, G
 }
 
 /**
- * Lista de la compra de un menú semanal. `diaB` solo se pasa en modo sencillo: los gramos de
- * cada alimento son la media aritmética de los dos días, contando 0 en el día donde no aparece.
+ * Días de cada variante en la semana del modo sencillo (§3.7.2, regla 2): los días 1, 3, 5 y 7
+ * siguen el día A y los días 2, 4 y 6 el día B. La lista de la compra tiene que comprar esa
+ * semana, no una media: con 4·A + 3·B un alimento que solo aparece en el día A se compraba corto.
+ */
+export const DIAS_A = 4
+export const DIAS_B = 3
+
+/**
+ * Lista de la compra de un menú semanal. `diaB` solo se pasa en modo sencillo: la semana son
+ * cuatro días del día A y tres del día B, contando 0 en el día donde el alimento no aparece.
  */
 export function listaCompraDeDias(
   diaA: readonly GramosAlimento[],
@@ -65,23 +74,29 @@ export function listaCompraDeDias(
     const nombre = a.get(id)?.nombre ?? b?.get(id)?.nombre ?? id
     const gA = a.get(id)?.gramos ?? 0
     const gB = b?.get(id)?.gramos ?? 0
-    const gramos_dia = b ? redondea1((gA + gB) / 2) : redondea1(gA)
-    if (gramos_dia <= 0) continue
+    // La semana es la que publica el calendario de §3.7.2 (4 días A + 3 días B), no la media de
+    // los dos días: promediar dejaba corto todo alimento que pesa más en el día A.
+    const gramos_semana = b ? Math.round(DIAS_A * gA + DIAS_B * gB) : Math.round(gA * 7)
+    if (gramos_semana <= 0) continue
+    const gramos_dia = redondea1(gramos_semana / 7)
 
     const fila = formatoCompra(id)
     // `mercadona.json` cubre los 101 alimentos de `foods.json` (lo comprueba
     // `src/data/__tests__/mercadona.test.ts`); esta rama solo evita que un alimento nuevo sin
     // ficha desaparezca en silencio de la lista.
-    const envase_g = fila && fila.envase_g > 0 ? fila.envase_g : Math.max(1, Math.round(gramos_dia * 7))
+    const envase_g = fila && fila.envase_g > 0 ? fila.envase_g : Math.max(1, gramos_semana)
     const conservacion = fila?.conservacion ?? 'despensa'
     const conservacion_dias = fila?.conservacion_dias ?? 7
 
-    const gramos_semana = Math.round(gramos_dia * 7)
     const envases = Math.max(1, Math.ceil(gramos_semana / envase_g))
-    const duraBruto = Math.floor((envases * envase_g) / gramos_dia)
+    const duraBruto = gramos_dia > 0 ? Math.floor((envases * envase_g) / gramos_dia) : conservacion_dias
     const dura_dias = Math.max(1, Math.min(duraBruto, conservacion_dias))
+    // Partir la compra en dos solo tiene sentido si de verdad se compra más de un envase: con un
+    // único paquete el consejo era materialmente imposible y tapaba el consejo del catálogo.
     const consejo =
-      conservacion === 'fresco' && duraBruto > conservacion_dias ? CONSEJO_FRESCO_DOS_VECES : fila?.consejo
+      conservacion === 'fresco' && duraBruto > conservacion_dias && envases >= 2 && gramos_semana > envase_g
+        ? CONSEJO_FRESCO_DOS_VECES
+        : fila?.consejo
 
     items.push({
       alimento_id: id,
