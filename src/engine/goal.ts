@@ -48,6 +48,8 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
   const exp = inputs.entrenamiento.experiencia
   const pobj = inputs.peso_objetivo ?? null
   let obj: ObjetivoEfectivo | 'no_se' = inputs.objetivo
+  // `true` cuando el peso objetivo ya explica la decisión (por dirección o por igualdad): el
+  // texto genérico INFO_OBJETIVO_RESUELTO sobraría.
   let resueltoPorPeso = false
   let objetivo_propuesto: ObjetivoEfectivo | undefined
 
@@ -61,6 +63,7 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
       // Meta a menos de 1 kg del peso actual: misma lectura conservadora que la regla 6.2, que
       // no cubre este caso por estar restringida a `objetivo !== 'no_se'`.
       obj = 'mantener'
+      resueltoPorPeso = true
       emitir('INFO_OBJETIVO_IGUAL')
     } else if (imc < 20) obj = 'mantener'
     else if (banda === 'alto' || banda === 'muy_alto') obj = 'perder'
