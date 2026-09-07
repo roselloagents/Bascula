@@ -2,14 +2,41 @@
 
 Calculadora de calorías y macronutrientes en español. Contestas trece preguntas cortas —sexo,
 edad, altura, peso, condiciones médicas, grasa corporal, constitución, actividad, entrenamiento,
-objetivo, ritmo, peso al que quieres llegar y forma de comer— y devuelve tu objetivo de calorías,
-el reparto en proteína, grasa, hidratos y fibra, la hidratación, el reparto por comidas, un menú
-de ejemplo con gramajes reales, la lista de la compra de la semana y un informe en PDF.
+objetivo, ritmo, peso al que quieres llegar y forma de comer; catorce si eres mujer, con la de la
+regla— y devuelve tu objetivo de calorías, el reparto en proteína, grasa, hidratos y fibra, la
+hidratación, el reparto por comidas, un menú de ejemplo con gramajes reales, la lista de la compra
+de la semana, la curva de peso esperada semana a semana y un informe en PDF.
 
 Es una aplicación de una sola página, **sin servidor y sin base de datos**: todo el cálculo ocurre
 en el navegador y lo único que se guarda es un borrador en el `localStorage` del propio dispositivo.
 No hay cuentas, no hay analítica y ningún dato sale del móvil: la página no hace una sola petición
 a un tercero, ni siquiera para las tipografías, que van autoalojadas en `public/fonts`.
+
+## Qué trae la v1.1
+
+Cuatro cosas que salieron del uso real, no de una lista de ideas:
+
+- **Ajusta tus macros.** El plan que propone el motor es un punto de partida, no una orden. Desde
+  la pantalla de resultados se pueden bajar o subir los **hidratos** con un deslizador y las
+  **calorías** de 50 en 50, dentro de los límites de seguridad que publica el propio motor. La
+  proteína no se toca (es la que protege el músculo cuando comes menos) y la grasa absorbe el
+  resto sin bajar nunca de su suelo. Todo lo derivado se rehace con el ajuste: reparto por comidas,
+  menú, lista de la compra, cronograma, proyección y PDF, que sale marcado "ajustado por ti".
+  Siempre hay un "Volver a lo recomendado".
+- **Preferencias que se combinan de verdad.** Antes solo se podía elegir una. Ahora hay una base
+  (omnívoro, vegetariano o vegano), las restricciones que hagan falta (sin lactosa, sin gluten) y
+  un interruptor de bajo en hidratos, y los menús filtran por todas a la vez.
+- **Proyección de peso.** Curva semana a semana con su banda de incertidumbre, hasta 26 semanas o
+  hasta el objetivo, con hitos a 4, 8 y 12 semanas. En pantalla y en el PDF.
+- **Seguimiento en este móvil.** Apuntas tus pesajes (fecha y kilos) y se dibujan sobre la
+  proyección, con una frase honesta de balance —vas por delante, en la banda o por detrás— y sin
+  promesas. Se guarda **solo en el navegador**: no hay cuenta, no hay nube y nadie más lo ve.
+
+Además, quien elige **recomposición** puede decir qué le importa más ahora (perder grasa, las dos
+cosas por igual o ganar músculo), y a las mujeres se les pregunta por la regla: no cambia los
+macros —el gasto varía poco a lo largo del ciclo—, pero explica por qué la báscula sube un par de
+kilos la semana previa y, si es irregular o ausente en un plan con déficit, avisa de la baja
+disponibilidad energética y suaviza el ritmo agresivo a moderado.
 
 ## Cómo se calcula
 
@@ -32,6 +59,8 @@ Sin magia y sin cajas negras: el cálculo es una implementación literal de
 7. **Menú y lista de la compra**: se resuelven contra `src/data/foods.json` con los límites de
    ración de [`docs/SPEC-ux-comidas-pdf.md`](docs/SPEC-ux-comidas-pdf.md); el modo sencillo cierra
    la semana en como mucho doce alimentos distintos.
+8. **Ajuste manual (paso 18)**: una función aparte, `ajustarMacros`, que parte siempre del plan
+   recomendado y rehace todo lo derivado. En `localStorage` se guarda solo el ajuste, nunca el plan.
 
 Todo es determinista: los mismos datos dan siempre el mismo plan, sin `Math.random` en ninguna
 parte. Hay cortes de seguridad —menores de 18 y mayores de 75, embarazo y lactancia, condición
@@ -41,8 +70,8 @@ renal o hepática— en los que la aplicación deriva a un profesional en vez de
 
 | Documento | Qué contiene |
 | --- | --- |
-| [`docs/SPEC-calculo.md`](docs/SPEC-calculo.md) | Los diecisiete pasos del motor, las tablas, los avisos y los catorce vectores de prueba. |
-| [`docs/SPEC-ux-comidas-pdf.md`](docs/SPEC-ux-comidas-pdf.md) | El cuestionario, la pantalla de resultados, el generador de menús, la lista de la compra y el PDF. |
+| [`docs/SPEC-calculo.md`](docs/SPEC-calculo.md) | Los dieciocho pasos del motor (el 18 es el ajuste manual), las tablas, los avisos y los dieciséis vectores de prueba. |
+| [`docs/SPEC-ux-comidas-pdf.md`](docs/SPEC-ux-comidas-pdf.md) | El cuestionario, la pantalla de resultados, el panel de ajuste, la proyección y el seguimiento, el generador de menús, la lista de la compra y el PDF. |
 | [`docs/CONTRATO.md`](docs/CONTRATO.md) | La API entre módulos: `Inputs`, `Resultado`, `Ejemplos`, `ListaCompra` y `DatosPdf`. |
 | [`docs/DESIGN-brief.md`](docs/DESIGN-brief.md) | Identidad visual: paleta, tipografía, tono y reglas de composición. |
 | [`docs/verify-vectors.mjs`](docs/verify-vectors.mjs) | Implementación de referencia de la spec de cálculo, independiente del código de la app. |
@@ -72,7 +101,7 @@ scripts/       Utilidades de desarrollo (generar PDF de muestra sin navegador).
 | `npm test` | Suite de Vitest: motor, menús, lista de la compra, PDF y accesibilidad. |
 | `npm run lint` | ESLint sobre todo el proyecto. |
 | `npm run typecheck` | `tsc -b --noEmit` sin generar nada. |
-| `node docs/verify-vectors.mjs` | Verifica los catorce vectores de la §5 y un barrido de invariantes contra la implementación de referencia. |
+| `node docs/verify-vectors.mjs` | Verifica los dieciséis vectores de la §5 y un barrido de invariantes contra la implementación de referencia. |
 | `node scripts/pdf-sample.mjs [carpeta]` | Genera los PDF de muestra sin abrir el navegador. |
 
 Requisitos: Node.js 20 o superior y npm. `npm install` y a correr.

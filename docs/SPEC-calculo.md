@@ -193,7 +193,7 @@ Todos los inputs se validan antes de calcular. Un valor fuera de rango produce `
 | 20 | `restricciones` | `('sin_lactosa' \| 'sin_gluten')[] \| null` | — | — | `[]` | No | **Combinables** (varias a la vez). **No cambian ningún número**: solo filtran los alimentos de los menús, de las equivalencias y de la lista de la compra. Se leen solo si `preferencia_base` está presente. Se deduplican y se ordenan (`sin_lactosa` antes que `sin_gluten`). |
 | 21 | `low_carb` | boolean | — | — | `false` | No | Interruptor "bajo en hidratos". Fija la grasa al 45 % (techo 50 %), baja `HC_min` a 75 g, cambia el suelo de fibra y desactiva el ajuste por somatotipo. `diabetes` lo anula (paso 6.8). Se lee solo si `preferencia_base` está presente. |
 | 22 | `recomposicion_prioridad` | `'perder' \| 'equilibrado' \| 'ganar' \| null` | — | — | `'equilibrado'` | No | Subpregunta "¿Qué te importa más ahora?" del paso de objetivo, solo visible con `objetivo = 'recomposicion'`. Cambia el déficit de recomposición (paso 7) y el % de grasa (paso 9). `null`/ausente ≡ `'equilibrado'`, que es exactamente el comportamiento v1.0. Se ignora si `objetivo_efectivo` acaba siendo otro. |
-| 23 | `menstruacion` | `'regular' \| 'irregular' \| 'ausente' \| 'no_dice' \| null` | — | — | `null` | No | Solo `sexo = 'mujer'`; en hombres el motor lo **ignora** (no es un error de validación). **No cambia calorías ni macros**: la evidencia dice que el gasto varía poco a lo largo del ciclo. Su único efecto numérico es suavizar el ritmo `agresivo` a `moderado` con `irregular`/`ausente` (paso 6.7bis). Produce `INFO_CICLO` y `WARN_CICLO_AUSENTE`. |
+| 23 | `menstruacion` | `'regular' \| 'irregular' \| 'ausente' \| 'no_dice' \| null` | — | — | `null` | No | Solo `sexo = 'mujer'`; en hombres el motor lo **ignora** (no es un error de validación). **No cambia macros**: la evidencia dice que el gasto varía poco a lo largo del ciclo. Su único efecto numérico es suavizar el ritmo `agresivo` a `moderado` con `irregular`/`ausente` **en un plan de `perder` o `recomposicion`** (paso 6.7bis) — y con el ritmo cambian las kcal del plan, así que el copy del paso 3b del wizard tiene que decirlo (`SPEC-ux-comidas-pdf.md` §1). Produce `INFO_CICLO` y `WARN_CICLO_AUSENTE`. |
 
 † **Excepción de la edad (única).** La edad no produce `ERR_INPUT_RANGO` entre 0 y 120: fuera de 0–120 es un error de formato del formulario; dentro de 0–120 el motor **sí se ejecuta** y es el paso 0 quien devuelve `{ excluido: 'EXCL_EDAD' }` si la edad está fuera de 18–75. Así el usuario recibe el copy compasivo de derivación en vez de un error de validación seco, y los casos 0.1/0.2 de la sección 5 son satisfacibles.
 
@@ -488,7 +488,14 @@ obj = objetivo; exp = experiencia; pobj = peso_objetivo
    // la §4 sea literalmente cierta y comprobable por tests.
 
 7bis. REGLA (solo mujeres, decisión D). Es el ÚNICO efecto numérico de `menstruacion`:
-   si menstruacion_ef ∈ {irregular, ausente} y ritmo_ef === 'agresivo' → ritmo_ef = 'moderado'
+   si menstruacion_ef ∈ {irregular, ausente} y obj ∈ {perder, recomposicion} y ritmo_ef === 'agresivo'
+        → ritmo_ef = 'moderado'
+   (La guarda `obj ∈ {perder, recomposicion}` es obligatoria. El motivo de la regla es la baja
+    disponibilidad energética (RED-S), y ahí el remedio es comer MÁS: recortar el superávit de una mujer
+    con amenorrea —o con menopausia, que la UI mete dentro de «no la tengo»— que pide ganar músculo iba
+    en dirección contraria a su propio motivo, y le quitaba 100-150 kcal/día. `ganar` es además el único
+    objetivo final que garantiza que el paso 6 tampoco lo vio como déficit: los pasos 7 y 10bis solo
+    reescriben HACIA `mantener`.)
    (el aviso WARN_CICLO_AUSENTE NO se emite aquí: su condición incluye `objetivo_efectivo === 'perder'`,
     que los pasos 7 y 10bis todavía pueden reescribir, así que se evalúa entera en el paso 17 —contra el
     objetivo FINAL y contra el ritmo ELEGIDO por el usuario, no contra `ritmo_ef`, que ya viene suavizado.)
@@ -1090,8 +1097,16 @@ Los dos avisos de la regla se evalúan **aquí y no en el paso 6** por dos motiv
 intermedio, que el paso 7 todavía podía reescribir):
 
 ```
-si objetivo_efectivo !== 'perder' → eliminar WARN_PERDIDA_MAYOR_65
+si objetivo_efectivo !== 'perder'        → eliminar WARN_PERDIDA_MAYOR_65
+si objetivo_efectivo !== 'recomposicion' → eliminar INFO_RECOMP_PRIORIDAD_PERDER
+                                                    INFO_RECOMP_PRIORIDAD_GANAR
 ```
+
+La segunda línea es la misma idea que la primera: el paso 10bis puede reescribir `objetivo_efectivo` a
+`mantener` después de que el paso 7 haya emitido la prioridad de recomposición. Cuando eso pasa,
+`Resultado.recomposicion_prioridad` **no se publica** (solo existe en recomposición), así que el informe
+quedaba diciendo "hemos apretado un poco el déficit" sobre un plan de mantenimiento y sin ningún campo que
+lo respaldara: pantalla y PDF se contradecían.
 
 **Filtro de protección del cribado TCA** (se aplica al final, después de la tabla de supresión del paso 6):
 
@@ -1166,8 +1181,15 @@ L = limites_ajuste;  P = macros.proteina_g;  TDEE = tdee.valor;  obje = objetivo
    kcal = clamp(round10(kcal_pedidas), L.kcal_min, L.kcal_max)
 
 2. HIDRATOS
-   suelo_g = max(L.suelo_grasa_abs_g, 0.20 · kcal / 9)               // el suelo del paso 9, recalculado
-   hc_max  = roundDown5((kcal − 4·P − 9·suelo_g) / 4)                // lo que deja el suelo de GRASA
+   suelo_g     = max(L.suelo_grasa_abs_g, 0.20 · kcal / 9)           // el suelo del paso 9, recalculado
+   suelo_red_g = roundUp5(suelo_g)                                   // el valor que el punto 3 pone en G
+   hc_max  = roundDown5((kcal − 4·P − 9·suelo_red_g) / 4)            // lo que deja el suelo de GRASA
+   // El techo se calcula contra el suelo YA REDONDEADO. Contra el suelo exacto, el `roundUp5` del
+   // punto 3 podía subir la grasa hasta 5 g (45 kcal) por encima de lo que el techo había previsto y
+   // el cierre se salía del 2 % con kcal bajas: el panel lanzaba en posiciones que el usuario alcanza
+   // pulsando cuatro veces «−50 kcal» (perfil base de la §5: mujer 30 a, 165 cm, 70 kg, perder
+   // moderado; P = 125 g, kcal_min = 1 430, hc = 105 g). Con el techo así, `G ≥ suelo_red_g` siempre y
+   // la única desviación del cierre es el redondeo a 5 g de la propia grasa (≤ 22,5 kcal).
    si kcal === L.kcal_recomendada → hc_max = max(hc_max, L.hc_recomendado_g)
    hc_lo   = min(30, hc_max)                                         // el suelo de grasa manda sobre los 30 g
    hc_pedidos = ajuste.hc_g ?? L.hc_recomendado_g
@@ -1178,7 +1200,8 @@ L = limites_ajuste;  P = macros.proteina_g;  TDEE = tdee.valor;  obje = objetivo
    si NO cambia_kcal y NO cambia_hc → G = L.grasa_recomendada_g      // restitución EXACTA
    si no:
       G = round5((kcal − 4·P − 4·HC) / 9)
-      si G < suelo_g → G = roundUp5(suelo_g)                         // redondeo dirigido (§0.1)
+      si G < suelo_red_g → G = suelo_red_g                           // red de seguridad; con el techo
+                                                                     // del punto 2 no llega a saltar
    kcal_cierre = 4·P + 4·HC + 9·G
    afirmar |kcal_cierre − kcal| ≤ 0.02 · kcal                        // si falla, lanzar excepción
 
@@ -1199,7 +1222,11 @@ L = limites_ajuste;  P = macros.proteina_g;  TDEE = tdee.valor;  obje = objetivo
    se vuelven a emitir los que correspondan (paso 11, paso 14) y además:
       si cambia_kcal o cambia_hc                       → INFO_AJUSTE_MANUAL
       si HC < L.hc_min_motor_g                         → WARN_HC_BAJO_MINIMO
-      si obje === 'perder' y TDEE − kcal < 100         → WARN_KCAL_AJUSTE_ALTA
+      si cambia_kcal y obje === 'perder' y TDEE − kcal < 100  → WARN_KCAL_AJUSTE_ALTA
+      // La guarda `cambia_kcal` es obligatoria. Sin ella, en cualquier plan de perder cuyo déficit
+      // recomendado ya esté entre 50 y 99 kcal el aviso salía con el ajuste VACÍO —y por la tabla de
+      // supresión borraba el WARN_DEFICIT_MINIMO honesto del motor—, rompiendo S27m y acusando al
+      // usuario de unas calorías que no había puesto justo al mover solo el deslizador de hidratos.
       si obje === 'perder' y 50 ≤ TDEE − kcal < 100    → WARN_DEFICIT_MINIMO
       si kcal < L.kcal_micronutrientes                 → INFO_MICRONUTRIENTES
    se aplica entera la tabla de supresión del paso 6 (WARN_KCAL_AJUSTE_ALTA suprime WARN_DEFICIT_MINIMO)
@@ -1215,7 +1242,7 @@ L = limites_ajuste;  P = macros.proteina_g;  TDEE = tdee.valor;  obje = objetivo
 - **`ajustarMacros` nunca lee `macros.grasa_g` ni `macros.hc_g` del resultado que recibe**, solo `macros.proteina_g` (que el ajuste no cambia) y los tres valores recomendados de `limites_ajuste`. De ahí que sea **idempotente respecto al origen**: `ajustarMacros(ajustarMacros(R, a₁), a₂)` da exactamente lo mismo que `ajustarMacros(R, a₂)`, y `ajustarMacros(R, {})` devuelve el plan recomendado **bit a bit** (invariantes **S27l** y **S27m**). Eso es lo que hace trivial el botón "Volver a lo recomendado" y lo que permite guardar en `localStorage` solo el `ajuste`, no el plan entero.
 - **El techo de grasa del paso 9 (40 % / 50 % de las kcal) NO se aplica aquí, el suelo sí.** Es deliberado: bajar los hidratos a 30 g con proteína fija empuja la grasa muy por encima del 40 %, y bloquearlo dejaría el deslizador sin recorrido justo para el perfil que motivó la decisión B. El suelo de grasa, en cambio, es inviolable (invariante **S27d**), y por eso es él quien fija `hc_max` y quien gana sobre el mínimo de 30 g cuando los dos entran en conflicto.
 - **Bajar de `HC_min` no bloquea: avisa.** `WARN_HC_BAJO_MINIMO` es un `aviso`, no un corte. El usuario ha pedido explícitamente comer menos hidratos.
-- **Tolerancia del cierre.** Con dos macros redondeados a 5 g el desajuste puede llegar a 22,5 kcal (frente a los 10 kcal del plan recomendado, donde solo se redondea el residuo de hidratos). Sigue dentro del 2 % que exige el paso 10 porque `kcal ≥ 1 200` siempre; la pantalla y el PDF dicen "hasta 25 kcal" en un plan ajustado.
+- **Tolerancia del cierre.** En un plan ajustado los hidratos los fija el usuario y **el único macro que se redondea a 5 g es la grasa**: el desajuste máximo es por tanto `9 · 2,5 = 22,5 kcal` (frente a los 10 kcal del plan recomendado). Es una cota medida, no estimada: el barrido exhaustivo del rectángulo (kcal, HC) que el panel puede alcanzar no encuentra ninguna desviación mayor, y el `roundUp5` del suelo de grasa ya no puede añadir nada porque el techo de hidratos del punto 2 se calcula contra ese suelo redondeado. Sigue dentro del 2 % que exige el paso 10 porque `kcal ≥ 1 200` siempre; la pantalla y el PDF dicen "hasta 25 kcal" en un plan ajustado, con **la misma función de copy en las dos capas** (`notaCierreKcal`, `SPEC-ux-comidas-pdf.md` §1226).
 - **El peso objetivo no se mueve.** Cambiar la meta bajo un deslizador de macros sería incomprensible; lo que sí cambia —y es la consecuencia honesta— es el cronograma, que se rehace con el nuevo déficit.
 
 ### Salida (`Resultado`)
@@ -1544,14 +1571,14 @@ Devine, Robinson, Miller, Hamwi (paso 13). Fórmulas clínicas de los años 60�
 | `INFO_IMC_MUSCULADO` | info | `FFMI_norm ≥ 22` (H) / `≥ 19` (M), `IMC ≥ 25` y banda ∈ {muy_bajo, bajo, medio} | Tu IMC sale en "sobrepeso" pero tu masa muscular es alta: en tu caso el IMC no es un buen indicador y no debes tomarlo como problema. |
 | `INFO_GRASA_ESTIMADA` | info | `grasa_fiabilidad === 'baja'` | Tu porcentaje de grasa es una estimación con un error típico de ±5 puntos. Una bioimpedancia profesional o una DEXA afinarían el cálculo. |
 | `INFO_ALTO_RENDIMIENTO` | info | `perfil !== 'sedentario'` y `dias · minutos_sesion / 60 > 10` | Con más de 10 horas semanales de entrenamiento, un/a dietista-nutricionista deportivo puede afinar mucho más estos números (periodización, timing). Toma esto como punto de partida. |
-| `INFO_RECOMP_PRIORIDAD_PERDER` | info | `objetivo_efectivo === 'recomposicion'` y `recomposicion_prioridad === 'perder'` (paso 7) | Nos has dicho que ahora te importa más perder grasa, así que dentro de la recomposición hemos apretado un poco el déficit y te hemos subido la grasa a costa de los hidratos. Sigue siendo una recomposición: los cambios serán lentos y la báscula se moverá poco. Mide con fotos y cinta métrica, no solo con el peso. |
-| `INFO_RECOMP_PRIORIDAD_GANAR` | info | `objetivo_efectivo === 'recomposicion'` y `recomposicion_prioridad === 'ganar'` (paso 7) | Nos has dicho que ahora te importa más ganar músculo, así que no te ponemos déficit: comerás en tu gasto estimado. Con la proteína alta y entrenamiento de fuerza 3-4 días por semana es donde más músculo se gana sin engordar. Si dentro de un par de meses la cintura sube, vuelve a calcular pidiendo prioridad a perder grasa. |
-| `INFO_CICLO` | info | `sexo === 'mujer'` y `menstruacion ∈ {regular, irregular}` (paso 17) | Tu gasto energético cambia poco a lo largo del ciclo, así que no ajustamos tus calorías por eso. Lo que sí cambia es lo que marca la báscula: la semana antes de la regla es normal retener 1-2 kg de agua y tener más hambre (unas 100-300 kcal). Pésate siempre en la misma fase del ciclo si quieres comparar, no te asustes con el peso de esa semana, y si comes 100-200 kcal más esos días, compénsalo en el resto de la semana sin cambiar el total. En los días de regla, cuida el hierro: carne roja, legumbre o verdura de hoja acompañadas de algo de vitamina C. |
-| `WARN_CICLO_AUSENTE` | aviso | `sexo === 'mujer'`, `menstruacion ∈ {irregular, ausente}` y (`objetivo_efectivo === 'perder'` o `banda ∈ {muy_bajo, bajo}` o `ritmo === 'agresivo'`) (paso 17) | Nos has dicho que tu regla es irregular o que no la tienes, y a la vez tu plan lleva déficit, poca grasa corporal o un ritmo rápido. Esa combinación puede indicar baja disponibilidad energética (lo que se llama RED-S): comer por debajo de lo que gastas durante meses altera las hormonas, el hueso y el propio ciclo.{ Hemos suavizado el ritmo a moderado.} Si llevas tres meses o más sin regla y no es por anticonceptivos ni por la menopausia, pide cita con tu médico antes de seguir con el déficit. |
+| `INFO_RECOMP_PRIORIDAD_PERDER` | info | `objetivo_efectivo === 'recomposicion'` y `recomposicion_prioridad === 'perder'` (emitido en el paso 7, **reevaluado en el paso 17**: si el 10bis ha reescrito el objetivo a `mantener`, se retira, igual que `WARN_PERDIDA_MAYOR_65`) | Nos has dicho que ahora te importa más perder grasa, así que dentro de la recomposición hemos apretado un poco el déficit y te hemos subido la grasa a costa de los hidratos. Sigue siendo una recomposición: los cambios serán lentos y la báscula se moverá poco. Mide con fotos y cinta métrica, no solo con el peso. |
+| `INFO_RECOMP_PRIORIDAD_GANAR` | info | `objetivo_efectivo === 'recomposicion'` y `recomposicion_prioridad === 'ganar'` (emitido en el paso 7, **reevaluado en el paso 17** igual que el anterior) | Nos has dicho que ahora te importa más ganar músculo, así que no te ponemos déficit: comerás en tu gasto estimado. Con la proteína alta y entrenamiento de fuerza 3-4 días por semana es donde más músculo se gana sin engordar. Si dentro de un par de meses la cintura sube, vuelve a calcular pidiendo prioridad a perder grasa. |
+| `INFO_CICLO` | info | `sexo === 'mujer'` y `menstruacion ∈ {regular, irregular}` (paso 17) | Tu gasto energético cambia poco a lo largo del ciclo, así que no ajustamos tus calorías por eso. Lo que sí cambia es lo que marca la báscula: la semana antes de la regla es normal retener 1-2 kg de agua y tener más hambre (unas 100-300 kcal). Pésate siempre en la misma fase del ciclo si quieres comparar, no te asustes con el peso de esa semana, y si comes 100-200 kcal más esos días, compénsalo en el resto de la semana sin cambiar el total. En los días de regla, cuida el hierro: {carne roja, legumbre o verdura de hoja / legumbre, verdura de hoja y frutos secos} acompañados de algo de vitamina C. |
+| `WARN_CICLO_AUSENTE` | aviso | `sexo === 'mujer'`, `menstruacion ∈ {irregular, ausente}` y (`objetivo_efectivo === 'perder'` o `banda ∈ {muy_bajo, bajo}` o `ritmo === 'agresivo'`) (paso 17) | Nos has dicho que tu regla es irregular o que no la tienes, y a la vez {tu plan lleva déficit, poca grasa corporal o un ritmo rápido / tienes poca grasa corporal o has pedido un ritmo rápido}. Esa combinación puede indicar baja disponibilidad energética (lo que se llama RED-S): comer por debajo de lo que gastas durante meses altera las hormonas, el hueso y el propio ciclo.{ Hemos suavizado el ritmo a moderado.} Si llevas tres meses o más sin regla y no es por anticonceptivos ni por la menopausia, pide cita con tu médico{ antes de seguir con el déficit}. |
 | `INFO_PROYECCION_PLANA` | info | `cronograma === null` (paso 14b) | Con este objetivo no proyectamos una curva de peso: lo que esperamos es que tu peso se mantenga, con la oscilación normal de un kilo arriba o abajo por agua, sal e intestino. Lo que sí debería cambiar es cómo te queda la ropa, las medidas y las cargas del entrenamiento. |
 | `INFO_AJUSTE_MANUAL` | info | Paso 18 con `ajuste.kcal === true` o `ajuste.hc === true` | Has ajustado a mano las calorías o los hidratos, así que estos ya no son los números que te propusimos. Hemos recalculado con tu ajuste la grasa, el reparto por comidas, el menú, la lista de la compra y el calendario. La proteína no la tocamos: es la que protege tu músculo cuando comes menos. Puedes volver a lo recomendado cuando quieras. |
 | `WARN_HC_BAJO_MINIMO` | aviso | Paso 18 y `HC < HC_min` (`{130/75}` según `low_carb`) | Has bajado los hidratos por debajo de los {130/75} g que usamos como mínimo de referencia. No es peligroso a corto plazo y hay gente que se encuentra mejor así, pero cuenta con dos cosas: entrenar fuerte cuesta más y la fibra es más difícil de cubrir. Si te notas sin energía, con mal descanso o con estreñimiento, súbelos otra vez. |
-| `WARN_KCAL_AJUSTE_ALTA` | aviso | Paso 18, `objetivo_efectivo === 'perder'` y `TDEE − kcal < 100` | Con las calorías que has puesto, el déficit se queda en menos de 100 kcal al día sobre tu gasto estimado: en la práctica esto es un plan de mantenimiento y el calendario que ves deja de tener sentido. Si quieres perder grasa, baja las calorías o sube la actividad diaria; si lo que quieres es mantener, cambia el objetivo y vuelve a calcular. |
+| `WARN_KCAL_AJUSTE_ALTA` | aviso | Paso 18, **`ajuste.kcal === true`** (el usuario ha movido de verdad la palanca), `objetivo_efectivo === 'perder'` y `TDEE − kcal < 100` | Con las calorías que has puesto, el déficit se queda en menos de 100 kcal al día sobre tu gasto estimado: en la práctica esto es un plan de mantenimiento y el calendario que ves deja de tener sentido. Si quieres perder grasa, baja las calorías o sube la actividad diaria; si lo que quieres es mantener, cambia el objetivo y vuelve a calcular. |
 
 **Fragmentos condicionales del texto.** Lo que va entre `{ }` es una parte opcional del mensaje:
 - `{35/30}` en `INFO_PROTEINA_CAPADA`: se resuelve leyendo `macros.pct_cap`, el `pct_cap` realmente aplicado en el paso 8 (30 % en dieta vegetal con `kcal < 1800`, 35 % en el resto). **No se recalcula con `resultado.kcal`**: los pasos 9 y 10 pueden subir las kcal por encima de 1.800 después de aplicado el cap, y entonces el informe imprimiría un porcentaje que nunca se aplicó. La interfaz y el PDF deben resolver el placeholder, no escribir el 35 % fijo.
@@ -1562,7 +1589,9 @@ Devine, Robinson, Miller, Hamwi (paso 13). Fórmulas clínicas de los años 60�
 - `{ y suavizado el ritmo}` en `WARN_PERDIDA_MAYOR_65`: se **omite** cuando `ritmo_ef === ritmo`. La segunda rama del paso 6.7 emite el aviso también cuando el usuario ya había elegido `suave` o `moderado`, es decir, cuando no se ha suavizado ningún ritmo; el déficit máximo sí se ha limitado siempre (`cap_pct ≤ 0,20`).
 - `{A / B}` en `INFO_PESO_YA_MINIMO`: se usa la variante **A** ("el objetivo no es un peso: es recomposición") con `objetivo_efectivo ∈ {mantener, recomposicion, ganar}` y la variante **B** ("hemos fijado tu meta en ese mínimo y no más abajo") con `objetivo_efectivo === 'perder'`. El aviso se emite desde el bloque común del paso 13, antes de ramificar por objetivo, así que con `perder` convivía con un peso objetivo, un déficit y un cronograma mientras afirmaba que no había peso objetivo.
 - `{1,2 g/kg · o bien "{X} g al día"…}` en `INFO_MAYOR_60`: ver paso 17.
-- `{ Hemos suavizado el ritmo a moderado.}` en `WARN_CICLO_AUSENTE`: se **omite** cuando `ritmo !== 'agresivo'`, es decir, cuando el paso 6.7bis no ha suavizado nada. Sin la regla, el aviso afirmaba haber cambiado un ritmo que el usuario nunca eligió (misma mecánica que `{ y suavizado el ritmo}` de `WARN_PERDIDA_MAYOR_65`).
+- `{ Hemos suavizado el ritmo a moderado.}` en `WARN_CICLO_AUSENTE`: se emite **solo** cuando `ritmo === 'agresivo'` **y** `ritmo_efectivo === 'moderado'`, es decir, cuando el paso 6.7bis (o el 6.7 de los 65 años) ha suavizado de verdad. Con la guarda de objetivo del 6.7bis, un plan de `ganar` a ritmo agresivo conserva su ritmo, y el aviso afirmaba haber cambiado algo que no cambió (misma mecánica que `{ y suavizado el ritmo}` de `WARN_PERDIDA_MAYOR_65`).
+- Las dos alternativas del déficit en `WARN_CICLO_AUSENTE` —`{tu plan lleva déficit, poca grasa corporal o un ritmo rápido}` al abrir y `{ antes de seguir con el déficit}` al cerrar— se eligen por `objetivo_efectivo ∈ {perder, recomposicion}`. La condición del aviso también se dispara con `banda ∈ {muy_bajo, bajo}` o `ritmo === 'agresivo'` sin mirar el objetivo, así que puede caer sobre un plan de superávit: ahí la frase del déficit era literalmente falsa.
+- `{carne roja, legumbre o verdura de hoja / legumbre, verdura de hoja y frutos secos}` en `INFO_CICLO`: la segunda alternativa se usa con `preferencia_base ∈ {vegetariano, vegano}`. Recomendarle carne roja a una vegetariana **en su propio plan** es justo lo que rompe la confianza en una versión cuyo argumento es que las preferencias por fin se combinan de verdad.
 - `{130/75}` en `WARN_HC_BAJO_MINIMO`: se resuelve a `limites_ajuste.hc_min_motor_g`, que es 75 con `low_carb` y 130 en el resto. La interfaz y el PDF deben resolverlo, no escribir el 130 fijo.
 
 **Reglas de supresión añadidas en la v1.1** (se suman a la tabla del paso 6):
@@ -1586,7 +1615,7 @@ Copy fijo del informe (no depende de condiciones):
 - Nota comidas: "No hay evidencia de que comer más o menos veces al día cambie tu metabolismo. Elige el número de comidas que mejor se adapte a tu rutina."
 - Nota agua: "Es líquido bebido: el café, el té y las infusiones cuentan si los tomas de forma habitual; la comida aporta además un 20–30 % de agua que no está incluido aquí. El alcohol no cuenta y deshidrata. No fuerces más de 1 litro por hora. Si entrenas más de una hora, sudas mucho o hace calor, añade sal a las comidas o una bebida con electrolitos: beber mucha agua sin sodio puede bajarte el sodio en sangre."
 - Nota peso objetivo: "El peso que te proponemos sale de tu masa magra estimada, y esa estimación tiene un margen de varios kilos. Por eso te damos una franja y no un número exacto: la báscula es una señal más, no el objetivo."
-- Nota cierre kcal: "Las calorías de los macros pueden diferir hasta 10 kcal del objetivo por el redondeo a 5 g." (en un plan ajustado a mano, hasta 25 kcal: se redondean a 5 g dos macros en vez de uno.)
+- Nota cierre kcal: "Las calorías de los macros pueden diferir hasta 10 kcal del objetivo por el redondeo a 5 g." (en un plan ajustado a mano, hasta 25 kcal: la grasa absorbe todo el residuo y su redondeo a 5 g vale hasta 22,5 kcal.) **La pantalla y el PDF usan la misma función de copy** (`notaCierreKcal(ajustado)`): con una constante fija en la pantalla y un literal en el PDF, la tabla de reparto de un plan ajustado imprimía "hasta 10 kcal" al lado de una diferencia real de 20.
 - Nota proyección: "Esta curva es una estimación, no una promesa: sale de tu déficit actual y de un factor de adaptación que crece con el tiempo. Tu peso real va a oscilar por agua, sal e intestino; lo que importa es la tendencia de varias semanas, no el dato de un día."
 - Línea de ayuda del disclaimer (v1.1, sustituye a todo lo que hacía el antiguo cribado del paso 5b): "Si la comida o el peso te generan ansiedad, puedes hablar gratis con ADANER (adaner.org) o con tu centro de salud."
 - Disclaimer general: "Báscula te ofrece una orientación nutricional general basada en evidencia científica, no un consejo médico ni un plan personalizado por un profesional sanitario. Los resultados son estimaciones: tu cuerpo puede responder de forma distinta. Si tienes una condición médica, tomas medicación, estás embarazada o en periodo de lactancia, o tienes antecedentes de trastornos de conducta alimentaria, consulta con un/a médico o dietista-nutricionista colegiado/a antes de seguir estas recomendaciones."
@@ -2343,7 +2372,7 @@ del uso real, implementadas aquí sin discutirlas. Resumen de lo que toca a este
 | A | Fuera el cribado de "relación con la comida" (paso 5b del wizard) | **Nada de cálculo.** `cribado_tca` pasa a ser un campo *no expuesto* (§1 fila 17 y recuadro de la §1.1): la UI escribe siempre `null`. Las reglas de `'tca'` se conservan íntegras porque siguen siendo alcanzables por `condiciones` y el caso 2 de la §5 las usa. Todo lo que desaparece vive en `SPEC-ux-comidas-pdf.md` |
 | B | Ajuste manual de macros | **Paso 18 nuevo** (`ajustarMacros`), `Resultado.limites_ajuste` y `Resultado.ajuste`, tres avisos nuevos y una regla de supresión |
 | C | Recomposición con prioridad | Input `recomposicion_prioridad`; paso 7 (déficit ±5 puntos, tope 15 %, o cero) con exención de la regla de margen; paso 9 (grasa 28 → 33 % con prioridad `perder`); dos avisos informativos; tabla 3.9 con tres filas |
-| D | Regla (solo mujeres) | Input `menstruacion`; único efecto numérico en el paso 6.7bis (agresivo → moderado); `INFO_CICLO` y `WARN_CICLO_AUSENTE` evaluados en el paso 17 |
+| D | Regla (solo mujeres) | Input `menstruacion`; único efecto numérico en el paso 6.7bis (agresivo → moderado, **solo en `perder` y `recomposicion`**); `INFO_CICLO` y `WARN_CICLO_AUSENTE` evaluados en el paso 17 |
 | E | Preferencias combinables | Inputs `preferencia_base`, `restricciones`, `low_carb`; regla de traducción y regla inversa de la §1.1; los pasos 8, 9, 10, 11 y 17 pasan a leer `pref_base` y `low_carb_efectivo` en vez de `preferencia` |
 | F | Proyección y seguimiento | **Paso 14b nuevo**, `Resultado.proyeccion`, `INFO_PROYECCION_PLANA`. El seguimiento de pesajes es `localStorage` y no toca el motor |
 
@@ -2351,6 +2380,19 @@ del uso real, implementadas aquí sin discutirlas. Resumen de lo que toca a este
 en 115 033 perfiles del barrido, con **36 familias** de invariantes (nuevas: S26 proyección, S27 ajuste
 manual, S28 regla, S29 preferencias combinables). **Los catorce vectores de la v1.0 conservan todos sus
 números**; lo único que cambia en ellos es que la salida trae los campos nuevos.
+
+**Cierre de la v1.1 (revisión final).** Cuatro invariantes se endurecieron porque certificaban de más:
+
+- **S27m** compara ahora el `Resultado` **entero** (con los avisos ordenados), no tres campos. "Bit a bit"
+  incluye los avisos: comparando solo `kcal`, `grasa_g` y `hc_g` no se veía que `WARN_KCAL_AJUSTE_ALTA`
+  apareciera con el ajuste vacío y borrase el `WARN_DEFICIT_MINIMO` del motor.
+- El generador de ajustes del barrido prueba **siempre** los extremos que el panel alcanza de verdad —el
+  ajuste vacío, `{kcal: kcal_min}` y `{kcal: kcal_min, hc_g: <techo>}`— y, cada 32 perfiles, el barrido
+  completo del deslizador de hidratos en pasos de 5 g. Ahí es donde el cierre del paso 18 se salía del 2 %.
+- **S28** solo exige que no quede ritmo `agresivo` en planes con déficit; **S28c**, nuevo, comprueba lo
+  contrario en `ganar`: que el ritmo elegido **no** se haya suavizado.
+- **S27d** (la grasa nunca baja del suelo) se mantiene, y ahora es consecuencia directa del techo de
+  hidratos en vez de depender del `roundUp5` correctivo del punto 3.
 
 **Deuda saldada de paso:** `macros.pct_cap` —que `CONTRATO.md` declara desde la ronda de cierre— no estaba
 en la salida de `verify-vectors.mjs`. Ahora sí, capturado en el paso 8, que es donde el cap se aplica.
