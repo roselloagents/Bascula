@@ -694,7 +694,23 @@ function rehacerConBancoNormal(
     hcAlterno: hcAlternoDe(preferencia, false),
     permitidos,
   }
-  return construirComida(comida, ctx, BANCOS[preferencia], new Set())
+  return construirComida(comida, ctx, plantillasRespaldo(preferencia, comida), new Set())
+}
+
+/**
+ * Plantillas del banco normal con las que el respaldo de §3.7.2 puede rehacer una toma: SOLO las
+ * de su propio `rol_comida`.
+ *
+ * `construirPlato` añade las plantillas ligeras al final de la lista como último recurso, y con
+ * la lista blanca corta del modo sencillo esa red de seguridad convertía un desayuno en una cena
+ * (brócoli y atún a las ocho de la mañana). Recortando el banco antes de construir, para un
+ * desayuno o una comida principal `plantillasDe(banco, 'ligera')` sale vacío y la sustitución
+ * solo puede salir de su propio rol; si ninguna plantilla del rol cuadra, la toma se queda sin
+ * porciones y `aplicarFallbackSencillo` la descarta, que es exactamente lo que queremos.
+ */
+export function plantillasRespaldo(preferencia: Preferencia, comida: Comida): readonly Plantilla[] {
+  const rol = rolComidaDe(comida.nombre, comida.kcal)
+  return BANCOS[preferencia].filter((p) => p.rol_comida === rol)
 }
 
 function recomponerDia(comidas: ComidaResuelta[]): DiaConstruido {
@@ -728,7 +744,13 @@ function aplicarFallbackSencillo(
     const b = diaB.comidas[i]
     if (!a || !b || (a.converge && b.converge)) continue
     const alterna = rehacerConBancoNormal(comidas[i], i, preferencia, offset, permitidos)
-    if (alterna.converge && alterna.porciones.length > 0) alternas.set(i, alterna)
+    if (!alterna.converge || alterna.porciones.length === 0) continue
+    // Cerrar las kcal no puede salir caro en proteína: el respaldo solo entra si la deja dentro
+    // de la tolerancia de §3.3 o, al menos, no peor que la toma que sustituye. Sin esta guarda,
+    // una toma muy grande cambiaba una desviación de calorías por una de 60 puntos de proteína.
+    const peor = Math.max(a.desviacionProteina, b.desviacionProteina)
+    if (alterna.desviacionProteina > TOLERANCIA_PROTEINA && alterna.desviacionProteina > peor) continue
+    alternas.set(i, alterna)
   }
   if (alternas.size === 0) return null
 

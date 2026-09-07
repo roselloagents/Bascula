@@ -85,11 +85,13 @@ export interface BancoSencillo {
 // ---------- Omnívoro ----------
 // El pavo es el que evita el desayuno de cuatro huevos: el huevo tope su ración en 250 g y, en un
 // desayuno de 40 g de proteína, se quedaba solo cubriendo el objetivo.
-// Las plantillas renuncian a la segunda fruta y a la patata (el arroz cubre el mismo papel con el
-// mismo tope de ración) para que quepa la lenteja, que hace dos cosas: es la segunda ancla de
-// proteína de las comidas principales —sin ella el pollo se quedaba clavado en su ración máxima y
-// la toma salía del ±15 %— y sube la fibra del día, que en modo sencillo no tiene la rotación de
-// verduras de §3.3.
+// Las plantillas renuncian a la segunda fruta para que quepan dos cosas. La lenteja: es la segunda
+// ancla de proteína de las comidas principales —sin ella el pollo se quedaba clavado en su ración
+// máxima y la toma salía del ±15 %— y sube la fibra del día, que en modo sencillo no tiene la
+// rotación de verduras de §3.3. Y la patata cocida: quien pide "pollo, arroz, huevos, cosas
+// sencillas" espera patata en la semana, así que rota con el arroz entre las dos variantes de
+// comida principal. El hueco lo deja el atún, que sigue en la lista blanca (el respaldo de §3.7.2
+// puede usarlo) pero ya no en las plantillas: el tope duro son 12 alimentos distintos.
 const OMN_SEN: readonly string[] = [
   'pechuga_pollo',
   'huevo_entero',
@@ -111,17 +113,17 @@ const OMN_SEN: readonly string[] = [
 
 const OMN_A: Plantilla[] = [
   plantilla({ id: 'SEN-OMN-DES-A', rol_comida: 'desayuno', p: ['huevo_entero'], p2: ['pechuga_pavo'], c: ['avena_copos', 'pan_integral'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-OMN-PRI-A1', rol_comida: 'principal', p: ['pechuga_pollo', 'atun_natural'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-OMN-PRI-A2', rol_comida: 'principal', p: ['atun_natural', 'pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-OMN-LIG-A1', rol_comida: 'ligera', p: ['pechuga_pavo', 'huevo_entero', 'atun_natural'], c: ['pan_integral'] }),
-  plantilla({ id: 'SEN-OMN-LIG-A2', rol_comida: 'ligera', p: ['huevo_entero', 'atun_natural'], g: ['almendras'], f: ['platano'] }),
+  plantilla({ id: 'SEN-OMN-PRI-A1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-OMN-PRI-A2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-OMN-LIG-A1', rol_comida: 'ligera', p: ['pechuga_pavo', 'huevo_entero'], c: ['pan_integral'] }),
+  plantilla({ id: 'SEN-OMN-LIG-A2', rol_comida: 'ligera', p: ['huevo_entero', 'pechuga_pavo'], g: ['almendras'], f: ['platano'] }),
 ]
 
 const OMN_B: Plantilla[] = [
   plantilla({ id: 'SEN-OMN-DES-B', rol_comida: 'desayuno', p: ['pechuga_pavo'], p2: ['huevo_entero'], c: ['pan_integral', 'avena_copos'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-OMN-PRI-B1', rol_comida: 'principal', p: ['atun_natural', 'pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-OMN-PRI-B2', rol_comida: 'principal', p: ['pechuga_pollo', 'atun_natural'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-OMN-LIG-B1', rol_comida: 'ligera', p: ['atun_natural', 'pechuga_pavo', 'huevo_entero'], c: ['pan_integral'] }),
+  plantilla({ id: 'SEN-OMN-PRI-B1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-OMN-PRI-B2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-OMN-LIG-B1', rol_comida: 'ligera', p: ['huevo_entero', 'pechuga_pavo'], c: ['pan_integral'] }),
   plantilla({ id: 'SEN-OMN-LIG-B2', rol_comida: 'ligera', p: ['pechuga_pavo', 'huevo_entero'], g: ['almendras'], f: ['platano'] }),
 ]
 
@@ -205,7 +207,8 @@ const VGN_B: Plantilla[] = [
 ]
 
 // ---------- Sin lactosa ----------
-// Mismo esqueleto que el omnívoro; el único lácteo es la variante sin lactosa de §3.2.
+// Mismo esqueleto que el omnívoro —patata y arroz rotando en las comidas principales, atún en la
+// lista blanca pero fuera de las plantillas—; el único lácteo es la variante sin lactosa de §3.2.
 const SLA_SEN: readonly string[] = [
   'pechuga_pollo',
   'huevo_entero',
@@ -227,23 +230,24 @@ const SLA_SEN: readonly string[] = [
 
 const SLA_A: Plantilla[] = [
   plantilla({ id: 'SEN-SLA-DES-A', rol_comida: 'desayuno', p: ['queso_fresco_batido_0_sl'], p2: ['huevo_entero'], c: ['avena_copos', 'pan_integral'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-SLA-PRI-A1', rol_comida: 'principal', p: ['pechuga_pollo', 'atun_natural'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SLA-PRI-A2', rol_comida: 'principal', p: ['atun_natural', 'pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-SLA-PRI-A1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-SLA-PRI-A2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
   plantilla({ id: 'SEN-SLA-LIG-A1', rol_comida: 'ligera', p: ['queso_fresco_batido_0_sl', 'huevo_entero'], c: ['pan_integral'] }),
   plantilla({ id: 'SEN-SLA-LIG-A2', rol_comida: 'ligera', p: ['queso_fresco_batido_0_sl', 'huevo_entero'], g: ['almendras'], f: ['platano'] }),
 ]
 
 const SLA_B: Plantilla[] = [
   plantilla({ id: 'SEN-SLA-DES-B', rol_comida: 'desayuno', p: ['huevo_entero'], p2: ['queso_fresco_batido_0_sl'], c: ['pan_integral', 'avena_copos'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-SLA-PRI-B1', rol_comida: 'principal', p: ['atun_natural', 'pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SLA-PRI-B2', rol_comida: 'principal', p: ['pechuga_pollo', 'atun_natural'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-SLA-PRI-B1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-SLA-PRI-B2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
   plantilla({ id: 'SEN-SLA-LIG-B1', rol_comida: 'ligera', p: ['huevo_entero', 'queso_fresco_batido_0_sl'], c: ['pan_integral'] }),
   plantilla({ id: 'SEN-SLA-LIG-B2', rol_comida: 'ligera', p: ['queso_fresco_batido_0_sl', 'huevo_entero'], g: ['almendras'], f: ['platano'] }),
 ]
 
 // ---------- Sin gluten ----------
 // Ni avena ni pan integral llevan el tag `sin_gluten` en `foods.json`: el pan del desayuno lo
-// sustituyen las tortitas de arroz y el hidrato de las comidas, el arroz y la patata.
+// sustituyen las tortitas de arroz, y el hidrato de las comidas lo reparten el arroz y la patata,
+// que rotan entre las dos variantes de comida principal. El atún se queda en la lista blanca.
 const SGL_SEN: readonly string[] = [
   'pechuga_pollo',
   'huevo_entero',
@@ -264,16 +268,16 @@ const SGL_SEN: readonly string[] = [
 
 const SGL_A: Plantilla[] = [
   plantilla({ id: 'SEN-SGL-DES-A', rol_comida: 'desayuno', p: ['yogur_griego_0'], p2: ['huevo_entero'], c: ['tortitas_arroz'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-SGL-PRI-A1', rol_comida: 'principal', p: ['pechuga_pollo', 'atun_natural'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SGL-PRI-A2', rol_comida: 'principal', p: ['atun_natural', 'pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-SGL-PRI-A1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-SGL-PRI-A2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
   plantilla({ id: 'SEN-SGL-LIG-A1', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], c: ['tortitas_arroz'] }),
   plantilla({ id: 'SEN-SGL-LIG-A2', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], g: ['almendras'], f: ['platano'] }),
 ]
 
 const SGL_B: Plantilla[] = [
   plantilla({ id: 'SEN-SGL-DES-B', rol_comida: 'desayuno', p: ['huevo_entero'], p2: ['yogur_griego_0'], c: ['tortitas_arroz'], g: ['almendras'], f: ['manzana'] }),
-  plantilla({ id: 'SEN-SGL-PRI-B1', rol_comida: 'principal', p: ['atun_natural', 'pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SGL-PRI-B2', rol_comida: 'principal', p: ['pechuga_pollo', 'atun_natural'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-SGL-PRI-B1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
+  plantilla({ id: 'SEN-SGL-PRI-B2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
   plantilla({ id: 'SEN-SGL-LIG-B1', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], c: ['tortitas_arroz'] }),
   plantilla({ id: 'SEN-SGL-LIG-B2', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], g: ['almendras'], f: ['manzana'] }),
 ]

@@ -12,7 +12,7 @@ import {
 } from '../bancoSencillo'
 import { TOLERANCIA_KCAL, TOLERANCIA_PROTEINA } from '../escalado'
 import { pasaPreferencia } from '../filtros'
-import { generarEjemplos } from '../index'
+import { generarEjemplos, plantillasRespaldo } from '../index'
 import { inputsDe, resultadoDe } from './fixtures'
 
 const PREFERENCIAS: Preferencia[] = ['omnivoro', 'vegetariano', 'vegano', 'sin_lactosa', 'sin_gluten', 'low_carb']
@@ -273,6 +273,78 @@ describe('menú sencillo: tolerancias de §3.3', () => {
         for (const c of menuSencillo(1800, n, p).entreno.comidas) {
           expect(c.alimentos.length, `${p} ${n} ${c.comida}`).toBeGreaterThan(0)
           for (const a of c.alimentos) expect(a.gramos).toBeGreaterThan(0)
+        }
+      }
+    }
+  })
+})
+
+describe('menú sencillo: la patata cocida está en la semana (petición del usuario)', () => {
+  // "pollo, arroz, huevos, cosas sencillas": en los bancos con carne la patata cocida rota con el
+  // arroz en las comidas principales. El hueco lo dejó el atún, que sigue en la lista blanca.
+  const CON_PATATA: Preferencia[] = ['omnivoro', 'sin_lactosa', 'sin_gluten']
+
+  for (const p of CON_PATATA) {
+    it(`${p}: las plantillas de la semana declaran la patata cocida`, () => {
+      expect(idsDeBanco(BANCOS_SENCILLOS[p])).toContain('patata_cocida')
+    })
+  }
+
+  it('la patata cocida llega de verdad a la lista de la compra', () => {
+    for (const p of CON_PATATA) {
+      const vistos = new Set<string>()
+      for (const kcal of KCAL) {
+        for (const n of COMIDAS) {
+          for (const item of menuSencillo(kcal, n, p).compra!.items) vistos.add(item.alimento_id)
+        }
+      }
+      expect(vistos.has('patata_cocida'), `${p}`).toBe(true)
+      expect(vistos.has('arroz_blanco_cocido'), `${p}`).toBe(true)
+      expect(vistos.has('pechuga_pollo'), `${p}`).toBe(true)
+    }
+  })
+})
+
+describe('menú sencillo: el respaldo respeta el rol de la toma (§3.7.2)', () => {
+  // Sin esta regla, la toma que el banco sencillo no cerraba se rehacía con CUALQUIER plantilla
+  // del banco normal —incluidas las ligeras, que `construirPlato` añade como último recurso— y un
+  // desayuno acababa siendo brócoli con atún.
+  const TOMAS: { nombre: string; kcal: number; rol: string }[] = [
+    { nombre: 'Desayuno', kcal: 600, rol: 'desayuno' },
+    { nombre: 'Comida', kcal: 800, rol: 'principal' },
+    { nombre: 'Cena', kcal: 700, rol: 'principal' },
+    { nombre: 'Merienda', kcal: 300, rol: 'ligera' },
+  ]
+
+  for (const p of PREFERENCIAS) {
+    it(`${p}: cada toma solo puede sustituirse por plantillas de su propio rol`, () => {
+      for (const t of TOMAS) {
+        const comida = {
+          nombre: t.nombre,
+          hora: '09:00',
+          pct_kcal: 0,
+          proteina_g: 30,
+          grasa_g: 20,
+          hc_g: 50,
+          kcal: t.kcal,
+          peri: false,
+        }
+        const plantillas = plantillasRespaldo(p, comida)
+        expect(plantillas.length, `${p} ${t.nombre}`).toBeGreaterThan(0)
+        for (const x of plantillas) expect(x.rol_comida, `${p} ${t.nombre}: ${x.id}`).toBe(t.rol)
+      }
+    })
+  }
+
+  it('ningún desayuno del modo sencillo acaba con brócoli y atún', () => {
+    for (const p of PREFERENCIAS) {
+      for (const kcal of KCAL) {
+        for (const n of COMIDAS) {
+          for (const c of menuSencillo(kcal, n, p).entreno.comidas) {
+            if (c.comida !== 'Desayuno') continue
+            const ids = c.alimentos.map((a) => a.id)
+            expect(ids, `${p} ${kcal} ${n}`).not.toContain('atun_natural')
+          }
         }
       }
     }
