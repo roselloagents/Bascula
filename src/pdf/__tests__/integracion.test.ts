@@ -14,11 +14,14 @@ import type { DatosPdf } from '../../engine/types'
 /** Máximo de páginas declarado en SPEC-ux-comidas-pdf.md §4.0, ya con la página de la compra (§4.4b). */
 const PAGINAS_MAX = 9
 
-function datosDe(indice: number): DatosPdf {
-  const v = VECTORES[indice]
-  const resultado = calcular(v.inputs)
-  const ejemplos = generarEjemplos(v.inputs, resultado)
-  return { inputs: v.inputs, resultado, ejemplos, avisos: textosAvisos(resultado, v.inputs), fecha: '2026-09-07' }
+/** Tope de alimentos distintos del modo sencillo (SPEC-ux-comidas-pdf.md §3.7.2). */
+const ALIMENTOS_MAX_SENCILLO = 12
+
+function datosDe(indice: number, sencillo = false): DatosPdf {
+  const inputs = { ...VECTORES[indice].inputs, menu_sencillo: sencillo }
+  const resultado = calcular(inputs)
+  const ejemplos = generarEjemplos(inputs, resultado)
+  return { inputs, resultado, ejemplos, avisos: textosAvisos(resultado, inputs), fecha: '2026-09-07' }
 }
 
 /**
@@ -71,6 +74,26 @@ describe('PDF — vectores de la §5 de punta a punta', () => {
       expect(paginas, `caso ${v.n}: ${paginas} páginas`).toBeLessThanOrEqual(PAGINAS_MAX)
       expect(paginas, `caso ${v.n}`).toBeGreaterThan(3)
       expect(buffer.length, `caso ${v.n}`).toBeGreaterThan(10_000)
+    }
+  }, 180_000)
+
+  // El modo sencillo llega al PDF por el mismo camino que a la pantalla: no hay fixture de por
+  // medio. Se comprueba que el generador rellena la lista, que respeta su tope, y que la página
+  // de la compra no desborda el máximo de páginas con una lista real.
+  it('imprime también los nueve casos en modo sencillo, con su lista real', async () => {
+    for (let i = 0; i < VECTORES.length; i++) {
+      const v = VECTORES[i]
+      const datos = datosDe(i, true)
+      const { compra, modo_sencillo } = datos.ejemplos
+      expect(modo_sencillo, `caso ${v.n}`).toBe(true)
+      expect(compra, `caso ${v.n}`).toBeDefined()
+      expect(compra!.alimentos_distintos, `caso ${v.n}`).toBeLessThanOrEqual(ALIMENTOS_MAX_SENCILLO)
+      expect(compra!.items.length, `caso ${v.n}`).toBe(compra!.alimentos_distintos)
+
+      const buffer = await renderToBuffer(elementoPlan(datos))
+      const paginas = (buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length
+      expect(paginas, `caso ${v.n}: ${paginas} páginas`).toBeLessThanOrEqual(PAGINAS_MAX)
+      expect(paginas, `caso ${v.n}`).toBeGreaterThan(3)
     }
   }, 180_000)
 })
