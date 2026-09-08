@@ -691,6 +691,42 @@ equivalencias y en la lista de la compra.
 5. Sin límite de marcados por arriba. La app **no** avisa de que "te quedan pocos alimentos": lo resuelve
    la regla de respaldo de §3.2b, que es donde se puede hacer bien.
 
+**Buscador (v1.2.1).** En la barra fija, **debajo del control segmentado**: un `<input type="search">`
+con etiqueta accesible (no visible: no cabe) y el placeholder literal **"Busca un alimento (p. ej.
+brócoli)"**. **Sin `autofocus`**: al entrar en el paso el foco sigue en el contenedor, como en el resto
+del cuestionario, y abrir el teclado del móvil nada más llegar taparía la pantalla entera. Con algo
+escrito aparece a su derecha un botón **"Borrar"**.
+
+La coincidencia es **por subcadena, sin distinguir mayúsculas ni acentos** —se normaliza con NFD y se
+tiran los diacríticos, así que "brocoli" encuentra "Brócoli"— y se busca en **`nombre_corto` y en
+`nombre`**: el chip pone "Semillas de lino" pero también "Pechuga de pollo", y quien escribe "sin piel"
+espera encontrarla. Lo escrito se parte en palabras y **todas** tienen que aparecer, aunque sea sueltas:
+así "yogur 0" encuentra "Yogur griego 0%". El helper vive en `src/components/utiles/alimentos.ts`
+(`normalizarTexto`, `coincide`, `filtrarGrupos`) y es una función pura con test unitario.
+
+Con texto en el buscador **solo se pintan los grupos que tienen alguna coincidencia, y todos abiertos**
+(ahí no hay nada que plegar, así que la cabecera es un encabezado a secas y no un botón que no haría
+nada visible). Debajo de la barra, una línea en `aria-live="polite"` que existe siempre en el DOM
+—aunque vacía— para que se pueda anunciar: **"{n} alimentos para «{lo escrito}»"** (en singular,
+"1 alimento para «…»") o, sin ninguno, **"Ningún alimento se llama así. Prueba con otro nombre o mira
+los grupos."** **Marcar un chip durante la búsqueda no la borra**: el texto, la lista filtrada y el
+recuento siguen donde estaban.
+
+**Grupos plegables (v1.2.1).** Cada grupo es un desplegable con **cabecera-botón** (`aria-expanded`,
+`aria-controls`, 44 px de alto) que enseña el nombre del grupo, el número de alimentos y, si los hay,
+las marcas en corto **"✕ 2 · ★ 1"** (en `aria-hidden`, con la versión hablada —"15 alimentos, 2 que no
+te gustan"— en texto solo para lectores de pantalla). **Por defecto entran todos plegados salvo los que
+ya tienen alguna marca**: quien vuelve desde el enlace "Cambiar" de resultados ve lo suyo abierto y el
+resto recogido. Junto al buscador, un botón de texto **"Mostrar todos"** / **"Plegar todos"** según haya
+o no algún grupo cerrado. El estado de plegado es **estado local del componente y no se persiste**, y
+**la búsqueda no lo destruye**: al borrarla se vuelve exactamente a lo que había.
+
+**Presupuesto de la barra fija:** con el control segmentado, el buscador y la fila del resumen no puede
+pasar de **130 px de alto en 375 px** (medida real: 126 px, y no cambia al escribir). Sin scroll
+horizontal. La transición de la flecha del desplegable usa el token `--dur`, que con
+`prefers-reduced-motion: reduce` ya vale 1 ms. Plegada, la pantalla mide **1 331 px** en vez de los
+3 553 px de la v1.2: poco más de una pantalla de móvil en vez de cuatro.
+
 **Resumen vivo**, justo encima de la barra de navegación, en una región `aria-live="polite"`:
 "{n} que no te gustan · {m} favoritos". Con cero de los dos no se pinta. El mismo texto se repite en la
 barra pegada arriba, junto al control segmentado.
@@ -1987,6 +2023,12 @@ viven en `SPEC-calculo.md` o en `verify-vectors.mjs` se registran en el §7 de a
 
 ---
 
+### v1.2.1 — buscador y grupos plegables del paso 14 (2026-09-08)
+
+| # | Sev. | Dónde | Resumen de lo aplicado |
+|---|---|---|---|
+| P14-1 | major | paso 14 | Los 103 chips repartidos en siete grupos median 3 553 px, cuatro pantallas de móvil, sin buscador ni plegado. Se añade el **buscador** en la barra fija (subcadena sobre `nombre_corto` y `nombre`, sin acentos ni mayúsculas, palabra a palabra, línea de resultados en `aria-live` y mensaje propio cuando no hay ninguno) y los **grupos plegables** (cabecera-botón de 44 px con recuento y marcas, todos plegados salvo los que ya traen algo marcado, "Mostrar todos" / "Plegar todos"). La búsqueda no destruye el plegado y marcar un chip no borra la búsqueda. Plegada, la pantalla baja a 1 331 px y la barra fija se queda en 126 px de los 130 de presupuesto. Reabre el hallazgo U-11 que la v1.2 dejó fuera por cierre de ronda. |
+
 ### v1.2 — decisiones G-J del segundo feedback real (2026-09-08)
 
 | Decisión | Dónde se ha escrito |
@@ -2020,10 +2062,11 @@ aplicados; la sección de cada uno queda arriba con la marca "(v1.2, revisión)"
 | U-10 | major | §3.2b | Los consejos del ciclo recomendaban alimentos excluidos mientras la compra sí los respetaba (ver también `SPEC-calculo.md`, paso 19). |
 | U-11 | minor | paso 10, §2.6b, §2.6c, §3.8.2, §4.2, §4.4b, paso 12, paso 14, §3.0 | Copy y detalle: el nudge nombra el objetivo de arriba; la descripción de la gráfica no dice "entre 63 y 63 kg"; el primer día del plan da un solo mensaje de fecha; la compra de los días de regla tiene su propia cantidad y tres columnas; el plazo solo se imprime si el motor lo ha leído; la variante breve va en minúscula; abrir el campo de fecha limpia el chip; el resumen de alimentos se ordena y se corta en seis; el radiogroup del paso 14 cumple el patrón ARIA; `nombre_corto` distingue soja seca/hidratada, proteína de guisante/soja y queso batido sin lactosa, y el grupo de lácteos nombra las bebidas vegetales. |
 
-**Rechazado:** nada. El único hallazgo que no se aplica tal cual es el buscador del paso 14 (U-11,
-"3 553 px de página"): se ha resuelto con la alternativa barata que el propio hallazgo propone —repetir
-el resumen vivo en la barra pegada arriba—, porque un buscador dentro del wizard es una pantalla nueva
-y esta ronda cierra la v1.2, no la amplía.
+**Rechazado:** nada. El único hallazgo que no se aplicó tal cual en esta ronda es el buscador del paso 14
+(U-11, "3 553 px de página"): se resolvió con la alternativa barata que el propio hallazgo propone
+—repetir el resumen vivo en la barra pegada arriba—, porque un buscador dentro del wizard es una
+pantalla nueva y esa ronda cerraba la v1.2, no la ampliaba. **Reabierto y hecho en la v1.2.1**, junto
+con el plegado de los grupos, que es lo que de verdad devuelve la pantalla a un tamaño razonable.
 
 ### v1.1 — decisiones A-F del feedback real de usuarios (2026-09-07)
 
