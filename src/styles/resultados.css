@@ -502,7 +502,7 @@ li[data-macro='carbo'] .leyenda-punto {
 
 .menu-alimentos li {
   display: grid;
-  grid-template-columns: 4.5rem 1fr;
+  grid-template-columns: 4.5rem 1fr auto;
   gap: var(--e-4);
   align-items: baseline;
 }
@@ -865,13 +865,93 @@ li[data-macro='carbo'] .leyenda-punto {
   }
 
   .menu-alimentos li {
-    grid-template-columns: 4.5rem 1fr auto;
+    grid-template-columns: 4.5rem 1fr 1fr auto;
   }
 
   .menu-medida {
-    grid-column: auto;
+    grid-column: 3;
     text-align: right;
   }
+}
+
+/* ---- "No me gusta" por alimento y resumen de alimentos (§2.5, v1.2) --- */
+
+/* Acción secundaria, sin color de alerta y con 44 px de área táctil. */
+.menu-quitar {
+  grid-column: -2;
+  grid-row: 1;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-height: 44px;
+  padding: 0 var(--e-4);
+  border: none;
+  background: none;
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-weight: 500;
+}
+
+.menu-quitar:hover {
+  color: var(--verde);
+}
+
+/* Aviso efímero con "Deshacer" (6 s). Neutro: quitar un alimento no es un error. */
+.aviso-efimero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-4);
+  margin: var(--e-8) 0 0;
+  padding: var(--e-6) var(--e-8);
+  border: 1px solid var(--verde-borde);
+  border-radius: var(--r-md);
+  background: var(--verde-velo);
+  font-size: var(--t-sm);
+}
+
+.resumen-alimentos-menu {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-2);
+  margin: var(--e-8) 0 0;
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+/* ---- Consejos por síntoma de la tarjeta del ciclo (§2.2c, v1.2) ------- */
+
+.consejo-ciclo {
+  margin-top: var(--e-8);
+  padding-top: var(--e-8);
+  border-top: 1px solid var(--linea);
+}
+
+.consejo-ciclo-titulo {
+  margin: 0 0 var(--e-4);
+  font-family: var(--display);
+  font-size: var(--t-base);
+  font-weight: 700;
+}
+
+.consejo-ciclo-alimentos {
+  margin: var(--e-4) 0 0;
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.consejo-ciclo-etiqueta {
+  font-weight: 600;
+  color: var(--tinta);
+}
+
+/* Sección opcional de la compra (§2.5b, v1.2): separada del resto con un filete. */
+.compra-opcional {
+  margin-top: var(--e-12);
+  padding-top: var(--e-8);
+  border-top: 2px solid var(--linea-fuerte);
 }
 
 /* Dentro de un plegable las notas no llevan caja propia: nada de tarjetas

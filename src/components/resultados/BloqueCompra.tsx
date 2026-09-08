@@ -96,6 +96,48 @@ export function BloqueCompra({ ejemplos }: { ejemplos: Ejemplos }) {
           ))}
         </div>
 
+        {/* Sección opcional "Para los días de regla" (§2.5b, v1.2): va al final, separada, y no
+            entra en el recuento de alimentos distintos porque no es parte del plan. */}
+        {compra.opcional_ciclo && compra.opcional_ciclo.items.length > 0 ? (
+          <div className="compra-seccion compra-opcional">
+            <h3 className="compra-seccion-titulo">{compra.opcional_ciclo.titulo}</h3>
+            <p className="nota">{compra.opcional_ciclo.nota}</p>
+            <div className="tabla-envoltorio">
+              <table className="tabla-compra">
+                <thead>
+                  <tr>
+                    <th scope="col">Producto</th>
+                    <th scope="col">Cantidad</th>
+                    <th scope="col">Comprar</th>
+                    <th scope="col">Dura</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {compra.opcional_ciclo.items.map((item) => (
+                    <tr key={item.alimento_id}>
+                      <th scope="row">
+                        <span className="compra-producto">{item.producto}</span>
+                        <span className="compra-alimento">{item.nombre}</span>
+                        {item.consejo ? <span className="compra-consejo">{item.consejo}</span> : null}
+                      </th>
+                      <td data-etiqueta="Cantidad">
+                        <span className="cifra compra-dato">{textoCantidadSemana(item)}</span>
+                        <span className="compra-secundario">{textoCantidadDia(item)}</span>
+                      </td>
+                      <td data-etiqueta="Comprar">
+                        <span className="compra-dato">{textoComprar(item)}</span>
+                      </td>
+                      <td data-etiqueta="Dura">
+                        <span className="compra-dato">{textoDura(item)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+
         {compra.notas.length > 0 ? (
           <ul className="compra-notas">
             {compra.notas.map((nota) => (

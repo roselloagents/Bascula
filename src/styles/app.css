@@ -604,3 +604,110 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ---- Paso 14: alimentos que no gustan y favoritos (v1.2) -------------- */
+
+/* Control segmentado del modo activo. Fijo al hacer scroll: la lista de chips es larga y sin él
+   no se sabe qué hace el siguiente toque. Se queda JUSTO DEBAJO de la barra de progreso, que ya
+   es `sticky` en `top: 0` y mide 86 px: con los dos a cero, el progreso (z-index mayor) tapaba
+   el control entero y los chips pasaban por debajo sin nada que dijera qué modo estaba activo. */
+.segmentado {
+  position: sticky;
+  top: 5.4rem;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--e-2);
+  padding: var(--e-2);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+  background: var(--papel);
+}
+
+.segmentado-boton {
+  min-height: 44px;
+  padding: var(--e-4) var(--e-6);
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+
+.segmentado-boton[data-sel='true'] {
+  background: var(--verde);
+  color: var(--papel);
+}
+
+.grupo-chips {
+  display: grid;
+  gap: var(--e-6);
+}
+
+.grupo-chips-titulo {
+  margin: 0;
+  font-family: var(--display);
+  font-size: var(--t-md);
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-4);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* 44 px de alto real: en 375 px estos chips son el control principal de la pantalla. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-height: 44px;
+  padding: var(--e-4) var(--e-8);
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 999px;
+  background: var(--papel);
+  color: var(--tinta);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  text-align: left;
+}
+
+.chip[data-estado='excluido'] {
+  border-color: var(--linea-fuerte);
+  background: var(--hueso-hundido);
+  color: var(--tinta-suave);
+  text-decoration: line-through;
+}
+
+.chip[data-estado='favorito'] {
+  border-color: var(--verde);
+  background: var(--verde-velo);
+  color: var(--verde-oscuro);
+}
+
+.chip-marca:empty {
+  display: none;
+}
+
+/* Resumen vivo del paso: sin nada marcado no ocupa sitio, pero la región sigue en el DOM para
+   que un lector de pantalla anuncie los cambios. */
+.resumen-alimentos {
+  margin: 0;
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+  text-align: center;
+}
+
+.resumen-alimentos:empty {
+  display: none;
+}
+
+/* "Seguir sin marcar nada": segunda fila de la barra de navegación del paso 14. */
+.barra-navegacion[data-extra='true'] .btn-salida {
+  grid-column: 1 / -1;
+}

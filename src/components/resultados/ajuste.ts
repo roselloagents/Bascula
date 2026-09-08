@@ -72,10 +72,22 @@ export function borrarAjuste(): void {
 }
 
 /**
+ * Campos que el motor **no lee** y que por tanto no pueden cambiar el plan (SPEC-calculo §0.3):
+ * el menú sencillo y las dos listas de alimentos de la v1.2. Si entraran en la huella, marcar
+ * "no me gusta" en un alimento tiraría el ajuste manual guardado y el "Volver a mi plan" del
+ * arranque (SPEC-ux §1 paso 14), y lo único que ha cambiado es qué se come.
+ */
+const CAMPOS_SIN_EFECTO = ['menu_sencillo', 'alimentos_excluidos', 'alimentos_favoritos']
+
+/**
  * Huella de los datos con los que se calculó un plan. Si el usuario edita sus datos y recalcula,
  * la huella cambia y el ajuste guardado se descarta: los límites del plan nuevo no tienen por qué
- * parecerse a los del anterior (SPEC-ux §2.2b).
+ * parecerse a los del anterior (SPEC-ux §2.2b). Los campos que el motor ignora quedan fuera.
  */
 export function firmaDeInputs(inputs: InputCalculo): string {
-  return JSON.stringify(inputs)
+  const relevantes: Record<string, unknown> = {}
+  for (const [clave, valor] of Object.entries(inputs)) {
+    if (!CAMPOS_SIN_EFECTO.includes(clave)) relevantes[clave] = valor
+  }
+  return JSON.stringify(relevantes)
 }

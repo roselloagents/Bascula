@@ -3,30 +3,16 @@
 // proyección y viaja al PDF en `DatosPdf.pesajes`.
 
 import type { ObjetivoEfectivo, Pesaje, PuntoProyeccion } from '../../engine/types'
-import { numCorto } from '../utiles/formato'
+import { diasEntreIso, isoAMilis, numCorto } from '../utiles/formato'
 
 export const CLAVE_PESAJES = 'bascula:pesajes:v1'
 
 export const PESO_MIN_KG = 30
 export const PESO_MAX_KG = 300
 
-const MS_DIA = 86_400_000
-
-/** Fecha ISO 'YYYY-MM-DD' a milisegundos UTC. Sin hora: comparar días, no instantes. */
-function aMilis(iso: string): number | null {
-  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
-  if (!partes) return null
-  const [, a, m, d] = partes
-  const valor = Date.UTC(Number(a), Number(m) - 1, Number(d))
-  return Number.isFinite(valor) ? valor : null
-}
-
 /** Días completos entre dos fechas ISO (negativo si la segunda es anterior). */
 export function diasEntre(desde: string, hasta: string): number | null {
-  const a = aMilis(desde)
-  const b = aMilis(hasta)
-  if (a === null || b === null) return null
-  return Math.round((b - a) / MS_DIA)
+  return diasEntreIso(desde, hasta)
 }
 
 /** '2026-09-07' → '7/9/2026'. */
@@ -34,6 +20,31 @@ export function fechaCorta(iso: string): string {
   const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
   if (!partes) return iso
   return `${Number(partes[3])}/${Number(partes[2])}/${partes[1]}`
+}
+
+/**
+ * Mensaje de fecha no válida del formulario de pesajes (§2.6c, v1.2 decisión J). Hasta la v1.1
+ * una fecha fuera de rango se rechazaba **en silencio**: el botón apagado, sin mensaje y sin
+ * campo marcado, que es justo el defecto que la §1.0 prohíbe en el cuestionario. `null` cuando
+ * la fecha vale.
+ */
+export function mensajeFechaPesaje(fecha: string, fechaInicio: string, hoy: string): string | null {
+  const desdeInicio = diasEntre(fechaInicio, fecha)
+  const hastaHoy = diasEntre(fecha, hoy)
+  if (desdeInicio === null || hastaHoy === null) return 'Pon la fecha del día en que te pesaste.'
+  if (desdeInicio < 0) {
+    return `Esa fecha es anterior al día en que empezaste el plan (${fechaCorta(fechaInicio)}). Elige una posterior.`
+  }
+  if (hastaHoy < 0) return 'Todavía no puedes apuntar un peso de una fecha futura.'
+  return null
+}
+
+/** Mensaje de peso no válido del mismo formulario. Con el campo vacío no se dice nada. */
+export function mensajePesoPesaje(kg: number | null): string | null {
+  if (kg === null) return null
+  return kg >= PESO_MIN_KG && kg <= PESO_MAX_KG
+    ? null
+    : `Pon un peso entre ${PESO_MIN_KG} y ${PESO_MAX_KG} kg.`
 }
 
 /**
@@ -73,7 +84,7 @@ export function cargarPesajes(): Pesaje[] {
           typeof p === 'object' &&
           p !== null &&
           typeof (p as Pesaje).fecha === 'string' &&
-          aMilis((p as Pesaje).fecha) !== null &&
+          isoAMilis((p as Pesaje).fecha) !== null &&
           typeof (p as Pesaje).kg === 'number' &&
           Number.isFinite((p as Pesaje).kg),
       ),

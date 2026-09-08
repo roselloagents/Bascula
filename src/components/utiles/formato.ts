@@ -63,6 +63,32 @@ export function hoyIso(): string {
   return `${d.getFullYear()}-${mes}-${dia}`
 }
 
+const MS_DIA = 86_400_000
+
+/** Fecha ISO 'YYYY-MM-DD' a milisegundos UTC. Sin hora: se comparan días, no instantes. */
+export function isoAMilis(iso: string): number | null {
+  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
+  if (!partes) return null
+  const [, a, m, d] = partes
+  const valor = Date.UTC(Number(a), Number(m) - 1, Number(d))
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Días completos entre dos fechas ISO (negativo si la segunda es anterior). */
+export function diasEntreIso(desde: string, hasta: string): number | null {
+  const a = isoAMilis(desde)
+  const b = isoAMilis(hasta)
+  if (a === null || b === null) return null
+  return Math.round((b - a) / MS_DIA)
+}
+
+/** La fecha ISO que cae `dias` días después de `iso`. */
+export function sumarDias(iso: string, dias: number): string {
+  const base = isoAMilis(iso)
+  if (base === null) return iso
+  return new Date(base + dias * MS_DIA).toISOString().slice(0, 10)
+}
+
 /** '2027-02-01' → '1 de febrero de 2027'. */
 export function fechaLarga(iso: string): string {
   const [a, m, d] = iso.split('-').map(Number)

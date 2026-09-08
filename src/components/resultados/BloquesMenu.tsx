@@ -1,8 +1,10 @@
 // Ejemplos de menú y consejos accionables (SPEC-ux §2.5 y §2.7).
 
+import { useEffect, useState } from 'react'
 import type { Ejemplos, InputCalculo } from '../../engine/types'
 import { Plegable } from '../ui/Controles'
 import { IconoBombilla, IconoMarca, IconoPesa } from '../ui/Iconos'
+import { listaNombresCortos, nombreCorto } from '../utiles/alimentos'
 import { NOTA_MENU, NOTA_SENCILLO_SIN_OTRO_EJEMPLO, NOTA_VERDURA_FRUTA } from '../utiles/copy'
 import { entero } from '../utiles/formato'
 import { textoModoSencillo } from './compra'
@@ -22,9 +24,34 @@ interface PropsMenu {
   inputs: InputCalculo
   ejemplos: Ejemplos
   onOtroEjemplo?: () => void
+  /** "No me gusta" por alimento (§2.5, v1.2): añade el id a los excluidos y rehace el menú. */
+  onExcluirAlimento?: (id: string) => void
+  /** "Deshacer" del aviso efímero: retira el id de los excluidos. */
+  onDeshacerExclusion?: (id: string) => void
+  /** Enlace "Cambiar" del resumen: lleva al paso de alimentos del cuestionario. */
+  onCambiarAlimentos?: () => void
 }
 
-export function BloqueMenus({ inputs, ejemplos, onOtroEjemplo }: PropsMenu) {
+/** Segundos que dura el aviso de "Fuera {alimento}" antes de desaparecer (§2.5). */
+const SEGUNDOS_DESHACER = 6
+
+export function BloqueMenus({
+  inputs,
+  ejemplos,
+  onOtroEjemplo,
+  onExcluirAlimento,
+  onDeshacerExclusion,
+  onCambiarAlimentos,
+}: PropsMenu) {
+  // El aviso efímero se cierra solo a los 6 s; el cambio, no. Vive aquí y no en `App` porque es
+  // presentación pura: ni el plan ni el borrador dependen de que se vea o no.
+  const [quitado, setQuitado] = useState<{ id: string; nombre: string } | null>(null)
+  useEffect(() => {
+    if (quitado === null) return
+    const temporizador = window.setTimeout(() => setQuitado(null), SEGUNDOS_DESHACER * 1000)
+    return () => window.clearTimeout(temporizador)
+  }, [quitado])
+
   const sinMenu =
     inputs.condiciones.includes('renal') ||
     inputs.condiciones.includes('hepatica') ||
@@ -77,6 +104,24 @@ export function BloqueMenus({ inputs, ejemplos, onOtroEjemplo }: PropsMenu) {
                   <span className="cifra menu-gramos">{entero(alimento.gramos)} g</span>
                   <span className="menu-alimento">{alimento.nombre}</span>
                   <span className="menu-medida">{alimento.medida}</span>
+                  {/* §2.5 (v1.2): acción pequeña y secundaria, sin color de alerta. No llama al
+                      motor: solo cambia el menú, las equivalencias, la compra y el PDF. */}
+                  {onExcluirAlimento ? (
+                    <button
+                      type="button"
+                      className="menu-quitar"
+                      aria-label={`Quitar ${alimento.nombre} de mi menú`}
+                      onClick={() => {
+                        setQuitado({
+                          id: alimento.id,
+                          nombre: nombreCorto(alimento.id) ?? alimento.nombre,
+                        })
+                        onExcluirAlimento(alimento.id)
+                      }}
+                    >
+                      <span aria-hidden="true">✕</span> No me gusta
+                    </button>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -101,9 +146,33 @@ export function BloqueMenus({ inputs, ejemplos, onOtroEjemplo }: PropsMenu) {
         hidratos
       </p>
 
+      {quitado ? (
+        <p className="aviso-efimero" role="status">
+          Fuera {quitado.nombre}. Hemos rehecho el menú y la compra.
+          {onDeshacerExclusion ? (
+            <button
+              type="button"
+              className="btn-plano"
+              onClick={() => {
+                onDeshacerExclusion(quitado.id)
+                setQuitado(null)
+              }}
+            >
+              Deshacer
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+
       {jornada.notas.map((nota) => (
         <p className="nota" key={nota}>
           {nota}
+        </p>
+      ))}
+      {/* Avisos propios del generador (§3.2b): "No hemos podido evitar X en la comida". */}
+      {(ejemplos.avisos_menu ?? []).map((aviso) => (
+        <p className="nota" key={aviso}>
+          {aviso}
         </p>
       ))}
       <p className="nota">{NOTA_MENU}</p>
@@ -121,7 +190,38 @@ export function BloqueMenus({ inputs, ejemplos, onOtroEjemplo }: PropsMenu) {
           </button>
         </div>
       ) : null}
+
+      <ResumenAlimentos inputs={inputs} onCambiar={onCambiarAlimentos} />
     </Seccion>
+  )
+}
+
+/**
+ * "Sin: brócoli, coliflor · Favoritos: pollo, arroz · Cambiar" (§2.5, v1.2). Los nombres son los
+ * cortos de `foods.json`; cada mitad se omite si su lista está vacía y, sin ninguna de las dos,
+ * la línea no se pinta.
+ */
+export function ResumenAlimentos({
+  inputs,
+  onCambiar,
+}: {
+  inputs: InputCalculo
+  onCambiar?: () => void
+}) {
+  const sin = listaNombresCortos(inputs.alimentos_excluidos ?? [])
+  const favoritos = listaNombresCortos(inputs.alimentos_favoritos ?? [])
+  if (sin === '' && favoritos === '') return null
+  return (
+    <p className="resumen-alimentos-menu">
+      {sin !== '' ? <span>Sin: {sin}</span> : null}
+      {sin !== '' && favoritos !== '' ? <span aria-hidden="true"> · </span> : null}
+      {favoritos !== '' ? <span>Favoritos: {favoritos}</span> : null}
+      {onCambiar ? (
+        <button type="button" className="btn-plano" onClick={onCambiar}>
+          Cambiar
+        </button>
+      ) : null}
+    </p>
   )
 }
 

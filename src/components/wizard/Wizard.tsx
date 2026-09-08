@@ -17,6 +17,7 @@ import {
   PasoSexo,
 } from './pasos/PasosPerfil'
 import { PasoGrasa, PasoSomatotipo } from './pasos/PasosCuerpo'
+import { PasoAlimentos } from './pasos/PasoAlimentos'
 import {
   PasoActividad,
   PasoEntrenamiento,
@@ -39,9 +40,10 @@ const COMPONENTES: Record<PasoId, (props: PropsPaso) => ReactElement> = {
   actividad: PasoActividad,
   entrenamiento: PasoEntrenamiento,
   objetivo: PasoObjetivo,
-  ritmo: PasoRitmo,
   pesoObjetivo: PasoPesoObjetivo,
+  ritmo: PasoRitmo,
   preferencias: PasoPreferencias,
+  alimentos: PasoAlimentos,
 }
 
 /** Nombre corto de cada pantalla para el índice de "Ir a una pregunta". */
@@ -57,9 +59,10 @@ const TITULO_PASO: Record<PasoId, string> = {
   actividad: 'Actividad diaria',
   entrenamiento: 'Entrenamiento',
   objetivo: 'Objetivo',
-  ritmo: 'Ritmo',
   pesoObjetivo: 'Peso objetivo',
+  ritmo: 'Ritmo',
   preferencias: 'Preferencias y comidas',
+  alimentos: 'Alimentos',
 }
 
 interface WizardProps {
@@ -145,6 +148,17 @@ export function Wizard({
     setPasoActual(pasos[indice + 1])
   }
 
+  /**
+   * "Seguir sin marcar nada" del paso 14 (§1 paso 14): envía las dos listas vacías. Se calcula el
+   * borrador limpio aquí y se pasa a `onTerminar` sin esperar al estado: dentro del mismo evento
+   * `borrador` todavía es el de antes, y el plan saldría con los alimentos que se acaban de tirar.
+   */
+  const seguirSinMarcar = () => {
+    const limpio = anclarPlan({ ...borrador, alimentos_excluidos: [], alimentos_favoritos: [] })
+    set(limpio)
+    onTerminar(aInputs(limpio))
+  }
+
   const retroceder = () => {
     if (indice > 0) setPasoActual(pasos[indice - 1])
   }
@@ -218,7 +232,11 @@ export function Wizard({
           </p>
         ) : null}
 
-        <div className="barra-navegacion" data-solo={indice === 0}>
+        <div
+          className="barra-navegacion"
+          data-solo={indice === 0}
+          data-extra={paso === 'alimentos'}
+        >
           {indice > 0 ? (
             <button type="button" className="btn btn-secundario" onClick={retroceder}>
               <IconoAtras />
@@ -233,6 +251,11 @@ export function Wizard({
             {esUltimo ? (planGuardado ? 'Volver a mi plan' : 'Ver mi plan') : 'Siguiente'}
             <IconoFlecha />
           </button>
+          {paso === 'alimentos' ? (
+            <button type="button" className="btn btn-secundario btn-salida" onClick={seguirSinMarcar}>
+              Seguir sin marcar nada
+            </button>
+          ) : null}
         </div>
       </form>
     </>

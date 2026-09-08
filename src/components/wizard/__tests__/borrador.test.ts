@@ -61,9 +61,20 @@ describe('mapa de pasos', () => {
     expect(pasosVisibles(completo({ sexo: 'hombre' }))).not.toContain('regla')
   })
 
-  it('el peso objetivo depende solo del objetivo, sin más condiciones', () => {
+  // v1.2 (decisión H): la recomposición con déficit real también tiene meta; la de prioridad
+  // `ganar`, no, porque ahí no hay déficit que dibujar.
+  it('el peso objetivo depende del objetivo y de la prioridad de recomposición', () => {
     expect(pasosVisibles(completo({ objetivo: 'perder' }))).toContain('pesoObjetivo')
-    expect(pasosVisibles(completo({ objetivo: 'recomposicion' }))).not.toContain('pesoObjetivo')
+    expect(
+      pasosVisibles(completo({ objetivo: 'recomposicion', recomposicion_prioridad: 'perder' })),
+    ).toContain('pesoObjetivo')
+    expect(
+      pasosVisibles(completo({ objetivo: 'recomposicion', recomposicion_prioridad: 'equilibrado' })),
+    ).toContain('pesoObjetivo')
+    expect(
+      pasosVisibles(completo({ objetivo: 'recomposicion', recomposicion_prioridad: 'ganar' })),
+    ).not.toContain('pesoObjetivo')
+    expect(pasosVisibles(completo({ objetivo: 'mantener' }))).not.toContain('pesoObjetivo')
   })
 
   it('la regla se puede saltar y las preferencias nunca bloquean el botón', () => {

@@ -69,6 +69,16 @@ export function BloquePeso({ inputs, resultado, avisos }: PropsCierre) {
         </>
       )}
 
+      {/* Recomposición con déficit real (v1.2): el peso objetivo existe y se dibuja, pero no hay
+          fecha y el músculo que se gane compensa parte de la grasa que se pierda. Se dice aquí,
+          donde está el número, y no solo en la nota de la proyección. */}
+      {resultado.objetivo_efectivo === 'recomposicion' && po.efectivo !== null ? (
+        <p className="nota">
+          En recomposición este peso es orientativo: la báscula baja más despacio de lo que cambia
+          tu cuerpo, así que no te damos una fecha. Mídete también la cintura y hazte fotos.
+        </p>
+      ) : null}
+
       {po.hito_intermedio !== null ? (
         <div className="hito">
           <p className="cifra hito-cifra">Primer hito: {numCorto(po.hito_intermedio, 1)} kg</p>

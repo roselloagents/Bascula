@@ -1,10 +1,10 @@
 // Pasos 1 a 5: sexo, edad, embarazo/lactancia, regla, altura y peso y
 // condiciones médicas.
 
-import type { Condicion, Menstruacion } from '../../../engine/types'
-import { CampoNumero, Opcion } from '../../ui/Controles'
+import type { Condicion, Menstruacion, SintomaRegla } from '../../../engine/types'
+import { Ayuda, CampoNumero, Grupo, Opcion } from '../../ui/Controles'
 import { CONDICION_ETIQUETA, TEXTO_CONDICIONES_FIJO } from '../../utiles/copy'
-import { estaMarcado } from '../borrador'
+import { estaMarcado, ORDEN_SINTOMAS } from '../borrador'
 import { Pantalla, type PropsPaso } from './comun'
 
 export function PasoSexo({ b, set }: PropsPaso) {
@@ -84,6 +84,14 @@ const REGLAS: { valor: Menstruacion; titulo: string }[] = [
   { valor: 'no_dice', titulo: 'Prefiero no decirlo' },
 ]
 
+const SINTOMAS: { valor: SintomaRegla; titulo: string }[] = [
+  { valor: 'dolor', titulo: 'Dolor fuerte' },
+  { valor: 'hinchazon', titulo: 'Hinchazón y retención' },
+  { valor: 'antojos', titulo: 'Más hambre o antojos' },
+  { valor: 'cansancio', titulo: 'Cansancio' },
+  { valor: 'sangrado_abundante', titulo: 'Sangrado abundante' },
+]
+
 /**
  * Paso 3b (SPEC-ux §1). No cambia calorías ni macros: produce la tarjeta "Tu ciclo y tu plan" y,
  * con regla irregular o ausente junto a un déficit, el aviso de seguridad. Lo único numérico que sí
@@ -92,6 +100,14 @@ const REGLAS: { valor: Menstruacion; titulo: string }[] = [
  * contestar: `null` vale exactamente igual que "prefiero no decirlo".
  */
 export function PasoRegla({ b, set }: PropsPaso) {
+  // El orden en que se marcan no importa: se guardan siempre en el orden canónico del tipo.
+  const alternarSintoma = (sintoma: SintomaRegla) =>
+    set((previo) => ({
+      sintomas_regla: ORDEN_SINTOMAS.filter((s) =>
+        s === sintoma ? !previo.sintomas_regla.includes(s) : previo.sintomas_regla.includes(s),
+      ),
+    }))
+
   return (
     <Pantalla
       titulo="¿Cómo es tu regla?"
@@ -105,10 +121,49 @@ export function PasoRegla({ b, set }: PropsPaso) {
             nombre="menstruacion"
             titulo={titulo}
             seleccionada={b.menstruacion === valor}
-            onElegir={() => set({ menstruacion: valor })}
+            // Con "no la tengo" o "prefiero no decirlo" la subpregunta se cierra y su valor se
+            // descarta (§1 paso 3b): no se guarda una respuesta que la pantalla ya no enseña.
+            onElegir={() =>
+              set(
+                valor === 'regular' || valor === 'irregular'
+                  ? { menstruacion: valor }
+                  : { menstruacion: valor, sintomas_regla: [] },
+              )
+            }
           />
         ))}
       </div>
+
+      {/* Subpregunta de la v1.2 (decisión I): no es un paso y no toca la barra de progreso.
+          No cambia ningún número: su único efecto es la tarjeta del ciclo y la compra opcional. */}
+      {b.menstruacion === 'regular' || b.menstruacion === 'irregular' ? (
+        <div className="subpregunta">
+          <Grupo
+            etiqueta="¿Qué notas esos días?"
+            descripcion="Opcional, puedes marcar varias."
+          >
+            {SINTOMAS.map(({ valor, titulo }) => (
+              <Opcion
+                key={valor}
+                nombre={`sintoma-${valor}`}
+                tipo="checkbox"
+                titulo={titulo}
+                seleccionada={b.sintomas_regla.includes(valor)}
+                onElegir={() => alternarSintoma(valor)}
+              />
+            ))}
+          </Grupo>
+          <p className="nota">
+            Esto no cambia tus calorías ni tus macros. Te damos consejos de alimentos para esos días,
+            que es donde sí se puede hacer algo.
+          </p>
+          <Ayuda>
+            A los números no les afecta: lo que cambia en esos días son los micronutrientes, sobre
+            todo el hierro si sangras mucho. Con lo que marques te preparamos una tarjeta con qué
+            priorizar antes y durante la regla, y una sección opcional en la lista de la compra.
+          </Ayuda>
+        </div>
+      ) : null}
     </Pantalla>
   )
 }

@@ -1,6 +1,6 @@
 // Cabecera, macros, hidratación y reparto por comidas (SPEC-ux §2.1 a §2.4).
 
-import type { AvisoTexto, InputCalculo, Resultado } from '../../engine/types'
+import type { AvisoTexto, Ejemplos, InputCalculo, Resultado } from '../../engine/types'
 import { DonutMacros } from '../graficos/DonutMacros'
 import { IconoGota, IconoPesa } from '../ui/Iconos'
 import {
@@ -184,12 +184,44 @@ export function BloqueMacros({ resultado, avisos }: PropsBloque) {
  * Tarjeta "Tu ciclo y tu plan" (§2.2c). Se pinta exactamente cuando el motor emite `INFO_CICLO`,
  * con su texto íntegro: no cambia ningún número y el copy lo dice con todas las letras.
  */
-export function TarjetaCiclo({ avisos }: { avisos: AvisoTexto[] }) {
+/**
+ * "Tu ciclo y tu plan" (§2.2c). El texto de `INFO_CICLO` va íntegro y, desde la v1.2, debajo van
+ * los consejos por síntoma de `resultado.ciclo`: la pantalla no los reescribe ni los trocea, y
+ * los fragmentos condicionales ya vienen resueltos por el motor. Nada de esto cambia un número.
+ */
+export function TarjetaCiclo({
+  avisos,
+  resultado,
+  ejemplos,
+}: {
+  avisos: AvisoTexto[]
+  resultado?: Resultado
+  ejemplos?: Ejemplos
+}) {
   const ciclo = buscarAviso(avisos, 'INFO_CICLO')
   if (!ciclo) return null
+  const consejos = resultado?.ciclo?.consejos ?? []
+  const hayCompraOpcional = (ejemplos?.alimentos_ciclo ?? []).length > 0
   return (
     <Seccion titulo="Tu ciclo y tu plan">
       <p>{ciclo.texto}</p>
+      {consejos.map((consejo) => (
+        <div className="consejo-ciclo" key={consejo.clave}>
+          <h4 className="consejo-ciclo-titulo">{consejo.titulo}</h4>
+          <p>{consejo.texto}</p>
+          {consejo.alimentos.length > 0 ? (
+            <p className="consejo-ciclo-alimentos">
+              <span className="consejo-ciclo-etiqueta">Prioriza:</span>{' '}
+              {consejo.alimentos.join(' · ')}
+            </p>
+          ) : null}
+        </div>
+      ))}
+      {consejos.length > 0 && hayCompraOpcional ? (
+        <p className="nota">
+          En tu lista de la compra te hemos dejado una sección opcional para esos días.
+        </p>
+      ) : null}
     </Seccion>
   )
 }

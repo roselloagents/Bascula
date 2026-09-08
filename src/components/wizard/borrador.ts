@@ -22,6 +22,7 @@ import type {
   Restriccion,
   Ritmo,
   Sexo,
+  SintomaRegla,
   TipoEntrenamiento,
 } from '../../engine/types'
 import { hoyIso, leerNumero } from '../utiles/formato'
@@ -30,6 +31,20 @@ export const CLAVE_ALMACEN = 'bascula:inputs:v1'
 
 /** Orden canónico de las restricciones combinables (SPEC-calculo §1.1, regla de traducción). */
 export const ORDEN_RESTRICCIONES: Restriccion[] = ['sin_lactosa', 'sin_gluten']
+
+/** Orden canónico de los síntomas de la regla (SPEC-calculo §1 fila 25 y paso 19). */
+export const ORDEN_SINTOMAS: SintomaRegla[] = [
+  'dolor',
+  'hinchazon',
+  'antojos',
+  'cansancio',
+  'sangrado_abundante',
+]
+
+/** Semanas que ofrecen los chips del selector de plazo (SPEC-ux §1 paso 12). */
+export const PLAZOS_CHIP = [8, 12, 16, 24] as const
+export const PLAZO_MIN_SEMANAS = 4
+export const PLAZO_MAX_SEMANAS = 52
 
 export type PasoId =
   | 'sexo'
@@ -43,9 +58,10 @@ export type PasoId =
   | 'actividad'
   | 'entrenamiento'
   | 'objetivo'
-  | 'ritmo'
   | 'pesoObjetivo'
+  | 'ritmo'
   | 'preferencias'
+  | 'alimentos'
 
 export interface Borrador {
   sexo: Sexo | null
@@ -53,6 +69,9 @@ export interface Borrador {
   embarazo_lactancia: boolean | null
   /** Paso 3b, solo mujeres. `null` = no contestado, que vale igual que "prefiero no decirlo". */
   menstruacion: Menstruacion | null
+  /** Subpregunta del paso 3b (v1.2, decisión I). No cambia ningún número: solo la tarjeta del
+   *  ciclo y la sección opcional de la compra. Se descarta con "no la tengo" y "prefiero no decirlo". */
+  sintomas_regla: SintomaRegla[]
   altura_cm: string
   peso_kg: string
   condiciones: Condicion[]
@@ -86,6 +105,11 @@ export interface Borrador {
   /** Sin preseleccionar (QA §1): el ritmo cambia el tamaño del déficit y el cronograma,
    *  así que no es un valor por defecto razonable como el número de comidas o el clima. */
   ritmo: Ritmo | null
+  /** Cuarta opción del paso de ritmo, "Tengo una fecha en mente" (v1.2, decisión H). Solo se
+   *  ofrece con peso objetivo numérico; el plazo sustituye al ritmo elegido (motor, paso 6.7ter). */
+  usarPlazo: boolean
+  /** Semanas del plazo (4-52 tras acotar). `null` mientras no se haya elegido ninguna. */
+  plazo_semanas: number | null
   quierePesoObjetivo: boolean | null
   peso_objetivo: string
   /** Paso 13, base excluyente (SPEC-ux §1 paso 13, 1a). Preseleccionada en "como de todo". */
@@ -98,6 +122,12 @@ export interface Borrador {
   clima_caluroso: boolean
   /** "¿Quieres comidas sencillas?" del paso 13 (SPEC-ux §3.7.1). Desactivado por defecto. */
   menu_sencillo: boolean
+  /** Paso 14 (v1.2, decisión G): ids de `foods.json` que no se quieren ver. En orden de `id`,
+   *  para que el borrador sea estable. El motor los ignora; solo los lee `src/meals`. */
+  alimentos_excluidos: string[]
+  /** Paso 14: ids marcados como favoritos, **en el orden en que los marcó el usuario** (ese
+   *  orden es normativo, SPEC-ux §3.2b). Ningún id puede estar en las dos listas. */
+  alimentos_favoritos: string[]
   /**
    * Día en que empezó el plan (`InputCalculo.fecha_inicio`). **No se pregunta**: se fija la
    * primera vez que se pide el plan y se conserva mientras el peso no cambie. Si se recalculara
@@ -115,6 +145,7 @@ export function borradorInicial(): Borrador {
     edad: '',
     embarazo_lactancia: null,
     menstruacion: null,
+    sintomas_regla: [],
     altura_cm: '',
     peso_kg: '',
     condiciones: [],
@@ -144,6 +175,8 @@ export function borradorInicial(): Borrador {
     objetivo: null,
     recomposicion_prioridad: 'equilibrado',
     ritmo: null,
+    usarPlazo: false,
+    plazo_semanas: null,
     quierePesoObjetivo: null,
     peso_objetivo: '',
     preferencia_base: 'omnivoro',
@@ -152,6 +185,8 @@ export function borradorInicial(): Borrador {
     n_comidas: 3,
     clima_caluroso: false,
     menu_sencillo: false,
+    alimentos_excluidos: [],
+    alimentos_favoritos: [],
     fecha_inicio: '',
     peso_inicio: '',
   }
@@ -281,6 +316,22 @@ function objeto(valor: unknown): Record<string, unknown> {
     : {}
 }
 
+/** Lista de ids de alimentos: solo cadenas no vacías, sin repetidos y en orden estable. */
+function idsValidos(valor: unknown): string[] {
+  if (!Array.isArray(valor)) return []
+  const vistos = new Set<string>()
+  for (const id of valor) {
+    if (typeof id === 'string' && id !== '') vistos.add(id)
+  }
+  return [...vistos]
+}
+
+/** Plazo guardado: entero de semanas dentro de [4, 52] (SPEC-calculo §1 fila 24). */
+function plazoValido(valor: unknown): number | null {
+  if (typeof valor !== 'number' || !Number.isInteger(valor)) return null
+  return valor >= PLAZO_MIN_SEMANAS && valor <= PLAZO_MAX_SEMANAS ? valor : null
+}
+
 /** Las cuatro respuestas del somatotipo, cada una contra su propio dominio. Las que falten se
  *  quedan fuera: el paso las trata como "sin contestar". */
 function somatotipoValido(valor: unknown): Partial<InputSomatotipo> {
@@ -305,6 +356,13 @@ export function cargarBorrador(): Borrador {
     const datos = JSON.parse(crudo) as Partial<Borrador> & Record<string, unknown>
     const prioridad = datos.recomposicion_prioridad as RecomposicionPrioridad | undefined
     const menstruacion = datos.menstruacion as Menstruacion | undefined
+    // v1.2: los tres campos nuevos del cuestionario. Los ids de alimentos se filtran contra
+    // `foods.json` más tarde (en el paso 14 y en `src/meals`), aquí solo se exige que sean cadenas.
+    const sintomas = Array.isArray(datos.sintomas_regla)
+      ? ORDEN_SINTOMAS.filter((s) => (datos.sintomas_regla as unknown[]).includes(s))
+      : base.sintomas_regla
+    const excluidos = [...idsValidos(datos.alimentos_excluidos)].sort()
+    const favoritos = idsValidos(datos.alimentos_favoritos).filter((id) => !excluidos.includes(id))
     // Campos de la v1.0 que ya no existen: se leen (para traducir la preferencia) y se tiran,
     // para no volver a guardarlos en el borrador nuevo.
     // Campo a campo, contra su tipo y su dominio: lo que no cuadra vuelve al valor inicial. Los
@@ -317,6 +375,9 @@ export function cargarBorrador(): Borrador {
       edad: texto(datos.edad, base.edad),
       embarazo_lactancia: booleanoOpcional(datos.embarazo_lactancia),
       menstruacion: menstruacion && MENSTRUACIONES.includes(menstruacion) ? menstruacion : null,
+      // Los síntomas solo tienen sentido con la regla presente (§1 paso 3b): con cualquier otra
+      // respuesta la subpregunta ni se pinta, así que un borrador con ambas cosas es basura.
+      sintomas_regla: menstruacion === 'regular' || menstruacion === 'irregular' ? sintomas : [],
       altura_cm: texto(datos.altura_cm, base.altura_cm),
       peso_kg: texto(datos.peso_kg, base.peso_kg),
       condiciones: Array.isArray(datos.condiciones)
@@ -349,6 +410,8 @@ export function cargarBorrador(): Borrador {
       recomposicion_prioridad:
         prioridad && PRIORIDADES.includes(prioridad) ? prioridad : 'equilibrado',
       ritmo: opcion(datos.ritmo, RITMOS, base.ritmo),
+      usarPlazo: booleano(datos.usarPlazo, base.usarPlazo),
+      plazo_semanas: plazoValido(datos.plazo_semanas),
       quierePesoObjetivo: booleanoOpcional(datos.quierePesoObjetivo),
       peso_objetivo: texto(datos.peso_objetivo, base.peso_objetivo),
       n_comidas: N_COMIDAS.includes(datos.n_comidas as NComidas)
@@ -356,6 +419,8 @@ export function cargarBorrador(): Borrador {
         : base.n_comidas,
       clima_caluroso: booleano(datos.clima_caluroso, base.clima_caluroso),
       menu_sencillo: booleano(datos.menu_sencillo, base.menu_sencillo),
+      alimentos_excluidos: excluidos,
+      alimentos_favoritos: favoritos,
       fecha_inicio: texto(datos.fecha_inicio, base.fecha_inicio),
       peso_inicio: texto(datos.peso_inicio, base.peso_inicio),
       ...normalizarPreferencias(datos),
@@ -445,15 +510,40 @@ function objetivoUsaRitmo(objetivo: Objetivo | null): boolean {
   return objetivo === null || objetivo === 'perder' || objetivo === 'ganar' || objetivo === 'no_se'
 }
 
+/**
+ * Peso objetivo (paso 11, v1.2): los tres objetivos de siempre y, además, la recomposición
+ * salvo con prioridad `ganar` —las otras dos prioridades producen un déficit real y el motor
+ * propone y valida la meta como en `perder` (SPEC-ux §1.1)—. Con el objetivo todavía sin
+ * contestar se asume que aplica, como pide la barra de progreso.
+ */
+export function pidePesoObjetivo(borrador: Borrador): boolean {
+  if (objetivoUsaRitmo(borrador.objetivo)) return true
+  return borrador.objetivo === 'recomposicion' && borrador.recomposicion_prioridad !== 'ganar'
+}
+
+/** `true` si la cuarta opción del paso de ritmo ("Tengo una fecha en mente") se puede ofrecer:
+ *  sin una meta numérica no hay nada que fechar (SPEC-ux §1 paso 12). */
+export function hayMetaNumerica(borrador: Borrador): boolean {
+  return (
+    pidePesoObjetivo(borrador) &&
+    borrador.quierePesoObjetivo === true &&
+    leerNumero(borrador.peso_objetivo) !== null
+  )
+}
+
 /** Pasos que aplican con las respuestas dadas hasta ahora (SPEC-ux §1.0). */
 export function pasosVisibles(borrador: Borrador): PasoId[] {
   const pasos: PasoId[] = ['sexo', 'edad']
   // La regla va justo detrás de embarazo/lactancia y solo se pregunta a mujeres (§1 paso 3b).
   if (borrador.sexo === 'mujer') pasos.push('embarazo', 'regla')
   pasos.push('medidas', 'condiciones', 'grasa', 'somatotipo', 'actividad', 'entrenamiento', 'objetivo')
-  // El peso objetivo ya no depende de ningún cribado (v1.1, decisión A): solo del objetivo.
-  if (objetivoUsaRitmo(borrador.objetivo)) pasos.push('ritmo', 'pesoObjetivo')
-  pasos.push('preferencias')
+  // Orden de la v1.2: primero la meta y después el ritmo, porque la cuarta opción del ritmo
+  // (la fecha) no existe sin una meta a la que llegar.
+  if (pidePesoObjetivo(borrador)) pasos.push('pesoObjetivo')
+  if (objetivoUsaRitmo(borrador.objetivo)) pasos.push('ritmo')
+  // El paso de alimentos se ve siempre y es el último: solo se puede pintar cuando ya se conocen
+  // la base y las restricciones del paso 13.
+  pasos.push('preferencias', 'alimentos')
   return pasos
 }
 
@@ -583,8 +673,14 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
     case 'objetivo':
       return { completo: b.objetivo !== null, errores }
 
-    case 'ritmo':
+    // Con "Tengo una fecha en mente" marcada, el paso no está contestado hasta que hay plazo
+    // (§1 paso 12): el mensaje de la barra dice exactamente qué falta.
+    case 'ritmo': {
+      if (b.usarPlazo && hayMetaNumerica(b)) {
+        return { completo: b.plazo_semanas !== null, errores, falta: 'el plazo' }
+      }
       return { completo: b.ritmo !== null, errores }
+    }
 
     case 'pesoObjetivo': {
       if (b.quierePesoObjetivo === null) return { completo: false, errores }
@@ -599,6 +695,10 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
     // La base viene preseleccionada en "como de todo" y el resto de controles tienen valor por
     // defecto (§1 paso 13), así que este paso nunca bloquea el botón.
     case 'preferencias':
+      return { completo: true, errores }
+
+    // Marcar alimentos es opcional (§1 paso 14): el botón principal nunca se apaga aquí.
+    case 'alimentos':
       return { completo: true, errores }
   }
 }
@@ -670,6 +770,10 @@ export function aInputs(b: Borrador): InputCalculo {
   const pasos = pasosVisibles(b)
   const pesoObjetivo =
     pasos.includes('pesoObjetivo') && b.quierePesoObjetivo ? leerNumero(b.peso_objetivo) : null
+  const sintomas =
+    b.sexo === 'mujer' && (b.menstruacion === 'regular' || b.menstruacion === 'irregular')
+      ? ORDEN_SINTOMAS.filter((s) => b.sintomas_regla.includes(s))
+      : []
 
   // Paso 13 (§1.1): se envían los tres campos nuevos y también el antiguo `preferencia`.
   const restricciones = ORDEN_RESTRICCIONES.filter((r) => b.restricciones.includes(r))
@@ -698,6 +802,16 @@ export function aInputs(b: Borrador): InputCalculo {
     recomposicion_prioridad: b.objetivo === 'recomposicion' ? b.recomposicion_prioridad : null,
     // Solo se pregunta a mujeres; en hombres el motor la ignora, pero no la enviamos siquiera.
     menstruacion: b.sexo === 'mujer' ? b.menstruacion : null,
+    // v1.2 (decisión I): solo con la regla presente, y siempre en el orden canónico. No cambia
+    // ningún número: su único efecto es `Resultado.ciclo`.
+    sintomas_regla: sintomas.length > 0 ? sintomas : null,
+    // v1.2 (decisión H): el plazo solo viaja si la pantalla lo ha podido ofrecer, es decir, con
+    // el paso de ritmo visible y una meta numérica de verdad.
+    plazo_semanas: pasos.includes('ritmo') && b.usarPlazo && pesoObjetivo !== null ? b.plazo_semanas : null,
+    // v1.2 (decisión G): el motor las ignora por completo; las lee `src/meals`. Ningún id puede
+    // estar en las dos listas.
+    alimentos_excluidos: b.alimentos_excluidos,
+    alimentos_favoritos: b.alimentos_favoritos.filter((id) => !b.alimentos_excluidos.includes(id)),
     n_comidas: b.n_comidas,
     clima_caluroso: b.clima_caluroso,
     // Solo lo lee el generador de menús; el motor lo ignora por completo (§3.7.1).
@@ -735,9 +849,15 @@ export function pasoDeCampo(campo: string): PasoId | null {
     case 'recomposicion_prioridad':
       return 'objetivo'
     case 'ritmo':
+    case 'plazo_semanas':
       return 'ritmo'
     case 'peso_objetivo':
       return 'pesoObjetivo'
+    case 'sintomas_regla':
+      return 'regla'
+    case 'alimentos_excluidos':
+    case 'alimentos_favoritos':
+      return 'alimentos'
     case 'preferencia':
     case 'preferencia_base':
     case 'restricciones':

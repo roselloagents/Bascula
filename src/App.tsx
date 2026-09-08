@@ -65,7 +65,9 @@ export default function App() {
   // Al recargar, se vuelve al paso donde estaba el usuario. Si ya tenía plan, al último paso:
   // el plan no se persiste, así que desde ahí se recupera con una sola pulsación.
   const [pasoInicial, setPasoInicial] = useState<PasoId>(
-    sesionInicial.current.planGenerado ? 'preferencias' : (sesionInicial.current.paso ?? 'sexo'),
+    // Con un plan hecho se aterriza en la ÚLTIMA pregunta, que desde la v1.2 es la de alimentos:
+    // desde ahí el botón devuelve el plan guardado con una sola pulsación.
+    sesionInicial.current.planGenerado ? 'alimentos' : (sesionInicial.current.paso ?? 'sexo'),
   )
   // Seguimiento local (§2.6c): solo en este dispositivo, nunca sale del navegador.
   const [pesajes, setPesajes] = useState<Pesaje[]>(() => cargarPesajes())
@@ -188,6 +190,51 @@ export default function App() {
     })
   }
 
+  /**
+   * "No me gusta" por alimento (§2.5, v1.2) y su "Deshacer". Cambia las dos listas del borrador y
+   * rehace el menú, las equivalencias, la compra y los datos del PDF **sin volver a llamar al
+   * motor**: `calcular` ignora estas listas, así que ni las calorías ni los macros ni la
+   * proyección pueden moverse, y la huella del plan (`firmaDeInputs`) tampoco cambia, de modo que
+   * el ajuste manual guardado y los pesajes siguen en pie.
+   */
+  const cambiarAlimentos = (excluidos: string[]) => {
+    setBorrador((previo) => ({
+      ...previo,
+      alimentos_excluidos: excluidos,
+      alimentos_favoritos: previo.alimentos_favoritos.filter((id) => !excluidos.includes(id)),
+    }))
+    setFase((previa) => {
+      if (previa.nombre !== 'resultados') return previa
+      const inputs: InputCalculo = {
+        ...previa.inputs,
+        alimentos_excluidos: excluidos,
+        alimentos_favoritos: (previa.inputs.alimentos_favoritos ?? []).filter(
+          (id) => !excluidos.includes(id),
+        ),
+      }
+      return { ...previa, inputs }
+    })
+    void import('./meals').then(({ generarEjemplos }) => {
+      setFase((previa) =>
+        previa.nombre === 'resultados'
+          ? { ...previa, ejemplos: generarEjemplos(previa.inputs, previa.resultado, variante) }
+          : previa,
+      )
+    })
+  }
+
+  const excluirAlimento = (id: string) => {
+    if (fase.nombre !== 'resultados') return
+    const previos = fase.inputs.alimentos_excluidos ?? []
+    if (previos.includes(id)) return
+    cambiarAlimentos([...previos, id].sort())
+  }
+
+  const deshacerExclusion = (id: string) => {
+    if (fase.nombre !== 'resultados') return
+    cambiarAlimentos((fase.inputs.alimentos_excluidos ?? []).filter((x) => x !== id))
+  }
+
   /** "Ver otro ejemplo" (§2.5): otra plantilla del mismo banco, sin volver a llamar al motor. */
   const otroEjemplo = () => {
     if (fase.nombre !== 'resultados') return
@@ -229,6 +276,13 @@ export default function App() {
     // Sin campo que corregir se entra por la primera pregunta; desde ahí el índice "Ir a una
     // pregunta" del wizard permite saltar a cualquier paso sin repetirlas todas.
     setPasoInicial(primero ?? 'sexo')
+    setFase({ nombre: 'wizard' })
+    window.scrollTo(0, 0)
+  }
+
+  /** Enlace "Cambiar" del resumen de alimentos (§2.5): lleva al paso 14 con el borrador cargado. */
+  const irAlPasoDeAlimentos = () => {
+    setPasoInicial('alimentos')
     setFase({ nombre: 'wizard' })
     window.scrollTo(0, 0)
   }
@@ -279,6 +333,9 @@ export default function App() {
             onPesajes={cambiarPesajes}
             onEditar={() => volverAlWizard()}
             onOtroEjemplo={otroEjemplo}
+            onExcluirAlimento={excluirAlimento}
+            onDeshacerExclusion={deshacerExclusion}
+            onCambiarAlimentos={irAlPasoDeAlimentos}
           />
         ) : null}
 

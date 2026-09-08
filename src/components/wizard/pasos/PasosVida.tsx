@@ -1,7 +1,7 @@
 // Pasos 8 a 13: actividad diaria, entrenamiento, objetivo, ritmo, peso objetivo
 // y preferencias de menú.
 
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import type {
   ActividadDiaria,
   Experiencia,
@@ -16,8 +16,14 @@ import type {
   TipoEntrenamiento,
 } from '../../../engine/types'
 import { CampoNumero, Deslizador, Grupo, Interruptor, Opcion } from '../../ui/Controles'
-import { numCorto, leerNumero } from '../../utiles/formato'
-import { estaMarcado } from '../borrador'
+import { diasEntreIso, hoyIso, numCorto, leerNumero, sumarDias } from '../../utiles/formato'
+import {
+  estaMarcado,
+  hayMetaNumerica,
+  PLAZOS_CHIP,
+  PLAZO_MAX_SEMANAS,
+  PLAZO_MIN_SEMANAS,
+} from '../borrador'
 import { Pantalla, type PropsPaso } from './comun'
 
 const ACTIVIDADES: { valor: ActividadDiaria; titulo: string; detalle: string }[] = [
@@ -275,6 +281,14 @@ export function PasoObjetivo({ b, set }: PropsPaso) {
                     />
                   ))}
                 </Grupo>
+                {/* Nudge de la v1.2 (decisión H): quien quiere bajar varios kilos y elige
+                    recomposición está eligiendo el plan más lento sin saberlo. Informa, no bloquea. */}
+                {b.recomposicion_prioridad === 'perder' ? (
+                  <p className="nota">
+                    Si lo que quieres sobre todo es que la báscula baje varios kilos, elige Perder
+                    grasa: tendrás ritmo, peso objetivo y fecha.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </Fragment>
@@ -290,7 +304,39 @@ const RITMOS: { valor: Ritmo; titulo: string; detalle: string }[] = [
   { valor: 'agresivo', titulo: 'Agresivo', detalle: 'Más rápido, pero exige más disciplina y más hambre.' },
 ]
 
+/** [SPEC] SPEC-ux §1 paso 12: segunda línea fija del selector de plazo. */
+const NOTA_PLAZO =
+  'Elegiremos el ritmo más suave que llegue a esa fecha. Si no hay ninguno seguro que llegue, te lo diremos en el resultado y no te prometeremos la fecha.'
+
+/** Semanas que separan hoy de una fecha, acotadas al dominio del campo (SPEC-calculo §1 fila 24). */
+function semanasHasta(fecha: string): number | null {
+  const dias = diasEntreIso(hoyIso(), fecha)
+  if (dias === null) return null
+  const semanas = Math.round(dias / 7)
+  return Math.min(Math.max(semanas, PLAZO_MIN_SEMANAS), PLAZO_MAX_SEMANAS)
+}
+
 export function PasoRitmo({ b, set }: PropsPaso) {
+  // La cuarta opción solo existe con una meta numérica: sin peso objetivo no hay nada que fechar.
+  const conMeta = hayMetaNumerica(b)
+  const [conFecha, setConFecha] = useState(false)
+  const [fecha, setFecha] = useState('')
+  const hoy = hoyIso()
+
+  const elegirRitmo = (ritmo: Ritmo) => {
+    // Volver a un ritmo descarta el plazo (§1 paso 12): las dos respuestas son excluyentes.
+    setConFecha(false)
+    setFecha('')
+    set({ ritmo, usarPlazo: false, plazo_semanas: null })
+  }
+
+  const elegirPlazo = (plazo_semanas: number) => set({ plazo_semanas })
+
+  const peso = leerNumero(b.peso_kg)
+  const meta = leerNumero(b.peso_objetivo)
+  const delta = peso !== null && meta !== null ? Math.abs(meta - peso) : null
+  const semanas = b.plazo_semanas
+
   return (
     <Pantalla
       titulo="¿A qué ritmo quieres avanzar?"
@@ -303,11 +349,75 @@ export function PasoRitmo({ b, set }: PropsPaso) {
             nombre="ritmo"
             titulo={titulo}
             detalle={detalle}
-            seleccionada={b.ritmo === valor}
-            onElegir={() => set({ ritmo: valor })}
+            seleccionada={!b.usarPlazo && b.ritmo === valor}
+            onElegir={() => elegirRitmo(valor)}
           />
         ))}
+        {conMeta ? (
+          <Opcion
+            nombre="ritmo"
+            titulo="Tengo una fecha en mente"
+            detalle="Elegimos nosotros el ritmo: el más suave que llegue a tiempo."
+            seleccionada={b.usarPlazo}
+            onElegir={() => set({ usarPlazo: true })}
+          />
+        ) : null}
       </div>
+
+      {/* Selector de plazo (§1 paso 12): vive dentro de esta pantalla y no cuenta en la barra. */}
+      {conMeta && b.usarPlazo ? (
+        <div className="subpregunta">
+          <Grupo etiqueta="¿En cuánto tiempo?" fila>
+            {PLAZOS_CHIP.map((valor) => (
+              <Opcion
+                key={valor}
+                nombre="plazo"
+                compacta
+                titulo={`${valor} semanas`}
+                seleccionada={semanas === valor}
+                onElegir={() => elegirPlazo(valor)}
+              />
+            ))}
+          </Grupo>
+
+          {conFecha ? (
+            <div className="campo">
+              <label className="campo-etiqueta" htmlFor="plazo-fecha">
+                Fecha a la que quieres llegar
+              </label>
+              <div className="campo-caja">
+                <input
+                  id="plazo-fecha"
+                  type="date"
+                  value={fecha}
+                  min={sumarDias(hoy, PLAZO_MIN_SEMANAS * 7)}
+                  max={sumarDias(hoy, PLAZO_MAX_SEMANAS * 7)}
+                  onChange={(evento) => {
+                    setFecha(evento.target.value)
+                    const convertidas = semanasHasta(evento.target.value)
+                    if (convertidas !== null) elegirPlazo(convertidas)
+                  }}
+                />
+              </div>
+            </div>
+          ) : (
+            <button type="button" className="btn-plano" onClick={() => setConFecha(true)}>
+              Prefiero poner una fecha
+            </button>
+          )}
+
+          {/* Previsualización honesta: es una resta, no un plan. El motor decide el ritmo. */}
+          <p className="nota nota-recuadro" aria-live="polite">
+            {semanas !== null && delta !== null
+              ? `Son ${numCorto(delta, 1)} kg en ${semanas} semanas: unos ${Math.round(
+                  (delta / semanas) * 1000,
+                )} g por semana.`
+              : 'Elige un plazo y te decimos cuántos gramos por semana serían.'}
+          </p>
+          <p className="nota">{NOTA_PLAZO}</p>
+        </div>
+      ) : null}
+
       <p className="nota">
         Ajustaremos el ritmo final a lo que sea seguro para tu caso; puede que apliquemos el más suave
         aunque elijas otro.
@@ -316,16 +426,21 @@ export function PasoRitmo({ b, set }: PropsPaso) {
   )
 }
 
+/** [SPEC] SPEC-ux §1 paso 11: intro literal, solo en recomposición (v1.2). */
+const INTRO_RECOMP =
+  'Aunque tu plan sea de recomposición, con este déficit la báscula debería bajar algo. Dinos a dónde te gustaría llegar y te dibujamos por dónde debería ir el peso. No te vamos a dar una fecha: en recomposición no se puede.'
+
 export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
   const altura = leerNumero(b.altura_cm)
   const objetivo = leerNumero(b.peso_objetivo)
-  // Previsualización simple del IMC exigida por SPEC-ux §1 paso 12; el cálculo
+  // Previsualización simple del IMC exigida por SPEC-ux §1 paso 11; el cálculo
   // real y cualquier corrección del peso objetivo los hace el motor.
   const imc = altura && objetivo ? objetivo / (altura / 100) ** 2 : null
 
   return (
     <Pantalla
       titulo="¿Tienes un peso objetivo en mente?"
+      intro={b.objetivo === 'recomposicion' ? INTRO_RECOMP : undefined}
       ayuda="Si no lo tienes claro, no pasa nada: te proponemos un peso saludable según tu altura y tu situación actual, y podrás cambiarlo cuando quieras."
     >
       <div className="opciones">
@@ -339,7 +454,11 @@ export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
           nombre="quiere-peso"
           titulo="No lo sé, proponédmelo vosotros"
           seleccionada={b.quierePesoObjetivo === false}
-          onElegir={() => set({ quierePesoObjetivo: false, peso_objetivo: '' })}
+          // Sin meta no puede haber plazo: la cuarta opción del paso de ritmo desaparece y el
+          // plazo se descarta con ella (§1 paso 12).
+          onElegir={() =>
+            set({ quierePesoObjetivo: false, peso_objetivo: '', usarPlazo: false, plazo_semanas: null })
+          }
         />
       </div>
       {b.quierePesoObjetivo ? (
@@ -350,7 +469,13 @@ export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
             autoFoco
             placeholder="Ej. 68"
             valor={b.peso_objetivo}
-            onCambio={(peso_objetivo) => set({ peso_objetivo })}
+            onCambio={(peso_objetivo) =>
+              set(
+                leerNumero(peso_objetivo) === null
+                  ? { peso_objetivo, usarPlazo: false, plazo_semanas: null }
+                  : { peso_objetivo },
+              )
+            }
             error={errores.peso_objetivo}
             max={300}
             marcado={estaMarcado(marcados, 'peso_objetivo')}

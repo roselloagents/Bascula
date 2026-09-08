@@ -23,6 +23,8 @@ import {
   calcularBalance,
   diasEntre,
   fechaCorta,
+  mensajeFechaPesaje,
+  mensajePesoPesaje,
   ordenar,
   semanaDePesaje,
 } from './seguimiento'
@@ -198,7 +200,10 @@ export function BloqueProyeccion({ inputs, resultado, avisos, pesajes }: Proyecc
   const proyeccion = resultado.proyeccion
   if (!proyeccion || proyeccion.length === 0) return null
 
+  // El copy de debajo de la gráfica es uno de tres, nunca dos (§2.6b y §4.5b): la nota general,
+  // el texto de la proyección plana o el de la banda de recomposición de la v1.2.
   const plana = buscarAviso(avisos, 'INFO_PROYECCION_PLANA')
+  const recomp = buscarAviso(avisos, 'INFO_PROYECCION_RECOMP')
   const ultima = proyeccion[proyeccion.length - 1].semana
   const puntos = pesajesEnSemanas(pesajes, inputs.fecha_inicio, ultima)
 
@@ -253,7 +258,7 @@ export function BloqueProyeccion({ inputs, resultado, avisos, pesajes }: Proyecc
         </div>
       </details>
 
-      <p className="nota">{plana ? plana.texto : NOTA_PROYECCION}</p>
+      <p className="nota">{plana?.texto ?? recomp?.texto ?? NOTA_PROYECCION}</p>
     </Seccion>
   )
 }
@@ -283,10 +288,15 @@ export function BloqueSeguimiento({
   if (!proyeccion || proyeccion.length === 0) return null
 
   const peso = leerNumero(kg)
-  const dentroDeFechas =
-    (diasEntre(inputs.fecha_inicio, fecha) ?? -1) >= 0 && (diasEntre(fecha, hoy) ?? -1) >= 0
+  const desdeInicio = diasEntre(inputs.fecha_inicio, fecha)
+  const hastaHoy = diasEntre(fecha, hoy)
+  const dentroDeFechas = (desdeInicio ?? -1) >= 0 && (hastaHoy ?? -1) >= 0
   const pesoValido = peso !== null && peso >= PESO_MIN_KG && peso <= PESO_MAX_KG
   const valido = dentroDeFechas && pesoValido
+  // §2.6c (v1.2, decisión J): hasta ahora una fecha fuera de rango se rechazaba en silencio —el
+  // botón apagado, ni mensaje ni campo marcado—, que es justo lo que la §1.0 prohíbe en el wizard.
+  const errorFecha = mensajeFechaPesaje(fecha, inputs.fecha_inicio, hoy)
+  const errorPeso = mensajePesoPesaje(peso)
 
   const balance = calcularBalance(
     pesajes,
@@ -345,22 +355,29 @@ export function BloqueSeguimiento({
               <label className="campo-etiqueta" htmlFor={idFecha}>
                 Fecha
               </label>
-              <div className="campo-caja">
+              <div className={`campo-caja${errorFecha ? ' erroneo' : ''}`}>
                 <input
                   id={idFecha}
                   type="date"
                   value={fecha}
                   min={inputs.fecha_inicio}
                   max={hoy}
+                  aria-invalid={errorFecha !== null}
+                  aria-describedby={errorFecha ? `${idFecha}-error` : undefined}
                   onChange={(evento) => setFecha(evento.target.value)}
                 />
               </div>
+              {errorFecha ? (
+                <p className="campo-error" id={`${idFecha}-error`} role="alert">
+                  {errorFecha}
+                </p>
+              ) : null}
             </div>
             <div className="campo">
               <label className="campo-etiqueta" htmlFor={idKg}>
                 Peso
               </label>
-              <div className="campo-caja">
+              <div className={`campo-caja${errorPeso ? ' erroneo' : ''}`}>
                 <input
                   id={idKg}
                   type="text"
@@ -368,10 +385,17 @@ export function BloqueSeguimiento({
                   autoComplete="off"
                   placeholder="Ej. 78,4"
                   value={kg}
+                  aria-invalid={errorPeso !== null}
+                  aria-describedby={errorPeso ? `${idKg}-error` : undefined}
                   onChange={(evento) => setKg(evento.target.value.replace(/[^\d.,]/g, ''))}
                 />
                 <span className="campo-unidad">kg</span>
               </div>
+              {errorPeso ? (
+                <p className="campo-error" id={`${idKg}-error`} role="alert">
+                  {errorPeso}
+                </p>
+              ) : null}
             </div>
             <button type="button" className="btn btn-principal" disabled={!valido} onClick={anadir}>
               Añadir pesaje

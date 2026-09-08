@@ -37,6 +37,11 @@ interface ResultadosProps {
   onPesajes: (pesajes: Pesaje[]) => void
   onEditar: () => void
   onOtroEjemplo: () => void
+  /** "No me gusta" de cada alimento del menú (§2.5, v1.2). */
+  onExcluirAlimento?: (id: string) => void
+  onDeshacerExclusion?: (id: string) => void
+  /** Enlace "Cambiar" del resumen de alimentos: lleva al paso 14 del cuestionario. */
+  onCambiarAlimentos?: () => void
 }
 
 export function Resultados({
@@ -51,6 +56,9 @@ export function Resultados({
   onPesajes,
   onEditar,
   onOtroEjemplo,
+  onExcluirAlimento,
+  onDeshacerExclusion,
+  onCambiarAlimentos,
 }: ResultadosProps) {
   // SPEC-ux §2.8: con avisos de condición médica, IMC 35/40 o 65 años o más,
   // el bloque de avisos sube por encima de los menús.
@@ -98,14 +106,21 @@ export function Resultados({
       {hayPanelAjuste(base) ? (
         <PanelAjuste base={base} inputs={inputs} ajuste={ajuste} onAplicar={onAjustar} />
       ) : null}
-      <TarjetaCiclo avisos={avisos} />
+      <TarjetaCiclo avisos={avisos} resultado={resultado} ejemplos={ejemplos} />
 
       <BloqueAgua inputs={inputs} resultado={resultado} avisos={avisos} />
       <BloqueComidas inputs={inputs} resultado={resultado} avisos={avisos} />
 
       {prioridad ? bloqueAvisos : null}
 
-      <BloqueMenus inputs={inputs} ejemplos={ejemplos} onOtroEjemplo={onOtroEjemplo} />
+      <BloqueMenus
+        inputs={inputs}
+        ejemplos={ejemplos}
+        onOtroEjemplo={onOtroEjemplo}
+        onExcluirAlimento={onExcluirAlimento}
+        onDeshacerExclusion={onDeshacerExclusion}
+        onCambiarAlimentos={onCambiarAlimentos}
+      />
       <BloqueEquivalencias inputs={inputs} ejemplos={ejemplos} />
       <BloqueCompra ejemplos={ejemplos} />
 
