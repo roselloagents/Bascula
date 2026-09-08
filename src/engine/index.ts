@@ -329,12 +329,27 @@ export function calcular(inputs: Inputs): Resultado {
   ) {
     avisos = avisos.filter((c) => c !== 'INFO_RITMO_POR_PLAZO' && c !== 'WARN_PLAZO_IRREAL')
   } else if (objetivo.ritmo_plazo !== null) {
-    const no_llega =
-      objetivo.ritmo_efectivo !== objetivo.ritmo_plazo ||
-      (cronograma !== null && cronograma.semanas[0] > plazo)
-    if (no_llega) {
-      avisos = avisos.filter((c) => c !== 'INFO_RITMO_POR_PLAZO')
-      if (!avisos.includes('WARN_PLAZO_IRREAL')) avisos.push('WARN_PLAZO_IRREAL')
+    // El calendario del paso 14 manda sobre la estimación del paso 6.7ter, en las dos direcciones.
+    // Si llega de sobra —la banda entera cabe dentro del plazo—, no hay nada que avisar: se retira
+    // `WARN_PLAZO_IRREAL`, y con él `INFO_RITMO_POR_PLAZO` cuando un suavizado de seguridad ha
+    // cambiado el ritmo que el plazo había elegido (el texto diría que lo puso la fecha).
+    const llega_holgado = cronograma !== null && cronograma.semanas[1] <= plazo
+    if (llega_holgado) {
+      avisos = avisos.filter((c) => c !== 'WARN_PLAZO_IRREAL')
+      if (objetivo.ritmo_efectivo !== objetivo.ritmo_plazo) {
+        avisos = avisos.filter((c) => c !== 'INFO_RITMO_POR_PLAZO')
+      }
+    } else {
+      // Sin cronograma no se puede sostener la promesa: el informe declara la fecha incalculable
+      // en la misma página en la que `INFO_RITMO_POR_PLAZO` afirmaría que el plan llega a ella.
+      const no_llega =
+        objetivo.ritmo_efectivo !== objetivo.ritmo_plazo ||
+        cronograma === null ||
+        cronograma.semanas[0] > plazo
+      if (no_llega) {
+        avisos = avisos.filter((c) => c !== 'INFO_RITMO_POR_PLAZO')
+        if (!avisos.includes('WARN_PLAZO_IRREAL')) avisos.push('WARN_PLAZO_IRREAL')
+      }
     }
   }
   const tiene_tca = condiciones.includes('tca')
@@ -348,6 +363,10 @@ export function calcular(inputs: Inputs): Resultado {
     pref_base: objetivo.preferencia_base,
     restricciones: objetivo.restricciones,
     low_carb: objetivo.low_carb,
+    // Único uso de `alimentos_excluidos` en el motor, y no cambia ni un número: retira de la lista
+    // "Prioriza:" lo que el usuario ha marcado como "no me gusta" (§3.2b). Sin esto la tarjeta se
+    // contradecía consigo misma: recomendaba arriba lo que la compra descartaba tres líneas abajo.
+    excluidos: inputs.alimentos_excluidos ?? null,
   })
 
   // ---------------- Paso 18 — límites del ajuste manual (se publican SIEMPRE, también sin ajuste).

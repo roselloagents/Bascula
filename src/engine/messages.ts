@@ -159,13 +159,22 @@ const miles = (x: number): string =>
   String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 
 /**
+ * Meta contra la que hablan los dos avisos del plazo: la del PLAN (`peso_objetivo.efectivo`), que
+ * es la que el paso 6.7ter usa para elegir el ritmo y la que el informe imprime en todas partes.
+ * Cuando los suelos de seguridad del paso 13 suben la meta que escribió el usuario, los avisos
+ * tienen que hablar de la meta corregida: la otra la rechaza el propio informe.
+ */
+function metaDelPlazo(ctx: Contexto): number {
+  return ctx.resultado.peso_objetivo?.efectivo ?? ctx.inputs.peso_objetivo ?? 0
+}
+
+/**
  * `{ritmo_req_g}` de los dos avisos del plazo (§4): los gramos por semana que **exige la fecha**,
  * no los del plan. Por eso en `WARN_PLAZO_IRREAL` siempre es mayor que el ritmo que se aplica.
  */
 function ritmoRequeridoG(ctx: Contexto): string {
-  const pobj = ctx.inputs.peso_objetivo ?? 0
   const plazo = ctx.inputs.plazo_semanas ?? 1
-  return miles(Math.abs(pobj - ctx.inputs.peso_kg) / plazo * 1000)
+  return miles(Math.abs(metaDelPlazo(ctx) - ctx.inputs.peso_kg) / plazo * 1000)
 }
 
 interface Plantilla {
@@ -398,8 +407,15 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
   WARN_PROTEINA_TOMA_ALTA: {
     severidad: 'warn',
     titulo: 'Mucha proteína en una toma',
-    texto:
-      'Con este número de comidas concentras mucha proteína en una sola toma. El total diario sigue siendo lo que más cuenta, pero repartirla en 3 tomas se aprovecha algo mejor.',
+    // El consejo tiene que mirar el reparto que el usuario ya tiene: recomendarle "repártela en 3
+    // tomas" a quien come 3 (o 4, o 5) veces al día era un consejo imposible de seguir.
+    texto: (ctx) => {
+      const n = ctx.resultado.comidas.length || ctx.inputs.n_comidas
+      if (n >= 4) {
+        return `Con tu reparto de ${n} comidas alguna toma concentra bastante proteína. No pasa nada: el total del día es lo que manda y no hace falta que la partas más. Si te sienta pesada, pasa una parte a la comida de al lado.`
+      }
+      return `Con ${n} comidas al día concentras mucha proteína en una sola toma. El total diario sigue siendo lo que más cuenta, pero repartirla en ${n + 1} tomas se aprovecha algo mejor.`
+    },
   },
   WARN_IMC_BAJO: {
     severidad: 'warn',
@@ -670,8 +686,14 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
     // `{suave/moderado/agresivo}` es `ritmo_efectivo`: en este aviso coincide siempre con el que
     // eligió el plazo, porque si un suavizado lo hubiera bajado el paso 17 ya lo habría cambiado
     // por WARN_PLAZO_IRREAL.
-    texto: (ctx) =>
-      `Nos has dicho que quieres llegar a ${num(ctx.inputs.peso_objetivo ?? 0)} kg en ${ctx.inputs.plazo_semanas} semanas: son unos ${ritmoRequeridoG(ctx)} g por semana. Hemos puesto el ritmo ${ctx.resultado.ritmo_efectivo}, el más suave de los nuestros que llega a esa fecha, y hemos ignorado el que habías elegido antes. Si la fecha no es tan importante, un ritmo más suave se sostiene mejor y cuesta menos músculo.`,
+    // La coletilla del "podrías ir aún más despacio" solo se imprime cuando existe un ritmo por
+    // debajo del aplicado: con el suave puesto, sugerir uno más suave es pedir lo imposible.
+    texto: (ctx) => {
+      const suave = ctx.resultado.ritmo_efectivo === 'suave'
+      return `Tu fecha son ${ctx.inputs.plazo_semanas} semanas y la meta de tu plan son ${num(metaDelPlazo(ctx))} kg: eso es un ritmo de unos ${ritmoRequeridoG(ctx)} g por semana. Hemos puesto el ritmo ${ctx.resultado.ritmo_efectivo}, el más suave de los nuestros que llega a esa fecha.${
+        suave ? '' : ' Si la fecha no es tan importante, un ritmo más suave se sostiene mejor y cuesta menos músculo.'
+      }`
+    },
   },
   WARN_PLAZO_IRREAL: {
     severidad: 'warn',
@@ -684,11 +706,17 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
         ctx.resultado.ritmo_efectivo === 'agresivo'
           ? 'Hemos puesto el más rápido de nuestra tabla.'
           : 'Hemos aplicado el ritmo que tu caso permite.'
-      const calendario = conCalendario(
-        ctx,
-        ` Con este plan el cálculo da entre ${cg?.semanas[0]} y ${cg?.semanas[1]} semanas.`,
-      )
-      return `Para llegar a ${num(ctx.inputs.peso_objetivo ?? 0)} kg en ${ctx.inputs.plazo_semanas} semanas harían falta unos ${ritmoRequeridoG(ctx)} g por semana, y ese no es un ritmo que podamos proponerte con seguridad. ${comoQueda} No te prometemos esa fecha: la buena es la que sale de tu plan real.${calendario} Perder más rápido no es perder mejor: por debajo de cierto ritmo lo que se va es músculo.`
+      // Sin cronograma no hay ninguna fecha que ofrecer a cambio, y prometer uno sería justo lo
+      // que este aviso viene a evitar: se dice que no se puede calcular y se acaba ahí.
+      const cierre =
+        cg === null
+          ? ' Con tu plan real no podemos calcularte un calendario, así que esa fecha menos todavía.'
+          : ` No te prometemos esa fecha: la buena es la que sale de tu plan real. Con este plan el cálculo da entre ${cg.semanas[0]} y ${cg.semanas[1]} semanas.`
+      const moraleja =
+        ctx.resultado.objetivo_efectivo === 'ganar'
+          ? 'Ganar más rápido no es ganar mejor: por encima de cierto superávit lo que se gana es grasa.'
+          : 'Perder más rápido no es perder mejor: por encima de cierto ritmo lo que se va es músculo.'
+      return `Para llegar a ${num(metaDelPlazo(ctx))} kg en ${ctx.inputs.plazo_semanas} semanas harían falta unos ${ritmoRequeridoG(ctx)} g por semana, y ese ritmo no sale de tu plan. ${comoQueda}${cierre} ${moraleja}`
     },
   },
   INFO_PROYECCION_RECOMP: {

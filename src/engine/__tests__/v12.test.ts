@@ -97,15 +97,29 @@ describe('Paso 6.7ter — el plazo elige el ritmo discreto (decisión H)', () =>
     expect(r.avisos).not.toContain('WARN_PLAZO_IRREAL')
   })
 
-  it('plazo justo: el ritmo elegido es el más suave que llega, no el siguiente', () => {
-    // 78 kg, banda muy_alto: suave 0,39 y moderado 0,585 kg/sem. Con el ritmo exigido EXACTAMENTE
-    // igual al del suave gana el suave (la comparación es `≥`, no `>`); un gramo más y gana el
-    // moderado. (El aviso que acompaña a cada uno lo decide después el calendario del paso 17.)
+  it('plazo justo: gana el más suave cuyas SEMANAS caben, descansos incluidos', () => {
+    // 78 kg, banda muy_alto: suave 0,39 y moderado 0,585 kg/sem. El ritmo se juzga con las mismas
+    // semanas que va a publicar el cronograma (lineal + una semana de mantenimiento por cada 8),
+    // no con la tasa pelada: 7,8 kg al ritmo suave son 20 semanas de dieta + 2 de descanso = 22, y
+    // no caben en 20; el moderado son 14 + 1 = 15 y sí. Juzgarlo con la tasa daba el suave y luego
+    // el paso 17 lo desmentía con un calendario de 24 semanas.
     const justo = calcular(con({ ...CASO_19, peso_objetivo: 78 - 0.39 * 20, plazo_semanas: 20 }))
-    expect(justo.ritmo_efectivo).toBe('suave')
+    expect(justo.ritmo_efectivo).toBe('moderado')
 
-    const siguiente = calcular(con({ ...CASO_19, peso_objetivo: 78 - 0.45 * 20, plazo_semanas: 20 }))
-    expect(siguiente.ritmo_efectivo).toBe('moderado')
+    // Con margen de sobra vuelve a ganar el más suave de la tabla.
+    const holgado = calcular(con({ ...CASO_19, peso_objetivo: 78 - 0.39 * 20, plazo_semanas: 30 }))
+    expect(holgado.ritmo_efectivo).toBe('suave')
+  })
+
+  it('pedir MÁS plazo nunca da un plan peor (monotonía del paso 6.7ter)', () => {
+    const orden = { suave: 0, moderado: 1, agresivo: 2 }
+    let previo = 3
+    for (const plazo of [8, 12, 15, 16, 20, 24, 30, 40, 52]) {
+      const r = calcular(con({ ...CASO_19, peso_objetivo: 72, plazo_semanas: plazo }))
+      const actual = orden[r.ritmo_efectivo]
+      expect(actual, `plazo ${plazo}`).toBeLessThanOrEqual(previo)
+      previo = actual
+    }
   })
 
   it('plazo irreal: ni el agresivo llega ⇒ agresivo y WARN_PLAZO_IRREAL', () => {
@@ -155,7 +169,11 @@ describe('Paso 6.7ter — el plazo elige el ritmo discreto (decisión H)', () =>
     const holgado = calcular({ ...base, plazo_semanas: 40 })
     expect(holgado.objetivo_efectivo).toBe('ganar')
     expect(holgado.ritmo_efectivo).toBe('suave')
-    expect(holgado.avisos).toContain('INFO_RITMO_POR_PLAZO')
+    // El superávit real de este plan es tan pequeño que el cronograma se va fuera de horizonte y
+    // sale `null`: sin calendario no se puede sostener ninguna promesa de fecha (paso 17).
+    expect(holgado.cronograma).toBeNull()
+    expect(holgado.avisos).not.toContain('INFO_RITMO_POR_PLAZO')
+    expect(holgado.avisos).toContain('WARN_PLAZO_IRREAL')
     // 4 kg en 4 semanas = 1 kg/sem: ni el techo de 500 kcal/día (0,4545 kg/sem) llega.
     const imposible = calcular({ ...base, plazo_semanas: 4 })
     expect(imposible.ritmo_efectivo).toBe('agresivo')
@@ -247,13 +265,18 @@ describe('Paso 17 — el plazo no sobrevive a los suavizados ni al calendario', 
     expect(t18?.texto).toContain('1.875 g por semana') // |80 − 95| / 8 · 1000
     expect(t18?.texto).toContain('Hemos puesto el más rápido de nuestra tabla.')
     expect(t18?.texto).toContain('entre 30 y 37 semanas')
+    // La moraleja va en el sentido correcto: el músculo se pierde yendo demasiado RÁPIDO.
+    expect(t18?.texto).toContain('por encima de cierto ritmo lo que se va es músculo')
     expect(t18?.texto).not.toContain('{')
 
     const holgado = calcular(CASO_19)
     const t19 = textosAvisos(holgado, CASO_19).find((t) => t.codigo === 'INFO_RITMO_POR_PLAZO')
-    expect(t19?.texto).toContain('72 kg en 24 semanas')
+    expect(t19?.texto).toContain('24 semanas')
+    expect(t19?.texto).toContain('72 kg')
     expect(t19?.texto).toContain('250 g por semana')
     expect(t19?.texto).toContain('el ritmo suave')
+    // Con el ritmo suave ya puesto no se sugiere "uno más suave": no existe.
+    expect(t19?.texto).not.toContain('un ritmo más suave')
     expect(t19?.texto).not.toContain('{')
 
     // Variante "el ritmo que tu caso permite": el aviso llega desde un suavizado, no del 6.7ter.

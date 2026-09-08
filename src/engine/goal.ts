@@ -2,11 +2,17 @@
 // Las sub-reglas 6.1 a 6.8 se ejecutan en este orden exacto.
 
 import {
+  DIET_BREAK_CADA,
+  DIET_BREAK_UMBRAL_SEMANAS,
+  GRASA_MIN_OBJETIVO_HOMBRE,
+  GRASA_MIN_OBJETIVO_MUJER,
   GRASA_OBJETIVO_HOMBRE,
   GRASA_OBJETIVO_HOMBRE_65,
   GRASA_OBJETIVO_MUJER,
   GRASA_OBJETIVO_MUJER_65,
+  IMC_OBJETIVO_MAX_GANAR,
   IMC_OBJETIVO_MIN,
+  IMC_OBJETIVO_MIN_65,
   KCAL_POR_KG_GRASA,
   PLAZO_EPSILON,
   RITMOS_POR_SUAVIDAD,
@@ -78,6 +84,26 @@ export function grasaObjetivo(hombre: boolean, edad: number): [number, number, n
     ? hombre ? GRASA_OBJETIVO_HOMBRE_65 : GRASA_OBJETIVO_MUJER_65
     : hombre ? GRASA_OBJETIVO_HOMBRE : GRASA_OBJETIVO_MUJER
   return [t[0], t[1], t[2]]
+}
+
+/**
+ * Meta que el paso 13 va a publicar para una meta escrita por el usuario, con los mismos suelos y
+ * techos de seguridad (§2, paso 13): en `perder`, el IMC mínimo por edad y la grasa esencial; en
+ * `ganar`, ese mismo suelo y el techo de IMC 27,5. Se calcula aquí, en el paso 6.7ter, porque el
+ * plazo tiene que medirse contra la meta REAL del plan y no contra una que el informe descarta.
+ */
+function metaSegura(
+  pobj: number,
+  obj: ObjetivoEfectivo | 'no_se',
+  hombre: boolean,
+  edad: number,
+  mlg: number,
+  h2: number,
+): number {
+  const min_imc = (edad >= 65 ? IMC_OBJETIVO_MIN_65 : IMC_OBJETIVO_MIN) * h2
+  if (obj === 'ganar') return Math.min(Math.max(pobj, min_imc), IMC_OBJETIVO_MAX_GANAR * h2)
+  const g_min = hombre ? GRASA_MIN_OBJETIVO_HOMBRE : GRASA_MIN_OBJETIVO_MUJER
+  return Math.max(pobj, min_imc, mlg / (1 - g_min / 100))
 }
 
 export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): SalidaObjetivo {
@@ -167,8 +193,17 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
     ? inputs.plazo_semanas
     : null
   let ritmo_plazo: Ritmo | null = null
-  if (plazo !== null && pobj !== null && (obj === 'perder' || obj === 'ganar')) {
-    const ritmo_req = Math.abs(pobj - PC) / plazo // kg por semana que exige la fecha
+  // La meta contra la que se mide el plazo es la que el paso 13 va a PUBLICAR, no la que el
+  // usuario escribió: los suelos de seguridad (IMC mínimo y grasa esencial) pueden subirla, y
+  // dividir por el plazo una meta que el propio informe rechaza aplicaba un ritmo más duro que el
+  // que exige el plan real. Con la meta ya en el suelo, `meta_plazo` coincide con
+  // `peso_objetivo.efectivo`, que es el número que se imprime.
+  const meta_plazo = pobj === null ? null : metaSegura(pobj, obj, hombre, inputs.edad, mlg, (inputs.altura_cm / 100) ** 2)
+  // Con la meta ya corregida el camino puede desaparecer (el suelo queda por encima del peso
+  // actual, o el techo de `ganar` por debajo): entonces no hay fecha que juzgar y el plazo no
+  // emite nada, ni ritmo ni aviso.
+  const delta_plazo = meta_plazo === null ? 0 : obj === 'perder' ? PC - meta_plazo : meta_plazo - PC
+  if (plazo !== null && meta_plazo !== null && delta_plazo > 0 && (obj === 'perder' || obj === 'ganar')) {
     // kg/semana que da cada ritmo de la tabla, con la misma aritmética del paso 7.
     const kgSem = (r: Ritmo): number | null => {
       if (obj === 'perder') {
@@ -178,9 +213,22 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
       const sup_pct = perfil !== 'fuerza' ? SUPERAVIT_SIN_FUERZA : SUPERAVIT[exp][r]
       return clamp(sup_pct * e.tdee, SUPERAVIT_MIN, SUPERAVIT_MAX) * 7 / KCAL_POR_KG_GRASA
     }
+    // Semanas que ese ritmo produciría DE VERDAD, con la misma aritmética del paso 14: la parte
+    // lineal más las semanas de mantenimiento (diet breaks). Comparar contra la tasa pelada de la
+    // tabla hacía que el paso 17 juzgara con un modelo distinto del que había elegido el ritmo:
+    // el motor avisaba de que la fecha era imposible cuando un ritmo de su propia tabla llegaba,
+    // y pedir MÁS tiempo podía dar una respuesta peor que pedir menos.
+    const semanasDe = (v: number): number => {
+      const sem_lineal = delta_plazo / v
+      const descansos =
+        obj === 'perder' && sem_lineal > DIET_BREAK_UMBRAL_SEMANAS
+          ? Math.floor(sem_lineal / DIET_BREAK_CADA)
+          : 0
+      return Math.ceil(sem_lineal - PLAZO_EPSILON) + descansos
+    }
     for (const r of RITMOS_POR_SUAVIDAD) {
       const v = kgSem(r)
-      if (v !== null && v >= ritmo_req - PLAZO_EPSILON) {
+      if (v !== null && v > 0 && semanasDe(v) <= plazo) {
         ritmo_plazo = r
         break
       }

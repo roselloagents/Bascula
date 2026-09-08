@@ -100,18 +100,55 @@ const CONSEJOS: Record<SintomaRegla, PlantillaConsejo> = {
 }
 
 /**
+ * Ids de `foods.json` que respaldan cada nombre genérico de la tabla de arriba. Solo sirven para
+ * una cosa: retirar de la lista "Prioriza:" un alimento que el usuario ha marcado como "no me
+ * gusta" en el paso 14 (§3.2b). Un nombre entra en la lista mientras le quede al menos un id sin
+ * excluir; un nombre que no esté en este mapa no se retira nunca.
+ */
+const IDS_DE_ALIMENTO_CONSEJO: Readonly<Record<string, readonly string[]>> = {
+  'Pescado azul (salmón, sardinas en lata)': ['salmon', 'sardinas_lata', 'salmon_ahumado'],
+  Nueces: ['nueces'],
+  'Semillas de lino molidas': ['semillas_lino'],
+  'Semillas de chía': ['semillas_chia'],
+  'Cacao puro': ['cacao_puro'],
+  Plátano: ['platano'],
+  'Patata cocida': ['patata_cocida'],
+  Espinacas: ['espinacas'],
+  Calabacín: ['calabacin'],
+  'Yogur griego 0%': ['yogur_griego_0'],
+  'Yogur griego 0% sin lactosa': ['yogur_griego_0_sl'],
+  'Yogur de soja alto en proteína': ['yogur_soja_proteico'],
+  'Fruta (manzana, plátano)': ['manzana', 'platano'],
+  'Chocolate negro 85%': ['chocolate_85'],
+  Almendras: ['almendras'],
+  Avena: ['avena_copos'],
+  'Lentejas o garbanzos': ['lentejas_cocidas', 'garbanzos_cocidos'],
+  Fruta: ['manzana', 'platano', 'naranja', 'kiwi', 'pera', 'mandarina'],
+  'Carne roja magra (ternera)': ['ternera_solomillo'],
+  'Mejillones o berberechos al natural': ['mejillones_lata'],
+  Tofu: ['tofu', 'tofu_firme'],
+}
+
+/**
  * Las dos únicas sustituciones por restricción (§4, paso 19): la avena se retira sin gluten y el
- * yogur griego pasa a su versión sin lactosa. Si la lista se quedara vacía el consejo se publica
- * igual: su texto vale por sí solo.
+ * yogur griego pasa a su versión sin lactosa. Después se retiran los alimentos cuyos ids estén
+ * TODOS en la lista de excluidos del paso 14 (§3.2b): la tarjeta no puede recomendar arriba lo
+ * que la lista de la compra descarta tres líneas más abajo. Si la lista se quedara vacía el
+ * consejo se publica igual: su texto vale por sí solo.
  */
 function alimentosDe(
   clave: SintomaRegla,
   pref_base: PreferenciaBase,
   restricciones: readonly Restriccion[],
+  excluidos: ReadonlySet<string>,
 ): string[] {
   return CONSEJOS[clave].alimentos[pref_base]
     .filter((n) => !(n === 'Avena' && restricciones.includes('sin_gluten')))
     .map((n) => (n === 'Yogur griego 0%' && restricciones.includes('sin_lactosa') ? 'Yogur griego 0% sin lactosa' : n))
+    .filter((n) => {
+      const ids = IDS_DE_ALIMENTO_CONSEJO[n]
+      return !ids || ids.length === 0 || ids.some((id) => !excluidos.has(id))
+    })
 }
 
 export interface EntradaCiclo {
@@ -122,6 +159,8 @@ export interface EntradaCiclo {
   restricciones: readonly Restriccion[]
   /** `low_carb` EFECTIVO (el paso 6.8 lo anula con diabetes), no el pedido. */
   low_carb: boolean
+  /** Ids del paso 14 marcados como "no me gusta" (§3.2b). No cambian ningún número. */
+  excluidos?: readonly string[] | null
 }
 
 /**
@@ -134,6 +173,7 @@ export function calcularCiclo(e: EntradaCiclo): ResultadoCiclo | undefined {
   const marcados = Array.isArray(e.sintomas_regla) ? e.sintomas_regla : []
   const sintomas = SINTOMAS_ORDEN.filter((s) => marcados.includes(s))
   if (sintomas.length === 0) return undefined
+  const excluidos = new Set(Array.isArray(e.excluidos) ? e.excluidos : [])
   const consejos: ConsejoCiclo[] = sintomas.map((clave) => {
     const c = CONSEJOS[clave]
     let texto = c.texto
@@ -141,7 +181,12 @@ export function calcularCiclo(e: EntradaCiclo): ResultadoCiclo | undefined {
     if (clave === 'sangrado_abundante') {
       texto = texto.replace('{fe}', sintomas.includes('cansancio') ? (c.fe ?? '') : '')
     }
-    return { clave, titulo: c.titulo, texto, alimentos: alimentosDe(clave, e.pref_base, e.restricciones) }
+    return {
+      clave,
+      titulo: c.titulo,
+      texto,
+      alimentos: alimentosDe(clave, e.pref_base, e.restricciones, excluidos),
+    }
   })
   return { sintomas: [...sintomas], consejos }
 }
