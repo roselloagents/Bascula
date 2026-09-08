@@ -22,6 +22,7 @@ import type {
   Somatotipo,
   TipoEntrenamiento,
 } from '../engine/types'
+import { alimentoPorId } from '../data/foods'
 
 function traduce<K extends string>(mapa: Record<K, string>, clave: K | null | undefined, porDefecto = '—'): string {
   if (clave === null || clave === undefined) return porDefecto
@@ -247,4 +248,43 @@ export function matizRecomposicion(resultado: {
   const p = resultado?.recomposicion_prioridad
   if (!p || p === 'equilibrado') return ''
   return PRIORIDAD[p] ?? ''
+}
+
+// ---------- v1.2: alimentos excluidos y favoritos (§4.2 y §4.4) ----------
+
+/**
+ * Nombres cortos (`nombre_corto` de `foods.json`, §3.0) de una lista de ids, **en el orden en que
+ * vienen** y sin repetir. Un id que no esté en la base se descarta: en el PDF no puede aparecer un
+ * identificador técnico, y tampoco un hueco con "undefined".
+ */
+export function nombresCortos(ids: readonly string[] | null | undefined): string[] {
+  const vistos = new Set<string>()
+  const salida: string[] = []
+  for (const id of ids ?? []) {
+    if (typeof id !== 'string' || vistos.has(id)) continue
+    vistos.add(id)
+    const alimento = alimentoPorId(id)
+    const nombre = alimento?.nombre_corto?.trim()
+    if (nombre) salida.push(nombre)
+  }
+  return salida
+}
+
+/**
+ * Resumen de alimentos de §2.5 y §4.4: "Sin: brócoli, coliflor · Favoritos: pollo, arroz".
+ * Cada mitad se omite si su lista está vacía; con las dos vacías devuelve cadena vacía y quien
+ * llama no pinta nada. `breve` da la variante en minúscula de la fila de datos de §4.2
+ * ("sin brócoli, coliflor · favoritos pollo, arroz").
+ */
+export function resumenAlimentos(
+  excluidos: readonly string[] | null | undefined,
+  favoritos: readonly string[] | null | undefined,
+  breve = false,
+): string {
+  const sin = nombresCortos(excluidos)
+  const fav = nombresCortos(favoritos)
+  const partes: string[] = []
+  if (sin.length > 0) partes.push(`${breve ? 'sin' : 'Sin:'} ${sin.join(', ')}`)
+  if (fav.length > 0) partes.push(`${breve ? 'favoritos' : 'Favoritos:'} ${fav.join(', ')}`)
+  return partes.join(' · ')
 }

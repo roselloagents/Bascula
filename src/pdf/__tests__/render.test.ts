@@ -3,7 +3,16 @@
 import { describe, expect, it } from 'vitest'
 import { renderToBuffer, renderToFile } from '@react-pdf/renderer'
 import { elementoPlan, generarPdfBlob, nombreFicheroPdf } from '../index'
-import { MUESTRA_AJUSTADA, MUESTRA_CICLO, MUESTRA_COMPLETA, MUESTRA_MINIMA } from '../__fixtures__/muestra'
+import {
+  MUESTRA_AJUSTADA,
+  MUESTRA_ALIMENTOS,
+  MUESTRA_CICLO,
+  MUESTRA_CICLO_SINTOMAS,
+  MUESTRA_COMPLETA,
+  MUESTRA_MINIMA,
+  MUESTRA_RECOMPOSICION,
+} from '../__fixtures__/muestra'
+import { textoDelPdf } from './utiles'
 
 const SALIDA =
   'C:/Users/Msaiz/AppData/Local/Temp/claude/C--Users-Msaiz-Documents-Claude-Projects-Bacula/' +
@@ -85,12 +94,15 @@ describe('exportador PDF', () => {
     await expect(renderToFile(elementoPlan(MUESTRA_CICLO), `${SALIDA}/plan-muestra-ciclo.pdf`)).resolves.toBeDefined()
   }, 60_000)
 
-  it('las cuatro muestras caben en el máximo de 10 páginas de §4.0', async () => {
+  it('todas las muestras caben en el máximo de 10 páginas de §4.0', async () => {
     for (const [nombre, datos] of [
       ['completa', MUESTRA_COMPLETA],
       ['mínima', MUESTRA_MINIMA],
       ['ajustada', MUESTRA_AJUSTADA],
       ['ciclo', MUESTRA_CICLO],
+      ['recomposición', MUESTRA_RECOMPOSICION],
+      ['ciclo con síntomas', MUESTRA_CICLO_SINTOMAS],
+      ['alimentos y plazo', MUESTRA_ALIMENTOS],
     ] as const) {
       const buffer = await renderToBuffer(elementoPlan(datos))
       const paginas = (buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length
@@ -143,6 +155,123 @@ describe('exportador PDF', () => {
     const buffer = await renderToBuffer(elementoPlan(roto))
     expect(buffer.length).toBeGreaterThan(10_000)
   }, 60_000)
+
+  // ---------- v1.2 ----------
+
+  it('imprime el resumen de alimentos, el plazo pedido y las notas del generador', async () => {
+    const buffer = await renderToBuffer(elementoPlan(MUESTRA_ALIMENTOS))
+    const texto = await textoDelPdf(buffer)
+    // §4.4: la misma línea que la pantalla, sin el enlace "Cambiar".
+    expect(texto).toContain('Sin: Brócoli, Coliflor')
+    expect(texto).toContain('Favoritos: Pechuga de pollo, Arroz blanco')
+    // §4.2: fila de datos con la variante breve y el matiz del plazo sobre el ritmo del plan.
+    expect(texto).toContain('sin Brócoli, Coliflor')
+    expect(texto).toContain('fecha pedida: 8 semanas')
+    expect(texto).toContain('agresivo')
+    // El aviso del generador (§3.2b) se lista donde el resto de notas del menú.
+    expect(texto).toContain('No hemos podido evitar')
+    expect(texto).not.toContain('undefined')
+    expect(texto).not.toMatch(/NaN/)
+  }, 90_000)
+
+  it('la tarjeta del ciclo lleva un bloque por síntoma y la compra su sección opcional', async () => {
+    const buffer = await renderToBuffer(elementoPlan(MUESTRA_CICLO_SINTOMAS))
+    const texto = await textoDelPdf(buffer)
+    expect(texto).toContain('Tu ciclo y tu plan')
+    for (const consejo of MUESTRA_CICLO_SINTOMAS.resultado.ciclo?.consejos ?? []) {
+      expect(texto, consejo.clave).toContain(consejo.titulo)
+    }
+    expect((texto.match(/Prioriza:/g) ?? []).length).toBe(3)
+    // §3.8.1 y §4.4b: los alimentos sugeridos y su sección opcional en la lista de la compra.
+    expect(texto).toContain('Para esos días:')
+    expect(texto).toContain('Para los días de regla (opcional)')
+    expect(texto).toContain('Mejillones al natural')
+    // La lista de síntomas marcados NO se imprime en la tabla de datos (§4.2).
+    expect(texto).not.toContain('sangrado_abundante')
+    expect(texto).not.toContain('undefined')
+    expect(texto).not.toMatch(/NaN/)
+  }, 90_000)
+
+  it('la recomposición con meta imprime su banda, su nota y el peso objetivo orientativo', async () => {
+    const buffer = await renderToBuffer(elementoPlan(MUESTRA_RECOMPOSICION))
+    const texto = await textoDelPdf(buffer)
+    expect(texto).toContain('63,0 kg')
+    expect(texto).toContain('orientativo')
+    // §4.5b: el copy es el de INFO_PROYECCION_RECOMP, no el de la proyección plana ni el fijo.
+    expect(texto).toContain('sino una banda')
+    expect(texto).not.toContain('esperamos que tu peso se mantenga')
+    // Sin cronograma no hay fechas que prometer.
+    expect(MUESTRA_RECOMPOSICION.resultado.cronograma).toBeNull()
+    expect(texto).toContain('Cómo debería ir la cosa')
+    expect(texto).not.toContain('undefined')
+    expect(texto).not.toMatch(/NaN/)
+  }, 90_000)
+
+  it('no rompe con el ciclo, los alimentos y la sección opcional a medio rellenar', async () => {
+    const compra = MUESTRA_CICLO_SINTOMAS.ejemplos.compra
+    const roto = {
+      ...MUESTRA_CICLO_SINTOMAS,
+      inputs: {
+        ...MUESTRA_CICLO_SINTOMAS.inputs,
+        alimentos_excluidos: ['no_existe', ''] as unknown as string[],
+        alimentos_favoritos: undefined,
+        plazo_semanas: Number.NaN,
+      },
+      resultado: {
+        ...MUESTRA_CICLO_SINTOMAS.resultado,
+        ciclo: {
+          sintomas: ['dolor' as const],
+          consejos: [
+            {
+              clave: 'dolor' as const,
+              titulo: undefined as unknown as string,
+              texto: undefined as unknown as string,
+              alimentos: undefined as unknown as string[],
+            },
+          ],
+        },
+      },
+      ejemplos: {
+        ...MUESTRA_CICLO_SINTOMAS.ejemplos,
+        alimentos_ciclo: [{ id: 'x', nombre: 'Espinacas', por_que: undefined as unknown as string }],
+        compra: {
+          ...compra!,
+          opcional_ciclo: {
+            titulo: undefined as unknown as string,
+            nota: undefined as unknown as string,
+            items: [
+              {
+                ...compra!.opcional_ciclo!.items[0],
+                producto: undefined as unknown as string,
+                gramos_semana: Number.NaN,
+                envases: undefined as unknown as number,
+              },
+            ],
+          },
+        },
+      },
+    }
+    const buffer = await renderToBuffer(elementoPlan(roto))
+    const texto = await textoDelPdf(buffer)
+    expect(buffer.length).toBeGreaterThan(10_000)
+    expect(texto).not.toContain('undefined')
+    expect(texto).not.toMatch(/NaN/)
+    // Un id que no está en `foods.json` no se imprime como identificador técnico.
+    expect(texto).not.toContain('no_existe')
+    expect(texto).not.toContain('fecha pedida')
+  }, 90_000)
+
+  it('escribe los PDF de las tres muestras nuevas de la v1.2', async () => {
+    await expect(
+      renderToFile(elementoPlan(MUESTRA_RECOMPOSICION), `${SALIDA}/plan-muestra-recomposicion.pdf`),
+    ).resolves.toBeDefined()
+    await expect(
+      renderToFile(elementoPlan(MUESTRA_CICLO_SINTOMAS), `${SALIDA}/plan-muestra-ciclo-sintomas.pdf`),
+    ).resolves.toBeDefined()
+    await expect(
+      renderToFile(elementoPlan(MUESTRA_ALIMENTOS), `${SALIDA}/plan-muestra-alimentos.pdf`),
+    ).resolves.toBeDefined()
+  }, 120_000)
 
   it('propone un nombre de fichero con la fecha del plan', () => {
     expect(nombreFicheroPdf(MUESTRA_COMPLETA)).toBe('bascula-plan-2026-09-07.pdf')

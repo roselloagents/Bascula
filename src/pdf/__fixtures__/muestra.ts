@@ -9,6 +9,8 @@ import type {
   Pesaje,
   PuntoProyeccion,
   Resultado,
+  ResultadoCiclo,
+  SeccionOpcionalCompra,
 } from '../../engine/types'
 import { equivalencias } from '../../meals/equivalencias'
 
@@ -947,6 +949,20 @@ export const MUESTRA_AJUSTADA: DatosPdf = {
 // aviso de seguridad y proyección plana con pesajes dentro de la banda.
 // =====================================================================
 
+/** Texto íntegro de `INFO_CICLO`. Lo comparten las muestras con regla (D, E y F). */
+const AVISO_CICLO: AvisoTexto = {
+  codigo: 'INFO_CICLO',
+  severidad: 'info',
+  titulo: 'Tu ciclo y tu plan',
+  texto:
+    'Tu gasto energético cambia poco a lo largo del ciclo, así que no ajustamos tus calorías por eso. Lo que sí ' +
+    'cambia es lo que marca la báscula: la semana antes de la regla es normal retener 1-2 kg de agua y tener ' +
+    'más hambre (unas 100-300 kcal). Pésate siempre en la misma fase del ciclo si quieres comparar, no te ' +
+    'asustes con el peso de esa semana, y si comes 100-200 kcal más esos días, compénsalo en el resto de la ' +
+    'semana sin cambiar el total. En los días de regla, cuida el hierro: carne roja, legumbre o verdura de ' +
+    'hoja acompañadas de algo de vitamina C.',
+}
+
 const AVISOS_D: AvisoTexto[] = [
   ...AVISOS_B.filter((a) => a.codigo !== 'INFO_AGUA_MAYORES'),
   {
@@ -960,18 +976,7 @@ const AVISOS_D: AvisoTexto[] = [
       'Si llevas tres meses o más sin regla y no es por anticonceptivos ni por la menopausia, pide cita con tu ' +
       'médico antes de seguir con el déficit.',
   },
-  {
-    codigo: 'INFO_CICLO',
-    severidad: 'info',
-    titulo: 'Tu ciclo y tu plan',
-    texto:
-      'Tu gasto energético cambia poco a lo largo del ciclo, así que no ajustamos tus calorías por eso. Lo que sí ' +
-      'cambia es lo que marca la báscula: la semana antes de la regla es normal retener 1-2 kg de agua y tener ' +
-      'más hambre (unas 100-300 kcal). Pésate siempre en la misma fase del ciclo si quieres comparar, no te ' +
-      'asustes con el peso de esa semana, y si comes 100-200 kcal más esos días, compénsalo en el resto de la ' +
-      'semana sin cambiar el total. En los días de regla, cuida el hierro: carne roja, legumbre o verdura de ' +
-      'hoja acompañadas de algo de vitamina C.',
-  },
+  AVISO_CICLO,
 ]
 
 const INPUTS_D: Inputs = { ...INPUTS_B, edad: 41, menstruacion: 'irregular' }
@@ -995,4 +1000,270 @@ export const MUESTRA_CICLO: DatosPdf = {
   avisos: AVISOS_D,
   fecha: '2026-10-05',
   pesajes: PESAJES_D,
+}
+
+// =====================================================================
+// Muestra E — recomposición con déficit real (v1.2, decisión H): mujer de 165 cm y 68 kg con
+// prioridad "perder". Tiene peso objetivo (63 kg) y proyección de banda, pero NO tiene cronograma:
+// en recomposición no se promete fecha. Sigue la forma del vector 17 de SPEC-calculo.md §5.
+// =====================================================================
+
+const INPUTS_E: Inputs = {
+  ...INPUTS_B,
+  edad: 39,
+  altura_cm: 165,
+  peso_kg: 68,
+  actividad_diaria: 'ligero',
+  entrenamiento: {
+    tipo: 'fuerza',
+    dias_semana: 3,
+    minutos_sesion: 50,
+    intensidad: 'media',
+    experiencia: 'novato',
+    momento: 'tarde',
+  },
+  objetivo: 'recomposicion',
+  recomposicion_prioridad: 'perder',
+  peso_objetivo: 63,
+  menstruacion: 'regular',
+  condiciones: [],
+}
+
+/**
+ * Proyección de recomposición (SPEC Paso 14): `peso_max` es siempre el peso de hoy, `peso_min` es
+ * la curva del déficit (0,265 kg/sem) acotada por la meta y `peso_esp`, el punto medio.
+ */
+const PROYECCION_E: PuntoProyeccion[] = Array.from({ length: 20 }, (_, semana) => {
+  const rapido = Math.min(0.265 * semana, 5)
+  const redondea = (v: number) => Math.round(v * 10) / 10
+  return {
+    semana,
+    peso_min: redondea(68 - rapido),
+    peso_esp: redondea((68 - rapido + 68) / 2),
+    peso_max: 68,
+  }
+})
+
+const RESULTADO_E: Resultado = {
+  ...RESULTADO_B,
+  imc: 24.977043158861342,
+  imc_categoria: 'normal',
+  objetivo_efectivo: 'recomposicion',
+  recomposicion_prioridad: 'perder',
+  ritmo_efectivo: 'suave',
+  kcal: 1750,
+  kcal_cierre: 1750,
+  peso_objetivo: {
+    ...RESULTADO_B.peso_objetivo,
+    efectivo: 63,
+    sugerido: 62.5,
+    mostrar_central: true,
+    rango: [59.5, 65.5],
+    metodo: 'grasa',
+    hito_intermedio: null,
+  },
+  cronograma: null,
+  proyeccion: PROYECCION_E,
+  avisos: ['INFO_CICLO', 'INFO_RECOMP_PRIORIDAD_PERDER', 'INFO_SIN_CRONOGRAMA', 'INFO_PROYECCION_RECOMP'],
+}
+
+const AVISOS_E: AvisoTexto[] = [
+  AVISO_CICLO,
+  {
+    codigo: 'INFO_RECOMP_PRIORIDAD_PERDER',
+    severidad: 'info',
+    titulo: 'Hemos inclinado tu recomposición',
+    texto:
+      'Nos has dicho que ahora te importa más perder grasa, así que bajamos algo las calorías y te subimos la ' +
+      'grasa a costa de los hidratos. Sigue siendo un proceso lento: la báscula se mueve poco aunque tu cuerpo ' +
+      'cambie.',
+  },
+  {
+    codigo: 'INFO_SIN_CRONOGRAMA',
+    severidad: 'info',
+    titulo: 'Sin fecha de llegada',
+    texto:
+      'Con este objetivo no hay un peso al que llegar en una fecha. Reevalúa medidas, fotos y rendimiento cada ' +
+      '8-12 semanas.',
+  },
+  {
+    codigo: 'INFO_PROYECCION_RECOMP',
+    severidad: 'info',
+    titulo: 'Tu proyección en recomposición',
+    texto:
+      'En recomposición la báscula baja mucho más despacio de lo que cambia tu cuerpo: puedes perder grasa y ' +
+      'ganar músculo a la vez y quedarte casi en el mismo peso. Por eso no te damos una fecha, sino una banda: ' +
+      'por abajo, lo que bajarías si todo lo que pierdes fuese grasa; por arriba, quedarte en el peso de hoy ' +
+      'porque el músculo lo compensa. Las dos cosas serían un buen resultado. Mídete también la cintura y hazte ' +
+      'fotos cada cuatro semanas: ahí se ve lo que la báscula no enseña.',
+  },
+]
+
+/** Muestra de recomposición con meta: banda honesta, sin fechas y con el peso objetivo orientativo. */
+export const MUESTRA_RECOMPOSICION: DatosPdf = {
+  inputs: INPUTS_E,
+  resultado: RESULTADO_E,
+  ejemplos: EJEMPLOS_B,
+  avisos: AVISOS_E,
+  fecha: '2026-09-07',
+}
+
+// =====================================================================
+// Muestra F — regla con tres síntomas marcados (v1.2, decisión I): la tarjeta del ciclo crece con
+// un bloque por síntoma, el generador sugiere alimentos para esos días y la lista de la compra
+// gana su sección opcional.
+// =====================================================================
+
+const CICLO_F: ResultadoCiclo = {
+  sintomas: ['dolor', 'cansancio', 'sangrado_abundante'],
+  consejos: [
+    {
+      clave: 'dolor',
+      titulo: 'Dolor: omega-3, magnesio y calor',
+      texto:
+        'El dolor de regla viene en buena parte de unas sustancias inflamatorias, las prostaglandinas. El ' +
+        'omega-3 del pescado azul y de los frutos secos y el magnesio de la legumbre y del cacao puro pueden ' +
+        'bajarlo algo, y el calor local y el movimiento suave ayudan tanto como muchos remedios. Si el dolor te ' +
+        'impide hacer vida normal, eso no es normal: pide cita.',
+      alimentos: ['Sardinas en aceite de oliva (lata, escurridas)', 'Nueces', 'Lentejas (cocidas)'],
+    },
+    {
+      clave: 'cansancio',
+      titulo: 'Cansancio: sueño, hierro e hidratos',
+      texto:
+        'Esos días el cansancio suele ser sueño de menos y hierro de menos, no falta de voluntad. Duerme lo que ' +
+        'puedas, cuida el hierro y no bajes demasiado los hidratos esa semana: son la energía más barata que ' +
+        'tienes.',
+      alimentos: ['Espinacas', 'Lentejas (cocidas)'],
+    },
+    {
+      clave: 'sangrado_abundante',
+      titulo: 'Sangrado abundante: hierro con vitamina C',
+      texto:
+        'Con sangrado abundante se pierde hierro de verdad. Acompaña la legumbre, la carne roja magra o los ' +
+        'mejillones con algo de vitamina C (pimiento, tomate, cítricos) y deja el café y el té para otro momento ' +
+        'del día, porque estorban su absorción. Si además te notas cansada, pídele a tu médico una ferritina en ' +
+        'la próxima analítica.',
+      alimentos: ['Mejillones al natural (lata, escurridos)', 'Lentejas (cocidas)', 'Espinacas'],
+    },
+  ],
+}
+
+const OPCIONAL_CICLO_F: SeccionOpcionalCompra = {
+  titulo: 'Para los días de regla (opcional)',
+  nota: 'No entra en las cantidades del plan: son compras pequeñas para esos días, si te apetecen.',
+  items: [
+    {
+      alimento_id: 'mejillones_lata',
+      nombre: 'Mejillones al natural (lata, escurridos)',
+      producto: 'Mejillones al natural Hacendado, pack de 3 latas',
+      seccion: 'despensa',
+      conservacion: 'despensa',
+      gramos_dia: 70,
+      gramos_semana: 210,
+      envase_g: 210,
+      envase_descripcion: 'pack de 3 latas ≈ 70 g escurridos cada una',
+      envases: 1,
+      dura_dias: 3,
+      consejo: 'Escúrrelos bien y añádeles limón: llevan bastante hierro.',
+    },
+    {
+      alimento_id: 'cacao_puro',
+      nombre: 'Cacao puro desgrasado en polvo',
+      producto: 'Cacao puro desgrasado en polvo Hacendado',
+      seccion: 'despensa',
+      conservacion: 'despensa',
+      gramos_dia: 10,
+      gramos_semana: 30,
+      envase_g: 250,
+      envase_descripcion: 'bote 250 g',
+      envases: 1,
+      dura_dias: 25,
+      consejo: 'Que sea cacao puro, no soluble: el soluble es azúcar en su mayor parte.',
+    },
+  ],
+}
+
+const COMPRA_F: ListaCompra = { ...COMPRA_B, opcional_ciclo: OPCIONAL_CICLO_F }
+
+const EJEMPLOS_F: Ejemplos = {
+  ...EJEMPLOS_B,
+  compra: COMPRA_F,
+  alimentos_ciclo: [
+    {
+      id: 'mejillones_lata',
+      nombre: 'Mejillones al natural (lata, escurridos)',
+      por_que: 'hierro, para el sangrado abundante',
+    },
+    { id: 'espinacas', nombre: 'Espinacas', por_que: 'hierro vegetal, mejor con algo de vitamina C' },
+    { id: 'cacao_puro', nombre: 'Cacao puro desgrasado en polvo', por_que: 'magnesio, para el dolor' },
+  ],
+}
+
+const INPUTS_F: Inputs = {
+  ...INPUTS_D,
+  menstruacion: 'regular',
+  sintomas_regla: ['dolor', 'cansancio', 'sangrado_abundante'],
+}
+
+const RESULTADO_F: Resultado = {
+  ...RESULTADO_B,
+  avisos: [...RESULTADO_B.avisos.filter((c) => c !== 'INFO_AGUA_MAYORES'), 'INFO_CICLO'],
+  ciclo: CICLO_F,
+}
+
+/** Muestra con tres síntomas de regla: tarjeta ampliada, alimentos sugeridos y sección opcional. */
+export const MUESTRA_CICLO_SINTOMAS: DatosPdf = {
+  inputs: INPUTS_F,
+  resultado: RESULTADO_F,
+  ejemplos: EJEMPLOS_F,
+  avisos: [...AVISOS_B.filter((a) => a.codigo !== 'INFO_AGUA_MAYORES'), AVISO_CICLO],
+  fecha: '2026-09-07',
+}
+
+// =====================================================================
+// Muestra G — alimentos excluidos y favoritos (decisión G) con plazo irreal (decisión H): el
+// usuario pidió llegar en 8 semanas, el motor aplicó el ritmo agresivo y avisa de que no llega.
+// =====================================================================
+
+const INPUTS_G: Inputs = {
+  ...INPUTS_A,
+  peso_objetivo: 74.5,
+  ritmo: 'suave',
+  plazo_semanas: 8,
+  alimentos_excluidos: ['brocoli', 'coliflor'],
+  alimentos_favoritos: ['pechuga_pollo', 'arroz_blanco_cocido'],
+}
+
+const RESULTADO_G: Resultado = {
+  ...RESULTADO_A,
+  ritmo_efectivo: 'agresivo',
+  avisos: [...RESULTADO_A.avisos, 'WARN_PLAZO_IRREAL'],
+}
+
+const EJEMPLOS_G: Ejemplos = {
+  ...EJEMPLOS_A,
+  avisos_menu: ['No hemos podido evitar el brócoli en la cena: era el único que cuadraba con tus macros.'],
+}
+
+const AVISOS_G: AvisoTexto[] = [
+  ...AVISOS_A,
+  {
+    codigo: 'WARN_PLAZO_IRREAL',
+    severidad: 'warn',
+    titulo: 'Esa fecha no nos sale',
+    texto:
+      'Para llegar a tu peso objetivo en 8 semanas harían falta 1,2 kg por semana, y eso no lo podemos ' +
+      'recomendar: se pierde músculo y se recupera casi todo. Hemos aplicado el ritmo más rápido que ' +
+      'consideramos seguro; con él llegarías hacia la semana 19.',
+  },
+]
+
+/** Muestra con alimentos excluidos, favoritos, aviso del generador y plazo que no se puede cumplir. */
+export const MUESTRA_ALIMENTOS: DatosPdf = {
+  inputs: INPUTS_G,
+  resultado: RESULTADO_G,
+  ejemplos: EJEMPLOS_G,
+  avisos: AVISOS_G,
+  fecha: '2026-09-07',
 }

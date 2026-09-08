@@ -4,9 +4,11 @@
 import { Circle, Document, Font, Line, Page, Path, Polyline, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
 import type { ReactNode } from 'react'
 import type {
+  AlimentoCiclo,
   AlimentoPorcion,
   AvisoTexto,
   Comida,
+  ConsejoCiclo,
   DatosPdf,
   EjemploComida,
   EjemploDia,
@@ -15,6 +17,7 @@ import type {
   Macros,
   Pesaje,
   PuntoProyeccion,
+  SeccionOpcionalCompra,
   SeccionSuper,
   TablasEquivalencia,
 } from '../engine/types'
@@ -25,7 +28,13 @@ import { NOMBRE_SECCION, ORDEN_SECCIONES } from '../data/secciones'
 // Las celdas de cantidad y el rótulo del modo sencillo salen del mismo helper que usa la
 // pantalla (§4.4b: "las mismas cuatro columnas de §2.5b"). Aquí no se recalcula ningún número.
 import { textoCantidadDia, textoCantidadSemana, textoModoSencillo } from '../meals/compra'
-import { etiqueta, formaDeComer, matizRecomposicion, NOMBRE_FORMULA_CLASICA } from './etiquetas'
+import {
+  etiqueta,
+  formaDeComer,
+  matizRecomposicion,
+  NOMBRE_FORMULA_CLASICA,
+  resumenAlimentos,
+} from './etiquetas'
 import {
   crearEscala,
   fraseBalance,
@@ -462,6 +471,16 @@ function comprarTexto(item: ItemCompra): string {
  */
 const ITEMS_COMPRA_COMPACTA = 14
 
+/**
+ * Las dos celdas de cantidad las redacta `src/meals/compra.ts` a partir de los gramos del item.
+ * Si un gramaje llega roto, esa función devuelve "NaN g en la semana": el PDF no puede imprimir
+ * eso, así que la celda cae al guion largo como cualquier otro dato que falta.
+ */
+function textoCantidadSeguro(texto: string): string {
+  const limpio = winAnsi(texto)
+  return /NaN|undefined/.test(limpio) ? SIN_DATO : limpio
+}
+
 function LineaCompra({ item, compacta }: { item: ItemCompra; compacta: boolean }) {
   const consejo = winAnsi(item.consejo ?? '').trim()
   // Con la lista apretada se recorta el aire de la fila y el interlineado de la letra pequeña:
@@ -477,12 +496,56 @@ function LineaCompra({ item, compacta }: { item: ItemCompra; compacta: boolean }
         </Text>
       </View>
       <View style={{ flex: 1.25, paddingRight: 6 }}>
-        <Text style={s.celdaCompraNum}>{winAnsi(textoCantidadSemana(item))}</Text>
-        <Text style={[...menudo, { textAlign: 'right' }]}>{winAnsi(textoCantidadDia(item))}</Text>
+        <Text style={s.celdaCompraNum}>{textoCantidadSeguro(textoCantidadSemana(item))}</Text>
+        <Text style={[...menudo, { textAlign: 'right' }]}>{textoCantidadSeguro(textoCantidadDia(item))}</Text>
       </View>
       <Text style={[s.celdaCompraNum, { flex: 1.9, paddingRight: 6 }]}>{comprarTexto(item)}</Text>
       <Text style={[s.celdaCompraNum, { flex: 0.75 }]}>{duracionTexto(item.dura_dias)}</Text>
     </View>
+  )
+}
+
+/**
+ * Un bloque por síntoma dentro de la tarjeta del ciclo (§4.3b, v1.2): el `titulo` en negrita, el
+ * `texto` íntegro tal y como lo redacta el motor y la línea "Prioriza:" cuando hay alimentos. Aquí
+ * no se reescribe ni se trocea nada: los fragmentos condicionales ya vienen resueltos.
+ */
+function BloqueSintomaCiclo({ consejo }: { consejo: ConsejoCiclo }) {
+  const alimentos = (consejo?.alimentos ?? []).filter((a) => typeof a === 'string' && a.trim().length > 0)
+  const texto = typeof consejo?.texto === 'string' ? consejo.texto.trim() : ''
+  return (
+    <View style={{ marginTop: 6 }}>
+      <Text style={s.h3}>{consejo?.titulo?.trim() || SIN_DATO}</Text>
+      {texto.length > 0 ? <Text>{texto}</Text> : null}
+      {alimentos.length > 0 ? (
+        <Text style={[s.small, { marginTop: 2 }]}>Prioriza: {alimentos.join('  ·  ')}</Text>
+      ) : null}
+    </View>
+  )
+}
+
+/** Alimentos sugeridos para esos días (§3.8.1), en una línea: "mejillones al natural (hierro...)". */
+function LineaAlimentosCiclo({
+  alimentos,
+  haySeccionCompra,
+}: {
+  alimentos: readonly AlimentoCiclo[]
+  haySeccionCompra: boolean
+}) {
+  const textos = alimentos
+    .filter((a) => a && typeof a.nombre === 'string' && a.nombre.trim().length > 0)
+    .map((a) => {
+      const porQue = typeof a.por_que === 'string' ? sinPuntoFinal(a.por_que).trim() : ''
+      return porQue.length > 0 ? `${a.nombre} (${porQue})` : a.nombre
+    })
+  if (textos.length === 0) return null
+  return (
+    <Text style={[s.small, { marginTop: 6 }]}>
+      Para esos días: {lista(textos)}.
+      {haySeccionCompra
+        ? ' Los tienes al final de tu lista de la compra, en una sección opcional que no cuenta en el plan.'
+        : ''}
+    </Text>
   )
 }
 
@@ -505,6 +568,44 @@ function BloqueSeccionCompra({
       </View>
       {items.map((item, i) => (
         <LineaCompra key={`${item.alimento_id}-${i}`} item={item} compacta={compacta} />
+      ))}
+    </View>
+  )
+}
+
+/**
+ * Sección opcional "Para los días de regla" (§3.8.2 y §4.4b, v1.2). Va al final de la lista y antes
+ * de las notas fijas, separada con un filete, y **no** suma al recuento de alimentos del plan: eso
+ * lo dice su propia `nota`, que viene escrita del generador y aquí se imprime tal cual.
+ */
+function BloqueOpcionalCompra({
+  seccion,
+  compacta,
+}: {
+  seccion: SeccionOpcionalCompra
+  compacta: boolean
+}) {
+  const items = (seccion.items ?? []).filter((i) => !!i)
+  if (items.length === 0) return null
+  return (
+    <View
+      style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: C.acento }}
+      minPresenceAhead={54}
+      wrap={false}
+    >
+      <View style={[s.tablaCabecera, { paddingBottom: 2, marginBottom: 1, alignItems: 'flex-end' }]}>
+        <Text style={[s.h3, { color: C.acento, flex: 2.3, marginBottom: 0 }]}>
+          {winAnsi(seccion.titulo) || SIN_DATO}
+        </Text>
+        <Text style={[s.cabeceraCelda, { flex: 1.25, textAlign: 'right' }]}>CANTIDAD</Text>
+        <Text style={[s.cabeceraCelda, { flex: 1.9, textAlign: 'right' }]}>COMPRAR</Text>
+        <Text style={[s.cabeceraCelda, { flex: 0.75, textAlign: 'right' }]}>DURA</Text>
+      </View>
+      {typeof seccion.nota === 'string' && seccion.nota.trim().length > 0 ? (
+        <Text style={[s.compraSmall, { marginBottom: 2 }]}>{winAnsi(seccion.nota)}</Text>
+      ) : null}
+      {items.map((item, i) => (
+        <LineaCompra key={`opc-${item.alimento_id}-${i}`} item={item} compacta={compacta} />
       ))}
     </View>
   )
@@ -711,6 +812,15 @@ const NOTA_PROYECCION =
 
 const SUBTITULO_PROYECCION = 'Semana a semana, con el margen que toca.'
 
+/**
+ * Nota bajo el peso objetivo de una recomposición con meta (v1.2, decisión H). El número existe
+ * —el motor lo valida con los mismos suelos que en `perder`— pero no lleva fecha detrás, y el PDF
+ * lo dice donde se lee el número, no tres párrafos más abajo.
+ */
+const NOTA_PESO_OBJETIVO_RECOMP =
+  'En recomposición este peso es orientativo: marca hacia dónde debería ir la báscula, no un día de ' +
+  'llegada. Mídete también la cintura y hazte fotos cada cuatro semanas.'
+
 /** Línea de ayuda de §2.10 y §4.6, literal y siempre presente. */
 const LINEA_ADANER =
   'Si la comida o el peso te generan ansiedad, puedes hablar gratis con ADANER (adaner.org) o con tu centro de salud.'
@@ -810,11 +920,33 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
 
   // §4.3b: la tarjeta del ciclo se imprime exactamente cuando el motor emite INFO_CICLO.
   const avisoCiclo = avisos.find((a) => a.codigo === 'INFO_CICLO')
+  // v1.2: los bloques por síntoma van dentro de esa misma tarjeta, en el orden del motor. La lista
+  // de síntomas marcados NO se imprime en ninguna parte (§4.2): solo sus consejos.
+  const consejosCiclo = (resultado.ciclo?.consejos ?? []).filter((c) => !!c)
+  const alimentosCiclo = (ejemplos?.alimentos_ciclo ?? []).filter((a) => !!a)
+
+  // §4.2 y §4.4 (v1.2): resumen de lo que el usuario no quiere ver y de sus favoritos. Los ids que
+  // no estén en `foods.json` se descartan: en el PDF no puede aparecer un identificador técnico.
+  const resumenAlimentosLargo = resumenAlimentos(inputs.alimentos_excluidos, inputs.alimentos_favoritos)
+  const resumenAlimentosBreve = resumenAlimentos(inputs.alimentos_excluidos, inputs.alimentos_favoritos, true)
+  const avisosMenu = (ejemplos?.avisos_menu ?? []).filter((t) => typeof t === 'string' && t.trim().length > 0)
+
+  // §4.2 (v1.2): el plazo pedido es un matiz de la fila de ritmo, nunca el ritmo que se imprime.
+  const plazo = typeof inputs.plazo_semanas === 'number' && Number.isFinite(inputs.plazo_semanas)
+    ? inputs.plazo_semanas
+    : null
 
   // §4.5b: proyección y seguimiento. Sin `resultado.proyeccion` no se imprime nada de esto.
   const proyeccion: PuntoProyeccion[] = resultado.proyeccion ?? []
   const pesajes: Pesaje[] = pesajesOrdenados(datos.pesajes)
-  const proyeccionPlana = avisos.some((a) => a.codigo === 'INFO_PROYECCION_PLANA') || crono === null
+  // §4.5b: el copy de debajo de la gráfica es UNO de tres, nunca dos. La banda de recomposición
+  // (v1.2) manda sobre la plana: son excluyentes y el motor no emite las dos.
+  const avisoProyeccionRecomp = avisos.find((a) => a.codigo === 'INFO_PROYECCION_RECOMP')
+  const avisoProyeccionPlana = avisos.find((a) => a.codigo === 'INFO_PROYECCION_PLANA')
+  const proyeccionPlana =
+    !avisoProyeccionRecomp && (avisoProyeccionPlana !== undefined || crono === null)
+  const notaProyeccion =
+    avisoProyeccionRecomp?.texto ?? (proyeccionPlana ? (avisoProyeccionPlana?.texto ?? NOTA_PROYECCION) : NOTA_PROYECCION)
   const balance = fraseBalance(
     pesajes,
     proyeccion,
@@ -916,18 +1048,36 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                 matizRecomposicion(resultado) ? ` · prioridad: ${matizRecomposicion(resultado)}` : ''
               }`}
             />
+            {/* §4.2 (v1.2): el ritmo impreso es SIEMPRE `ritmo_efectivo` —el del plan—, y el plazo
+                pedido va como matiz. Si los dos no coinciden, lo explica INFO_RITMO_POR_PLAZO o
+                WARN_PLAZO_IRREAL en la última página. */}
             <Fila
               etiqueta="Ritmo"
               valor={
-                resultado.objetivo_efectivo === 'perder' || resultado.objetivo_efectivo === 'ganar'
+                (resultado.objetivo_efectivo === 'perder' || resultado.objetivo_efectivo === 'ganar'
                   ? etiqueta.ritmo(resultado.ritmo_efectivo)
-                  : 'no aplica con este objetivo'
+                  : 'no aplica con este objetivo') +
+                (plazo === null ? '' : ` · fecha pedida: ${num(plazo)} semanas`)
               }
             />
             {/* §4.2 (v1.1): base + restricciones + bajo en hidratos, nunca `inputs.preferencia`. */}
             <Fila etiqueta="Forma de comer" valor={formaDeComer(resultado)} />
-            <Fila etiqueta="Comidas al día" valor={num(inputs.n_comidas)} ultima={condiciones.length === 0} />
-            {condiciones.length > 0 ? <Fila etiqueta="Nos has contado" valor={lista(condiciones)} ultima /> : null}
+            <Fila
+              etiqueta="Comidas al día"
+              valor={num(inputs.n_comidas)}
+              ultima={condiciones.length === 0 && resumenAlimentosBreve.length === 0}
+            />
+            {condiciones.length > 0 ? (
+              <Fila
+                etiqueta="Nos has contado"
+                valor={lista(condiciones)}
+                ultima={resumenAlimentosBreve.length === 0}
+              />
+            ) : null}
+            {/* §4.2 (v1.2): la misma línea que la pantalla imprime bajo el menú. */}
+            {resumenAlimentosBreve.length > 0 ? (
+              <Fila etiqueta="Alimentos" valor={resumenAlimentosBreve} ultima />
+            ) : null}
           </View>
 
           {objetivoAjustado ? (
@@ -1061,6 +1211,17 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           <View style={[s.nota, { marginBottom: 7 }]} wrap={false}>
             <Text style={s.h3}>Tu ciclo y tu plan</Text>
             <Text>{avisoCiclo.texto}</Text>
+            {/* v1.2: un bloque por síntoma marcado, en el orden que trae el motor. Ninguno cambia
+                un número: son qué priorizar dentro de los mismos macros. */}
+            {consejosCiclo.map((c, i) => (
+              <BloqueSintomaCiclo key={`${c.clave ?? 'sintoma'}-${i}`} consejo={c} />
+            ))}
+            {alimentosCiclo.length > 0 ? (
+              <LineaAlimentosCiclo
+                alimentos={alimentosCiclo}
+                haySeccionCompra={(compra?.opcional_ciclo?.items ?? []).length > 0}
+              />
+            ) : null}
           </View>
         ) : null}
 
@@ -1141,6 +1302,17 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                   <BloqueDia dia={ejemplos.descanso} titulo="Día de descanso" />
                 </View>
               )}
+              {/* §4.4 (v1.2): el mismo resumen que la pantalla, sin el enlace "Cambiar" (en papel no
+                  lleva a ninguna parte), y las notas del generador si ha tenido que usar igualmente
+                  un alimento excluido. */}
+              {resumenAlimentosLargo.length > 0 ? (
+                <Text style={[s.small, { marginTop: 6 }]}>{resumenAlimentosLargo}</Text>
+              ) : null}
+              {avisosMenu.map((t, i) => (
+                <Text key={`am-${i}`} style={[s.small, { marginTop: 2 }]}>
+                  {t}
+                </Text>
+              ))}
               <Text style={[s.small, { marginTop: 6 }]}>
                 Son ejemplos para orientarte, no un menú obligatorio. Puedes sustituir cualquier alimento por otro
                 de la misma familia sin descuadrar tus macros de forma relevante: mira la tabla de equivalencias.
@@ -1187,6 +1359,13 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
               compacta={(compra.items ?? []).length > ITEMS_COMPRA_COMPACTA}
             />
           ))}
+          {/* §4.4b (v1.2): sección opcional para los días de regla, al final y antes de las notas. */}
+          {compra.opcional_ciclo ? (
+            <BloqueOpcionalCompra
+              seccion={compra.opcional_ciclo}
+              compacta={(compra.items ?? []).length > ITEMS_COMPRA_COMPACTA}
+            />
+          ) : null}
           {(compra.notas ?? []).length > 0 ? (
             <View style={[s.nota, { marginTop: 2, padding: 6 }]} wrap={false}>
               <Text style={s.compraSmall}>
@@ -1220,6 +1399,12 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                   </Text>
                 </View>
               )}
+              {/* §4.5 (v1.2): en recomposición con meta el número existe, pero no hay fecha detrás y
+                  se dice donde se lee el número. */}
+              {resultado.objetivo_efectivo === 'recomposicion' &&
+              typeof resultado.peso_objetivo?.efectivo === 'number' ? (
+                <Text style={[s.small, { marginTop: 6 }]}>{NOTA_PESO_OBJETIVO_RECOMP}</Text>
+              ) : null}
               {typeof resultado.peso_objetivo?.hito_intermedio === 'number' ? (
                 <Text style={[s.p, { marginTop: 8 }]}>
                   Primer hito: {kilos(resultado.peso_objetivo.hito_intermedio)}. Cuando el camino es largo, ir por
@@ -1290,11 +1475,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                 La línea verde es la previsión; los puntos rojos, tu peso real.
               </Text>
             ) : null}
-            <Text style={[s.p, { marginBottom: 6 }]}>
-              {proyeccionPlana
-                ? (avisos.find((a) => a.codigo === 'INFO_PROYECCION_PLANA')?.texto ?? NOTA_PROYECCION)
-                : NOTA_PROYECCION}
-            </Text>
+            <Text style={[s.p, { marginBottom: 6 }]}>{notaProyeccion}</Text>
             <Text style={[s.h3, { marginTop: 2 }]}>Los números, semana a semana</Text>
             <TablaProyeccion proyeccion={proyeccion} />
 
