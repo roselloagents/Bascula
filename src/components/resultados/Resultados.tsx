@@ -106,7 +106,12 @@ export function Resultados({
       {hayPanelAjuste(base) ? (
         <PanelAjuste base={base} inputs={inputs} ajuste={ajuste} onAplicar={onAjustar} />
       ) : null}
-      <TarjetaCiclo avisos={avisos} resultado={resultado} ejemplos={ejemplos} />
+      <TarjetaCiclo
+        avisos={avisos}
+        resultado={resultado}
+        ejemplos={ejemplos}
+        excluidos={inputs.alimentos_excluidos ?? []}
+      />
 
       <BloqueAgua inputs={inputs} resultado={resultado} avisos={avisos} />
       <BloqueComidas inputs={inputs} resultado={resultado} avisos={avisos} />

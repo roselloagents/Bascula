@@ -1,5 +1,6 @@
 // Cabecera, macros, hidratación y reparto por comidas (SPEC-ux §2.1 a §2.4).
 
+import { consejosSinExcluidos } from '../../engine'
 import type { AvisoTexto, Ejemplos, InputCalculo, Resultado } from '../../engine/types'
 import { DonutMacros } from '../graficos/DonutMacros'
 import { IconoGota, IconoPesa } from '../ui/Iconos'
@@ -193,14 +194,20 @@ export function TarjetaCiclo({
   avisos,
   resultado,
   ejemplos,
+  excluidos,
 }: {
   avisos: AvisoTexto[]
   resultado?: Resultado
   ejemplos?: Ejemplos
+  /** Excluidos del momento: el "No me gusta" de §2.5 los cambia sin volver a llamar al motor. */
+  excluidos?: readonly string[]
 }) {
   const ciclo = buscarAviso(avisos, 'INFO_CICLO')
   if (!ciclo) return null
-  const consejos = resultado?.ciclo?.consejos ?? []
+  // La lista "Prioriza:" no puede nombrar lo que el usuario acaba de marcar como "no me gusta":
+  // el motor ya la filtra al calcular, y aquí se vuelve a filtrar por si las listas han cambiado
+  // en resultados (la operación es idempotente).
+  const consejos = consejosSinExcluidos(resultado?.ciclo?.consejos ?? [], excluidos ?? [])
   const hayCompraOpcional = (ejemplos?.alimentos_ciclo ?? []).length > 0
   return (
     <Seccion titulo="Tu ciclo y tu plan">

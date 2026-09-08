@@ -147,16 +147,54 @@ const CONSEJOS_CICLO = {
     },
   },
 };
-/** Las dos unicas sustituciones por restriccion de la lista de alimentos (§4, Paso 19). */
-function alimentosCiclo(clave, pref_base, restr) {
+/**
+ * Ids de `foods.json` que respaldan cada nombre generico de la tabla de arriba (v1.2, §3.2b). Solo
+ * sirven para retirar de la lista "Prioriza:" lo que el usuario ha marcado como "no me gusta": un
+ * nombre se queda mientras le quede un id sin excluir, y el que no este aqui no se retira nunca.
+ */
+const IDS_ALIMENTO_CONSEJO = {
+  'Pescado azul (salmon, sardinas en lata)': ['salmon','sardinas_lata','salmon_ahumado'],
+  'Nueces': ['nueces'],
+  'Semillas de lino molidas': ['semillas_lino'],
+  'Semillas de chia': ['semillas_chia'],
+  'Cacao puro': ['cacao_puro'],
+  'Platano': ['platano'],
+  'Patata cocida': ['patata_cocida'],
+  'Espinacas': ['espinacas'],
+  'Calabacin': ['calabacin'],
+  'Yogur griego 0%': ['yogur_griego_0'],
+  'Yogur griego 0% sin lactosa': ['yogur_griego_0_sl'],
+  'Yogur de soja alto en proteina': ['yogur_soja_proteico'],
+  'Fruta (manzana, platano)': ['manzana','platano'],
+  'Chocolate negro 85%': ['chocolate_85'],
+  'Almendras': ['almendras'],
+  'Avena': ['avena_copos'],
+  'Lentejas o garbanzos': ['lentejas_cocidas','garbanzos_cocidos'],
+  'Fruta': ['manzana','platano','naranja','kiwi','pera','mandarina'],
+  'Carne roja magra (ternera)': ['ternera_solomillo'],
+  'Mejillones o berberechos al natural': ['mejillones_lata'],
+  'Tofu': ['tofu','tofu_firme'],
+};
+
+/**
+ * Las dos unicas sustituciones por restriccion de la lista de alimentos (§4, Paso 19) y, desde la
+ * v1.2, la retirada de los alimentos excluidos (§3.2b): la tarjeta no puede recomendar arriba lo
+ * que la lista de la compra descarta abajo. Si la lista se queda vacia, el consejo se publica igual.
+ */
+function alimentosCiclo(clave, pref_base, restr, excluidos) {
+  const fuera = new Set(Array.isArray(excluidos) ? excluidos : []);
   const lista = CONSEJOS_CICLO[clave].alimentos[pref_base];
   return lista
     .filter((n) => !(n === 'Avena' && restr.includes('sin_gluten')))
-    .map((n) => (n === 'Yogur griego 0%' && restr.includes('sin_lactosa') ? 'Yogur griego 0% sin lactosa' : n));
+    .map((n) => (n === 'Yogur griego 0%' && restr.includes('sin_lactosa') ? 'Yogur griego 0% sin lactosa' : n))
+    .filter((n) => {
+      const ids = IDS_ALIMENTO_CONSEJO[n];
+      return !ids || ids.some((id) => !fuera.has(id));
+    });
 }
 
 /** Paso 19: `Resultado.ciclo`, o `undefined`. No cambia ningun numero del plan. */
-function paso19(hayInfoCiclo, sintomas_in, pref_base, restr, low_carb) {
+function paso19(hayInfoCiclo, sintomas_in, pref_base, restr, low_carb, excluidos) {
   if (!hayInfoCiclo) return undefined;
   const marcados = Array.isArray(sintomas_in) ? sintomas_in : [];
   const sintomas = SINTOMAS_ORDEN.filter((s) => marcados.includes(s));
@@ -166,7 +204,7 @@ function paso19(hayInfoCiclo, sintomas_in, pref_base, restr, low_carb) {
     let texto = c.texto;
     if (clave === 'cansancio') texto = texto.replace('{lc}', low_carb ? c.lc : '');
     if (clave === 'sangrado_abundante') texto = texto.replace('{fe}', sintomas.includes('cansancio') ? c.fe : '').trim();
-    return { clave, titulo: c.titulo, texto, alimentos: alimentosCiclo(clave, pref_base, restr) };
+    return { clave, titulo: c.titulo, texto, alimentos: alimentosCiclo(clave, pref_base, restr, excluidos) };
   });
   return { sintomas, consejos };
 }
@@ -432,6 +470,18 @@ function validar(I) {
 }
 
 // ---------------------------------------------------------------- motor
+/**
+ * Meta que el paso 13 va a publicar para una meta escrita por el usuario, con sus mismos suelos y
+ * techos (paso 13): en `perder`, el IMC minimo por edad y la grasa esencial; en `ganar`, ese
+ * mismo suelo y el techo de IMC 27,5. La usa el paso 6.7ter para medir el plazo (v1.2).
+ */
+function metaSegura(pobj, obj, hombre, edad, MLG, h2) {
+  const min_imc = (edad >= 65 ? 22 : 18.5) * h2;
+  if (obj === 'ganar') return Math.min(Math.max(pobj, min_imc), 27.5 * h2);
+  const g_min = hombre ? 12 : 20;
+  return Math.max(pobj, min_imc, MLG / (1 - g_min / 100));
+}
+
 function calcular(I) {
   const A = [];
   const w = (c) => { if (!A.includes(c)) A.push(c); };
@@ -556,9 +606,14 @@ function calcular(I) {
   // ritmo de PARTIDA a partir de la fecha que ha pedido el usuario, y despues los suavizados de
   // 6.7 (tca, >=65) y 6.7bis (regla) se aplican sobre el resultado y MANDAN.
   const plazo = (typeof I.plazo_semanas === 'number' && Number.isFinite(I.plazo_semanas)) ? I.plazo_semanas : null;
-  let ritmo_plazo = null, ritmo_req = null;
-  if (plazo !== null && pobj !== null && (obj === 'perder' || obj === 'ganar')) {
-    ritmo_req = Math.abs(pobj - PC) / plazo;                      // kg/semana que exige la fecha
+  let ritmo_plazo = null;
+  // La meta contra la que se mide el plazo es la que el paso 13 va a PUBLICAR, no la cruda: los
+  // suelos de seguridad (IMC minimo por edad y grasa esencial) la suben y el techo de `ganar` la
+  // baja, y dividir por el plazo una meta que el propio informe rechaza aplicaba un ritmo mas
+  // duro que el que exige el plan real.
+  const meta_plazo = pobj === null ? null : metaSegura(pobj, obj, hombre, I.edad, MLG, h2);
+  const delta_plazo = meta_plazo === null ? 0 : (obj === 'perder' ? PC - meta_plazo : meta_plazo - PC);
+  if (plazo !== null && meta_plazo !== null && delta_plazo > 0 && (obj === 'perder' || obj === 'ganar')) {
     const kgSem = (r) => {
       if (obj === 'perder') {
         const t = RITMO_T[banda];
@@ -567,9 +622,17 @@ function calcular(I) {
       const sup_pct = perfil !== 'fuerza' ? 0.05 : SUP_T[exp][r];
       return clamp(sup_pct * TDEE, 150, 500) * 7 / 7700;          // el superavit real del paso 7
     };
+    // Semanas que ese ritmo produce DE VERDAD, con la aritmetica del paso 14: la parte lineal mas
+    // las semanas de mantenimiento. Comparar contra la tasa pelada hacia que el paso 17 juzgara
+    // con un modelo distinto del que habia elegido el ritmo.
+    const semanasDe = (v) => {
+      const sem_lineal = delta_plazo / v;
+      const descansos = (obj === 'perder' && sem_lineal > 10) ? Math.floor(sem_lineal / 8) : 0;
+      return Math.ceil(sem_lineal - 1e-9) + descansos;
+    };
     for (const r of ['suave','moderado','agresivo']) {
       const v = kgSem(r);
-      if (v !== null && v >= ritmo_req - 1e-9) { ritmo_plazo = r; break; }
+      if (v !== null && v > 0 && semanasDe(v) <= plazo) { ritmo_plazo = r; break; }
     }
     if (ritmo_plazo === null) { ritmo_plazo = 'agresivo'; w('WARN_PLAZO_IRREAL'); }
     else w('INFO_RITMO_POR_PLAZO');
@@ -963,10 +1026,19 @@ function calcular(I) {
     if (objetivo_efectivo !== 'perder' && objetivo_efectivo !== 'ganar') {
       avisos = avisos.filter(c => c !== 'INFO_RITMO_POR_PLAZO' && c !== 'WARN_PLAZO_IRREAL');
     } else if (ritmo_plazo !== null) {
-      const noLlega = ritmo_ef !== ritmo_plazo || (cronograma !== null && cronograma.semanas[0] > plazo);
-      if (noLlega) {
-        avisos = avisos.filter(c => c !== 'INFO_RITMO_POR_PLAZO');
-        if (!avisos.includes('WARN_PLAZO_IRREAL')) avisos.push('WARN_PLAZO_IRREAL');
+      // El calendario del paso 14 manda en las dos direcciones. Si llega de sobra (la banda entera
+      // cabe en el plazo) no hay nada que avisar; si no llega, o si NO HAY calendario, la promesa
+      // no se puede sostener y el aviso pasa a ser el de plazo irreal.
+      const llegaHolgado = cronograma !== null && cronograma.semanas[1] <= plazo;
+      if (llegaHolgado) {
+        avisos = avisos.filter(c => c !== 'WARN_PLAZO_IRREAL');
+        if (ritmo_ef !== ritmo_plazo) avisos = avisos.filter(c => c !== 'INFO_RITMO_POR_PLAZO');
+      } else {
+        const noLlega = ritmo_ef !== ritmo_plazo || cronograma === null || cronograma.semanas[0] > plazo;
+        if (noLlega) {
+          avisos = avisos.filter(c => c !== 'INFO_RITMO_POR_PLAZO');
+          if (!avisos.includes('WARN_PLAZO_IRREAL')) avisos.push('WARN_PLAZO_IRREAL');
+        }
       }
     }
   }
@@ -1030,7 +1102,7 @@ function calcular(I) {
     recomposicion_prioridad: objetivo_efectivo === 'recomposicion' ? recomp_prio : undefined,
     proyeccion, limites_ajuste,
     // ---- v1.2 (Paso 19): copy por sintomas de la regla. No cambia ningun numero.
-    ciclo: paso19(avisos.includes('INFO_CICLO'), I.sintomas_regla, pref_base, restr, low_carb_ef),
+    ciclo: paso19(avisos.includes('INFO_CICLO'), I.sintomas_regla, pref_base, restr, low_carb_ef, I.alimentos_excluidos),
     // ---- campos de diagnostico del verificador (no forman parte de `Resultado`)
     _dbg: { met: MET, kcal_sesion, gkg, P_cap, suelo_g, techo_g, pesoA, cierre_ok, ejercicio_dia, MET },
   };
@@ -1237,6 +1309,12 @@ const CASOS = [
       somatotipo:null, actividad_diaria:'ligero',
       entrenamiento:ent({tipo:'fuerza',dias_semana:3,minutos_sesion:50,intensidad:'media',experiencia:'intermedio',momento:'tarde'}),
       objetivo:'perder', ritmo:'agresivo', peso_objetivo:72, plazo_semanas:24, n_comidas:4,
+      preferencia_base:'omnivoro', restricciones:[], low_carb:false } },
+  { n:'20', titulo:'perder con meta por debajo del suelo y plazo (el ritmo se mide contra la meta EFECTIVA)',
+    in:{ ...B, sexo:'hombre', edad:38, altura_cm:150, peso_kg:55, grasa:{metodo:'desconocido'},
+      somatotipo:null, actividad_diaria:'ligero',
+      entrenamiento:ent({tipo:'fuerza',dias_semana:3,minutos_sesion:50,intensidad:'media',experiencia:'intermedio',momento:'tarde'}),
+      objetivo:'perder', ritmo:'moderado', peso_objetivo:38, plazo_semanas:24, n_comidas:3,
       preferencia_base:'omnivoro', restricciones:[], low_carb:false } },
 ];
 
@@ -1711,21 +1789,43 @@ for (let iter = 0; iter < 200000; iter++) {
   // mandan sobre el plazo, y cuando muerden el aviso pasa a ser el de plazo irreal.
   const plazo_i = (I.plazo_semanas === undefined || I.plazo_semanas === null) ? null : I.plazo_semanas;
   const usaPlazo = plazo_i !== null && I.peso_objetivo !== null && (obje === 'perder' || obje === 'ganar');
-  if (usaPlazo && !I.condiciones.includes('tca')) {
-    const req = Math.abs(I.peso_objetivo - I.peso_kg) / plazo_i;
+  // El plazo se mide contra la META EFECTIVA (la que publica el paso 13) y con las SEMANAS que
+  // ese ritmo produce, descansos incluidos: es la regla de la v1.2 y la que cierra el bucle con
+  // el cronograma del paso 14.
+  const h2_i = (I.altura_cm / 100) ** 2;
+  const meta_i = I.peso_objetivo === null || I.peso_objetivo === undefined
+    ? null
+    : metaSegura(I.peso_objetivo, obje, I.sexo === 'hombre', I.edad, r.mlg, h2_i);
+  const delta_i = meta_i === null ? 0 : (obje === 'perder' ? I.peso_kg - meta_i : meta_i - I.peso_kg);
+  if (usaPlazo && delta_i > 0 && !I.condiciones.includes('tca')) {
     const kgSem = (rr) => obje === 'perder'
       ? (RITMO_T[r.grasa.banda] ? RITMO_T[r.grasa.banda][rr] / 100 * I.peso_kg : null)
       : clamp((r.tdee.perfil !== 'fuerza' ? 0.05 : SUP_T[I.entrenamiento.experiencia][rr]) * r.tdee.valor, 150, 500) * 7 / 7700;
-    const esperado = ['suave','moderado','agresivo'].find((rr) => { const v = kgSem(rr); return v !== null && v >= req - 1e-9; }) || 'agresivo';
+    const semanasDe = (v) => {
+      const lin = delta_i / v;
+      return Math.ceil(lin - 1e-9) + ((obje === 'perder' && lin > 10) ? Math.floor(lin / 8) : 0);
+    };
+    const esperado = ['suave','moderado','agresivo']
+      .find((rr) => { const v = kgSem(rr); return v !== null && v > 0 && semanasDe(v) <= plazo_i; }) || 'agresivo';
     const info = r.avisos.includes('INFO_RITMO_POR_PLAZO'), warn = r.avisos.includes('WARN_PLAZO_IRREAL');
     if (info && warn) viol('S30 los dos avisos de plazo a la vez', ctx);
-    if (!info && !warn) viol('S30a plazo utilizable sin ninguno de sus dos avisos', ctx);
     if (info && r.ritmo_efectivo !== esperado) viol('S30b el ritmo no es el mas suave que llega', { ...ctx, esperado, ef:r.ritmo_efectivo });
+    // v1.2: INFO_RITMO_POR_PLAZO promete una fecha, asi que exige un calendario que la cumpla.
+    if (info && r.cronograma === null)
+      viol('S30c INFO_RITMO_POR_PLAZO sin cronograma: promete una fecha que el informe declara incalculable', ctx);
     if (info && r.cronograma && r.cronograma.semanas[0] > plazo_i)
-      viol('S30c INFO_RITMO_POR_PLAZO con un calendario mas largo que el plazo', { ...ctx, cg:r.cronograma.semanas });
+      viol('S30e INFO_RITMO_POR_PLAZO con un calendario mas largo que el plazo', { ...ctx, cg:r.cronograma.semanas });
+    // ...y el reciproco: si el calendario cabe entero en el plazo, no se puede negar la fecha.
+    if (warn && r.cronograma && r.cronograma.semanas[1] <= plazo_i)
+      viol('S30f WARN_PLAZO_IRREAL con un calendario que cabe de sobra', { ...ctx, cg:r.cronograma.semanas });
   }
   if ((r.avisos.includes('INFO_RITMO_POR_PLAZO') || r.avisos.includes('WARN_PLAZO_IRREAL')) && !usaPlazo)
     viol('S30d aviso de plazo en un plan que no lo usa', ctx);
+  // Con la meta ya en su suelo de seguridad el camino puede desaparecer (el suelo queda por
+  // encima del peso actual): entonces el plazo no emite nada, ni ritmo ni aviso.
+  if (usaPlazo && delta_i <= 0 &&
+      (r.avisos.includes('INFO_RITMO_POR_PLAZO') || r.avisos.includes('WARN_PLAZO_IRREAL')))
+    viol('S30g aviso de plazo con la meta efectiva en el peso actual o mas alla', ctx);
 
   // S32 ciclo (I): `ciclo` es exactamente "INFO_CICLO + al menos un sintoma valido", y sus
   // consejos van en el orden canonico, uno por sintoma. No toca ningun numero (lo cubre S33).
@@ -1749,9 +1849,17 @@ for (let iter = 0; iter < 200000; iter++) {
   // cambiar ni un numero. Se comprueba en 1 de cada 16 perfiles para no doblar el barrido.
   if (n % 16 === 0) {
     const conRuido = calcular({ ...I, menu_sencillo: !I.menu_sencillo,
-      alimentos_excluidos: ['brocoli','pechuga_pollo'], alimentos_favoritos: ['huevo_entero'] });
-    const limpio = (x) => JSON.stringify({ ...x, avisos: [...x.avisos].sort() });
+      alimentos_excluidos: ['brocoli','pechuga_pollo','espinacas','lentejas_cocidas'],
+      alimentos_favoritos: ['huevo_entero'] });
+    // `ciclo` queda fuera de la comparacion: desde la v1.2 los excluidos SI retiran nombres de la
+    // lista "Prioriza:" (§3.2b). Es lo unico que pueden tocar, y no es un numero.
+    const limpio = (x) => JSON.stringify({ ...x, ciclo: undefined, avisos: [...x.avisos].sort() });
     if (limpio(conRuido) !== limpio(r)) viol('S33 el motor ha leido menu_sencillo o alimentos_*', ctx);
+    if (conRuido.ciclo) {
+      for (const c of conRuido.ciclo.consejos) {
+        if (c.alimentos.includes('Espinacas')) viol('S33b consejo del ciclo con un alimento excluido', ctx);
+      }
+    }
   }
 }
 

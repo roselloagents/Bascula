@@ -142,13 +142,38 @@ function alimentosDe(
   restricciones: readonly Restriccion[],
   excluidos: ReadonlySet<string>,
 ): string[] {
-  return CONSEJOS[clave].alimentos[pref_base]
+  const lista = CONSEJOS[clave].alimentos[pref_base]
     .filter((n) => !(n === 'Avena' && restricciones.includes('sin_gluten')))
     .map((n) => (n === 'Yogur griego 0%' && restricciones.includes('sin_lactosa') ? 'Yogur griego 0% sin lactosa' : n))
-    .filter((n) => {
-      const ids = IDS_DE_ALIMENTO_CONSEJO[n]
-      return !ids || ids.length === 0 || ids.some((id) => !excluidos.has(id))
-    })
+  return sinExcluidos(lista, excluidos)
+}
+
+/**
+ * Retira de una lista de "Prioriza:" los nombres cuyos ids estén TODOS excluidos (§3.2b). Es
+ * idempotente y se exporta porque el "No me gusta" de resultados cambia las listas **sin volver a
+ * llamar al motor**: la pantalla y el PDF vuelven a pasar los consejos ya publicados por aquí con
+ * la lista de excluidos del momento, y así la tarjeta nunca recomienda lo que la compra descarta.
+ */
+export function sinExcluidos(
+  alimentos: readonly string[],
+  excluidos: ReadonlySet<string> | readonly string[] | null | undefined,
+): string[] {
+  const fuera = excluidos instanceof Set ? excluidos : new Set(Array.isArray(excluidos) ? excluidos : [])
+  if (fuera.size === 0) return [...alimentos]
+  return alimentos.filter((n) => {
+    const ids = IDS_DE_ALIMENTO_CONSEJO[n]
+    return !ids || ids.length === 0 || ids.some((id) => !fuera.has(id))
+  })
+}
+
+/** Los consejos del paso 19 con sus listas ya filtradas por los excluidos del momento (§3.2b). */
+export function consejosSinExcluidos(
+  consejos: readonly ConsejoCiclo[],
+  excluidos: readonly string[] | null | undefined,
+): ConsejoCiclo[] {
+  const fuera = new Set(Array.isArray(excluidos) ? excluidos : [])
+  if (fuera.size === 0) return [...consejos]
+  return consejos.map((c) => ({ ...c, alimentos: sinExcluidos(c.alimentos ?? [], fuera) }))
 }
 
 export interface EntradaCiclo {

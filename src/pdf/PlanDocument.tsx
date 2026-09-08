@@ -24,6 +24,7 @@ import type {
 // La nota del cierre de kcal es la MISMA función que usa la pantalla: en un plan ajustado el
 // número cambia (§4.0: el PDF es la instantánea de lo que se ve en pantalla).
 import { notaCierreKcal } from '../components/utiles/copy'
+import { consejosSinExcluidos } from '../engine'
 import { NOMBRE_SECCION, ORDEN_SECCIONES } from '../data/secciones'
 // Las celdas de cantidad y el rótulo del modo sencillo salen del mismo helper que usa la
 // pantalla (§4.4b: "las mismas cuatro columnas de §2.5b"). Aquí no se recalcula ningún número.
@@ -969,7 +970,12 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
   const avisoCiclo = avisos.find((a) => a.codigo === 'INFO_CICLO')
   // v1.2: los bloques por síntoma van dentro de esa misma tarjeta, en el orden del motor. La lista
   // de síntomas marcados NO se imprime en ninguna parte (§4.2): solo sus consejos.
-  const consejosCiclo = (resultado.ciclo?.consejos ?? []).filter((c) => !!c)
+  // Las listas "Prioriza:" se vuelven a filtrar por los excluidos del momento: el "No me gusta"
+  // de resultados cambia las listas sin volver a llamar al motor, y el PDF se genera después.
+  const consejosCiclo = consejosSinExcluidos(
+    (resultado.ciclo?.consejos ?? []).filter((c) => !!c),
+    inputs.alimentos_excluidos,
+  )
   const alimentosCiclo = (ejemplos?.alimentos_ciclo ?? []).filter((a) => !!a)
 
   // §4.2 y §4.4 (v1.2): resumen de lo que el usuario no quiere ver y de sus favoritos. Los ids que

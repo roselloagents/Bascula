@@ -6,7 +6,7 @@ import { ajustarMacros, techoHidratosAjuste } from './adjust'
 import { calcularGrasa } from './bodyfat'
 import { calcularBmr, calcularMlg } from './bmr'
 import { calcularCalorias } from './calories'
-import { calcularCiclo } from './ciclo'
+import { calcularCiclo, consejosSinExcluidos } from './ciclo'
 import {
   AJUSTE_KCAL_FACTOR_MAX,
   AJUSTE_KCAL_FACTOR_MIN,
@@ -47,7 +47,7 @@ import type {
 } from './types'
 
 export type * from './types'
-export { ajustarMacros, techoHidratosAjuste, textoError, textosAvisos }
+export { ajustarMacros, consejosSinExcluidos, techoHidratosAjuste, textoError, textosAvisos }
 
 /** Paso 1 — categoría de IMC (OMS). Bordes estrictos por arriba, no estrictos por abajo. */
 function categoriaImc(imc: number): ImcCategoria {

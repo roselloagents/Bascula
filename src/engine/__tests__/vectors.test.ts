@@ -1062,6 +1062,56 @@ const VECTORES: Vector[] = [
     ],
     avisos: ['INFO_ADAPTACION', 'INFO_GRASA_ESTIMADA', 'INFO_PROTEINA_CAPADA', 'INFO_RITMO_POR_PLAZO', 'WARN_PROTEINA_TOMA_ALTA'],
   },
+
+  {
+    n: '20',
+    titulo: 'Hombre 38 años, meta por debajo del suelo y plazo de 24 semanas (H)',
+    inputs: {
+      ...BASE,
+      sexo: 'hombre',
+      edad: 38,
+      altura_cm: 150,
+      peso_kg: 55,
+      grasa: { metodo: 'desconocido' },
+      somatotipo: null,
+      actividad_diaria: 'ligero',
+      entrenamiento: ent({ tipo: 'fuerza', dias_semana: 3, minutos_sesion: 50, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+      objetivo: 'perder',
+      ritmo: 'moderado',
+      peso_objetivo: 38,
+      plazo_semanas: 24,
+      n_comidas: 3,
+      preferencia_base: 'omnivoro',
+    },
+    imc: 24.4,
+    imc_categoria: 'normal',
+    grasa: { pct: 22.3, margen: 5, cunbae: 22.3, deurenberg: 21.9, fiabilidad: 'baja', metodo_efectivo: 'desconocido', banda: 'alto' },
+    mlg: 42.72,
+    bmr: { valor: 1302.5, ecuacion: 'mifflin', mifflin: 1302.5, katch: 1292.9, harris: 1329.3 },
+    tdee: { valor: 1930.7, bruto: 2032.3, pal: 1.5, ejercicio_dia: 78.6, perfil: 'fuerza', kcal_sesion: 183.3 },
+    objetivo_efectivo: 'perder',
+    // Paso 6.7ter (v1.2): la meta cruda son 38 kg, pero el paso 13 la sube a 49 (IMC mínimo y
+    // grasa esencial). El plazo se mide contra ESA meta —6 kg en 24 semanas— y le basta el ritmo
+    // moderado; con la meta cruda salía el agresivo, un ritmo que el propio informe no exigía.
+    ritmo_efectivo: 'moderado',
+    kcal: 1570,
+    kcal_cierre: 1570,
+    macros: { p: 120, g: 50, hc: 160, fibra: 24, azucares: 39.25, base_kg: 55.0, base_proteina: 'peso_corporal', somatotipo: 'mesomorfo' },
+    agua: { ml: 2200, rango: [2000, 2450], vasos: 9 },
+    peso_objetivo: {
+      metodo: 'grasa', sugerido: 50.5, rango: [46.5, 54.0], mostrar_central: false, efectivo: 49.0, hito: null,
+      imc22: 49.5, rango_imc: [45.0, 56.0],
+      clasicas: { devine: 47.8, robinson: 50.2, miller: 54.9, hamwi: 45.4 },
+    },
+    cronograma: { ritmo_kg_sem: 0.3279, ritmo_pct_sem: 0.60, delta_kg: 6.0, semanas: [21, 24], diet_breaks: 2, fecha_min: '2027-02-01', fecha_max: '2027-02-22', precision_fecha: 'mes', tramo_12sem: [3.5, 4.0] },
+    ffmi: { valor: 19.0, normalizado: 20.9, categoria: null },
+    comidas: [
+      { nombre: 'Desayuno', hora: '08:00', pct: 30, p: 35, g: 15, hc: 50, kcal: 475, peri: false },
+      { nombre: 'Comida', hora: '14:00', pct: 35, p: 45, g: 15, hc: 45, kcal: 495, peri: false },
+      { nombre: 'Cena', hora: '21:00', pct: 35, p: 40, g: 20, hc: 65, kcal: 600, peri: true },
+    ],
+    avisos: ['INFO_ADAPTACION', 'INFO_FIBRA_AJUSTADA', 'INFO_GRASA_ESTIMADA', 'INFO_MICRONUTRIENTES', 'INFO_RITMO_POR_PLAZO', 'WARN_OBJETIVO_GRASA_MUY_BAJA', 'WARN_OBJETIVO_IMC_BAJO', 'WARN_PROTEINA_TOMA_ALTA'],
+  },
 ]
 
 // ---------------------------------------------------------------- comprobación de cada vector
