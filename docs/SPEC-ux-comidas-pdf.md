@@ -695,7 +695,17 @@ equivalencias y en la lista de la compra.
 con etiqueta accesible (no visible: no cabe) y el placeholder literal **"Busca un alimento (p. ej.
 brócoli)"**. **Sin `autofocus`**: al entrar en el paso el foco sigue en el contenedor, como en el resto
 del cuestionario, y abrir el teclado del móvil nada más llegar taparía la pantalla entera. Con algo
-escrito aparece a su derecha un botón **"Borrar"**.
+escrito aparece a su derecha un botón **"Borrar"**, que vacía el campo y **le devuelve el foco**: se
+desmonta al pulsarlo y sin eso el foco caía al `<body>` y quien va con teclado o con lector volvía a
+empezar por la barra de progreso (v1.2.1, revisión).
+
+**Intro en el buscador no envía el cuestionario** (v1.2.1, revisión). El campo vive dentro del
+`<form onSubmit={avanzar}>` del wizard y es el único de texto del paso: por la submisión implícita de
+HTML, un Intro —o la tecla "Buscar"/"Ir" que el teclado del móvil enseña justo por ser
+`type="search"`— llamaba a `avanzar`, y como el paso 14 es el último y siempre está completo,
+generaba el plan y sacaba al usuario de la pantalla con cero alimentos marcados. La tecla **filtra y
+cierra el teclado** (`preventDefault` + `blur`, helper puro `teclaEnBuscador` con test), y el campo
+declara `enterKeyHint="search"` para no prometer navegación.
 
 La coincidencia es **por subcadena, sin distinguir mayúsculas ni acentos** —se normaliza con NFD y se
 tiran los diacríticos, así que "brocoli" encuentra "Brócoli"— y se busca en **`nombre_corto` y en
@@ -706,11 +716,19 @@ así "yogur 0" encuentra "Yogur griego 0%". El helper vive en `src/components/ut
 
 Con texto en el buscador **solo se pintan los grupos que tienen alguna coincidencia, y todos abiertos**
 (ahí no hay nada que plegar, así que la cabecera es un encabezado a secas y no un botón que no haría
-nada visible). Debajo de la barra, una línea en `aria-live="polite"` que existe siempre en el DOM
-—aunque vacía— para que se pueda anunciar: **"{n} alimentos para «{lo escrito}»"** (en singular,
-"1 alimento para «…»") o, sin ninguno, **"Ningún alimento se llama así. Prueba con otro nombre o mira
-los grupos."** **Marcar un chip durante la búsqueda no la borra**: el texto, la lista filtrada y el
-recuento siguen donde estaban.
+nada visible; eso sí, enseña el mismo recuento y las mismas marcas que la cabecera-botón, porque
+marcar chips buscando es un flujo previsto y esa es la única señal por grupo).
+
+El recuento vive **dentro de la barra fija**, en la fila del resumen y en su sitio: mientras se busca
+sustituye al resumen vivo (v1.2.1, revisión; debajo de la barra quedaba tapado por ella en cuanto se
+bajaba un poco y el usuario no veía ningún recuento). Es una línea en `aria-live="polite"` que existe
+**siempre en el DOM** —aunque vacía, recortada como `.etiqueta-oculta` y no con `display: none`, que
+la sacaría del árbol de accesibilidad y no se anunciaría al aparecer— y que **cabe en una sola
+línea**, porque la barra no puede crecer: **"{n} alimentos para «{lo escrito}»"** (en singular,
+"1 alimento para «…»") o, sin ninguno, **"Ningún alimento para «{lo escrito}»"**. La frase larga que
+dice qué hacer se pinta **donde estarían los grupos**: **"Ningún alimento se llama así. Prueba con
+otro nombre o mira los grupos."** **Marcar un chip durante la búsqueda no la borra**: el texto, la
+lista filtrada y el recuento siguen donde estaban.
 
 **Grupos plegables (v1.2.1).** Cada grupo es un desplegable con **cabecera-botón** (`aria-expanded`,
 `aria-controls`, 44 px de alto) que enseña el nombre del grupo, el número de alimentos y, si los hay,
@@ -718,18 +736,25 @@ las marcas en corto **"✕ 2 · ★ 1"** (en `aria-hidden`, con la versión habl
 te gustan"— en texto solo para lectores de pantalla). **Por defecto entran todos plegados salvo los que
 ya tienen alguna marca**: quien vuelve desde el enlace "Cambiar" de resultados ve lo suyo abierto y el
 resto recogido. Junto al buscador, un botón de texto **"Mostrar todos"** / **"Plegar todos"** según haya
-o no algún grupo cerrado. El estado de plegado es **estado local del componente y no se persiste**, y
-**la búsqueda no lo destruye**: al borrarla se vuelve exactamente a lo que había.
+o no algún grupo cerrado: comparte fila con el resumen vivo, justo debajo del campo, y **no se pinta
+mientras hay algo escrito** (buscando salen todos los grupos abiertos y no hay nada que plegar). Mide
+24 px de alto —el mínimo de WCAG 2.5.8— y guarda **8 px con el campo de búsqueda**, que está encima y
+también se toca: con los 4 px de antes, un pulgar que apuntara al borde de abajo del buscador caía en
+"Mostrar todos" y desplegaba los siete grupos de golpe (v1.2.1, revisión). El estado de plegado es
+**estado local del componente y no se persiste**, y **la búsqueda no lo destruye**: al borrarla se
+vuelve exactamente a lo que había.
 
 **Presupuesto de la barra fija:** con el control segmentado, el buscador y la fila del resumen no puede
-pasar de **130 px de alto en 375 px** (medida real: 126 px, y no cambia al escribir). Sin scroll
+pasar de **130 px de alto en 375 px** (medida real: 126 px, y no cambia al escribir; los 8 px del
+párrafo anterior salen del `padding-bottom` que tenía la barra, no del presupuesto). Sin scroll
 horizontal. La transición de la flecha del desplegable usa el token `--dur`, que con
 `prefers-reduced-motion: reduce` ya vale 1 ms. Plegada, la pantalla mide **1 331 px** en vez de los
 3 553 px de la v1.2: poco más de una pantalla de móvil en vez de cuatro.
 
 **Resumen vivo**, justo encima de la barra de navegación, en una región `aria-live="polite"`:
 "{n} que no te gustan · {m} favoritos". Con cero de los dos no se pinta. El mismo texto se repite en la
-barra pegada arriba, junto al control segmentado.
+barra pegada arriba, junto al control segmentado —salvo mientras se busca, que esa fila la ocupa el
+recuento de resultados; el de abajo sigue ahí.
 
 **Botón de salida (copy literal):** "Seguir sin marcar nada", como acción secundaria junto a "Ver mi
 plan". Envía las dos listas vacías. **Solo se pinta mientras no hay nada marcado** (v1.2, revisión):
@@ -2028,6 +2053,20 @@ viven en `SPEC-calculo.md` o en `verify-vectors.mjs` se registran en el §7 de a
 | # | Sev. | Dónde | Resumen de lo aplicado |
 |---|---|---|---|
 | P14-1 | major | paso 14 | Los 103 chips repartidos en siete grupos median 3 553 px, cuatro pantallas de móvil, sin buscador ni plegado. Se añade el **buscador** en la barra fija (subcadena sobre `nombre_corto` y `nombre`, sin acentos ni mayúsculas, palabra a palabra, línea de resultados en `aria-live` y mensaje propio cuando no hay ninguno) y los **grupos plegables** (cabecera-botón de 44 px con recuento y marcas, todos plegados salvo los que ya traen algo marcado, "Mostrar todos" / "Plegar todos"). La búsqueda no destruye el plegado y marcar un chip no borra la búsqueda. Plegada, la pantalla baja a 1 331 px y la barra fija se queda en 126 px de los 130 de presupuesto. Reabre el hallazgo U-11 que la v1.2 dejó fuera por cierre de ronda. |
+
+#### Ronda de cierre de la v1.2.1 (revisión adversaria del paso 14, 2026-09-08)
+
+Recorrido real en móvil (375 × 812) sobre el build de producción y revisión adversaria del código, la
+spec y los tests. Aceptados y aplicados los cinco; la sección de cada uno queda arriba con la marca
+"(v1.2.1, revisión)".
+
+| # | Sev. | Dónde | Resumen |
+|---|---|---|---|
+| B-1 | critical | paso 14 | Intro —o la tecla "Buscar" del teclado del móvil— en el buscador enviaba el formulario del wizard por submisión implícita: como el paso 14 es el último y siempre está completo, generaba el plan y sacaba al usuario de la pantalla con cero alimentos marcados. Ahora la tecla filtra y cierra el teclado (`preventDefault` + `blur`), y el campo declara `enterKeyHint="search"`. |
+| B-2 | major | paso 14 | "Borrar" se desmonta al pulsarlo y el foco caía al `<body>`: quien va con teclado o con lector volvía a empezar por la barra de progreso. Ahora el foco vuelve al campo. |
+| B-3 | major | paso 14 | La línea de resultados se escondía con `display: none` mientras estaba vacía, así que la región `aria-live` no estaba registrada y al aparecer con el texto ya dentro no se anunciaba —justo lo contrario de lo que prometía esta sección—. Vacía se recorta como `.etiqueta-oculta`: fuera del flujo, dentro del árbol de accesibilidad. |
+| B-4 | minor | paso 14 | El recuento "{n} alimentos para «…»" se pintaba **debajo** de la barra fija y la barra lo tapaba en cuanto se bajaba un poco: con muchos resultados no se veía nunca. Sube a la fila del resumen, dentro de la barra, en una sola línea; la frase larga del vacío se queda donde estarían los grupos. Buscando, la cabecera del grupo recupera el recuento y las marcas que sí lleva la cabecera-botón. |
+| B-5 | minor | paso 14 | "Mostrar todos" quedaba a 4 px del campo de búsqueda, que también se toca: 8 px, sacados del `padding-bottom` de la barra para no tocar el presupuesto de 130 px. La spec no decía que el botón comparte fila con el resumen ni que desaparece al buscar; ahora sí. |
 
 ### v1.2 — decisiones G-J del segundo feedback real (2026-09-08)
 

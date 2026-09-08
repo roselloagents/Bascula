@@ -21,7 +21,10 @@ Cuatro cosas que salieron de escuchar a una usuaria de verdad usando la v1.1:
   chips agrupados por tipo de alimento, lo que no quieres ver y lo que sí te apetece comer. Un
   alimento tachado no aparece en ningún sitio —ni en el menú, ni en las sustituciones, ni en las
   equivalencias, ni en la lista de la compra— y los favoritos entran los primeros. Solo se enseñan
-  los alimentos que encajan con tu forma de comer: una vegana no ve pollo. Desde la pantalla de
+  los alimentos que encajan con tu forma de comer: una vegana no ve pollo. Son 103 chips, así que la
+  pantalla trae **buscador** —escribe "brocoli" y sale el Brócoli, sin acentos ni mayúsculas que
+  valgan— y los **grupos vienen plegados**, salvo los que ya tienes marcados: una pantalla de móvil
+  en vez de cuatro. Desde la pantalla de
   resultados, cada alimento del menú lleva un **"No me gusta"** que rehace el menú y la compra al
   momento (con "Deshacer" en una barra fija abajo), sin tocar ni una caloría del plan. Los favoritos
   se sirven donde tienen sentido —en la comida y en la cena, o donde la plantilla ya los tenía—:
