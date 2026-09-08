@@ -61,6 +61,19 @@ export function textoCantidadDia(item: ItemCompra): string {
   return `${cifra(item.gramos_dia, 1)} g al día`
 }
 
+/**
+ * Cantidad de la sección opcional del ciclo (§3.8.2). Esa sección no es del plan: son dos
+ * raciones para dos o tres días al mes, así que no puede hablar el idioma semanal del resto de la
+ * lista ("120 g en la semana · 17,1 g al día · te dura 10 días" para dos latas de sardinas).
+ */
+export function textoCantidadCiclo(item: ItemCompra): string {
+  const cantidad =
+    item.gramos_semana >= 1000
+      ? `${cifra(item.gramos_semana / 1000, 2)} kg`
+      : `${cifra(item.gramos_semana, 0)} g`
+  return `${cantidad} en total, unas 2 raciones`
+}
+
 /** Rótulo del distintivo de modo sencillo, con el singular resuelto (§2.5b y §4.4b). */
 export function textoModoSencillo(alimentos: number | undefined): string {
   if (alimentos === undefined || !Number.isFinite(alimentos)) return 'Modo sencillo'

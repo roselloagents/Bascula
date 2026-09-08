@@ -67,8 +67,20 @@ export function normalizarListasAlimentos(
     return lista
   }
   const fuera = new Set(limpia(excluidos))
+  // Exclusiones encadenadas (§3.2b): hay alimentos que son otro alimento con otra forma. El
+  // "arroz de coliflor" ES coliflor rallada, y quien marca la coliflor no espera encontrársela
+  // en el plato bajo otro nombre. La cadena va en un solo sentido: excluir el arroz de coliflor
+  // no retira la coliflor, que es una verdura normal.
+  for (const [origen, arrastrados] of EXCLUSIONES_ENCADENADAS) {
+    if (fuera.has(origen)) for (const id of arrastrados) fuera.add(id)
+  }
   return { excluidos: fuera, favoritos: limpia(favoritos).filter((id) => !fuera.has(id)) }
 }
+
+/** Un id excluido arrastra a estos otros (§3.2b): el mismo alimento con otra presentación. */
+const EXCLUSIONES_ENCADENADAS: readonly (readonly [string, readonly string[]])[] = [
+  ['coliflor', ['arroz_coliflor']],
+]
 
 export function pasaBase(a: Alimento, base: PreferenciaBase): boolean {
   switch (base) {

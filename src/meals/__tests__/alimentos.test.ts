@@ -186,7 +186,9 @@ describe('§3.2b — alimentos excluidos', () => {
     expect(new Set(avisos).size, 'sin duplicados').toBe(avisos.length)
     for (const aviso of avisos) {
       expect(aviso).toContain('No hemos podido evitar')
-      expect(aviso).toContain('Cámbialo por lo que quieras de la tabla de equivalencias.')
+      expect(aviso).toContain('Puedes cambiarlo por lo que quieras de la tabla de equivalencias.')
+      // El aviso no puede tener género: "gambas" es femenino plural y "lomo de cerdo" masculino.
+      expect(aviso).not.toContain('sin él')
     }
     // Hay un aviso por cada alimento excluido que ha tenido que volver, y ninguno de más.
     const forzados = new Set(idsDelMenu(e).filter((id) => proteinas.includes(id)))
@@ -314,9 +316,29 @@ describe('§3.2b — alimentos favoritos', () => {
     const c = CASOS[0]
     const primero = generar(c, 2200, 4, { alimentos_favoritos: ['salmon', 'ternera_solomillo'] })
     const segundo = generar(c, 2200, 4, { alimentos_favoritos: ['ternera_solomillo', 'salmon'] })
-    const desayuno = (e: Ejemplos): string[] => e.entreno.comidas[0].alimentos.map((a) => a.id)
-    expect(desayuno(primero)).toContain('salmon')
-    expect(desayuno(segundo)).toContain('ternera_solomillo')
+    // La comida es la primera toma donde manda el gusto (§3.2b): ahí se ve el orden del usuario.
+    const laComida = (e: Ejemplos): string[] =>
+      (e.entreno.comidas.find((x) => x.comida === 'Comida')?.alimentos ?? []).map((a) => a.id)
+    expect(laComida(primero)).toContain('salmon')
+    expect(laComida(segundo)).toContain('ternera_solomillo')
+  })
+
+  it('un favorito de comida y cena no se cuela en el desayuno (§3.2b)', () => {
+    // El caso literal del feedback: marcar pechuga de pollo y arroz no puede convertir el
+    // desayuno en una comida. En el desayuno manda la plantilla, no el gusto.
+    for (const sencillo of [false, true]) {
+      const e = generar(
+        CASOS[0],
+        2200,
+        4,
+        { alimentos_favoritos: ['pechuga_pollo', 'arroz_blanco_cocido'] },
+        sencillo,
+      )
+      const desayuno = e.entreno.comidas[0].alimentos.map((a) => a.id)
+      expect(e.entreno.comidas[0].comida, `sencillo ${sencillo}`).toBe('Desayuno')
+      expect(desayuno, `sencillo ${sencillo}`).not.toContain('pechuga_pollo')
+      expect(desayuno, `sencillo ${sencillo}`).not.toContain('arroz_blanco_cocido')
+    }
   })
 })
 

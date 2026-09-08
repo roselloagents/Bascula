@@ -109,6 +109,11 @@ interface Contexto {
   /** Índice del plato dentro de la toma: desplaza la rotación para que los platos no se repitan. */
   plato: number
   /**
+   * Rol de la toma que se está construyendo (§3.2b): decide dónde manda el gusto y dónde manda la
+   * plantilla. `construirComida` lo fija antes de resolver cada toma.
+   */
+  rolComida: RolComida
+  /**
    * Modo sencillo (§3.7.2): apaga la variedad. Sin desplazamiento por usuario, sin rotación por
    * comida y sin evitar los alimentos ya usados en el día, para que las dos variantes de cada rol
    * caigan siempre sobre la misma lista corta de básicos.
@@ -173,6 +178,13 @@ function pasaQuery(a: Alimento, q: FoodQuery): boolean {
  *   6. dentro de `preferidos`, primero los FAVORITOS en el orden del usuario y después el resto
  *      de `ids_preferidos` en el orden de la plantilla.
  *
+ * Dónde adelanta un favorito (§3.2b): en las tomas PRINCIPALES (comida y cena) manda el gusto y
+ * el favorito va delante de todo lo que comparta su rol; en el desayuno, la merienda y los
+ * tentempiés manda la plantilla, y el favorito solo adelanta si ya está en sus `ids_preferidos`.
+ * Anteponerlo a ciegas metía pechuga de pollo y arroz blanco en el desayuno de quien los había
+ * marcado, y en modo sencillo lo dejaba comiendo lo mismo cuatro veces al día. Una consulta sin
+ * lista declarada —donde la plantilla no opina— siempre deja pasar al favorito.
+ *
  * `ignorarExcluidos` solo lo activa el respaldo de §3.2b, y solo para las consultas obligatorias:
  * es la vía por la que un alimento marcado como "no me gusta" puede volver, siempre con su aviso.
  */
@@ -181,7 +193,9 @@ function candidatos(
   perfil: PerfilDietetico,
   permitidos: ReadonlySet<string> | null = null,
   ignorarExcluidos = false,
-): { preferidos: Alimento[]; reserva: Alimento[] } {
+  /** `true` en las tomas principales: ahí el favorito adelanta aunque la plantilla no lo liste. */
+  favoritoLibre = true,
+): { preferidos: Alimento[]; reserva: Alimento[]; favoritos: Alimento[] } {
   // Filtro de §3.2: la CONJUNCIÓN de la base y de todas las restricciones, antes que ningún otro
   // criterio. Las variantes «sin lactosa» solo entran en la rotación de quien las necesita; para
   // el resto de perfiles quedan como reserva (§3.2): son el mismo alimento, más caro y sin motivo.
@@ -195,24 +209,31 @@ function candidatos(
       (sinLactosa || !esVarianteSinLactosa(a)) &&
       (permitidos === null || permitidos.has(a.id)),
   )
-  // Los favoritos que han sobrevivido a los pasos 1-5, en el orden del usuario. Ser favorito no
-  // salta ningún filtro (§3.2b): solo cambia qué hay en la posición 0 de la lista.
-  const favoritos = perfil.favoritos
-    .map((id) => validos.find((a) => a.id === id))
-    .filter((a): a is Alimento => a !== undefined)
   if (!q.ids_preferidos) {
+    // Consulta sin lista declarada: la plantilla no opina sobre qué encaja, así que el favorito
+    // manda. Ser favorito no salta ningún filtro (§3.2b): solo cambia qué hay en la posición 0.
+    const favoritos = perfil.favoritos
+      .map((id) => validos.find((a) => a.id === id))
+      .filter((a): a is Alimento => a !== undefined)
     const resto = validos
       .filter((a) => !favoritos.includes(a))
       .sort((x, y) => x.id.localeCompare(y.id))
-    return { preferidos: [...favoritos, ...resto], reserva: [] }
+    return { preferidos: [...favoritos, ...resto], reserva: [], favoritos }
   }
   // Sustitución por variante `_sl` de §3.2, conservando la posición en la lista de preferidos.
-  const declarados = sustituirSinLactosa(q.ids_preferidos, perfil)
+  const idsDeclarados = sustituirSinLactosa(q.ids_preferidos, perfil)
+  // Fuera de las tomas principales solo adelantan los favoritos que la propia consulta ya
+  // considera aptos: la plantilla del desayuno sabe que el pollo no es un desayuno.
+  const favoritos = perfil.favoritos
+    .filter((id) => favoritoLibre || idsDeclarados.includes(id))
+    .map((id) => validos.find((a) => a.id === id))
+    .filter((a): a is Alimento => a !== undefined)
+  const declarados = idsDeclarados
     .map((id) => validos.find((a) => a.id === id))
     .filter((a): a is Alimento => a !== undefined && !favoritos.includes(a))
   const preferidos = [...favoritos, ...declarados]
   const reserva = validos.filter((a) => !preferidos.includes(a)).sort((x, y) => x.id.localeCompare(y.id))
-  return { preferidos, reserva }
+  return { preferidos, reserva, favoritos }
 }
 
 /**
@@ -229,7 +250,14 @@ function elegirAlimento(
   yaEnElPlato: ReadonlySet<string> | null = null,
 ): Alimento | null {
   if (!q) return null
-  const { preferidos, reserva } = candidatos(q, ctx.perfil, ctx.permitidos)
+  const favoritoLibre = ctx.rolComida === 'principal'
+  const { preferidos, reserva, favoritos: favoritosDeLaConsulta } = candidatos(
+    q,
+    ctx.perfil,
+    ctx.permitidos,
+    false,
+    favoritoLibre,
+  )
   let lista = preferidos.length > 0 ? preferidos : reserva
   if (lista.length === 0 && ctx.permitirExcluidos && obligatoria) {
     // Respaldo de §3.2b: la consulta se ha quedado sin candidatos por las exclusiones y el
@@ -237,7 +265,7 @@ function elegirAlimento(
     // usa el MEJOR candidato excluido —el que la consulta habría elegido si el usuario no lo
     // hubiera marcado— y `generarEjemplos` lo anota en `Ejemplos.avisos_menu`. La base dietética
     // y las restricciones siguen puestas: eso no lo relaja ningún respaldo.
-    const conExcluidos = candidatos(q, ctx.perfil, ctx.permitidos, true)
+    const conExcluidos = candidatos(q, ctx.perfil, ctx.permitidos, true, favoritoLibre)
     lista = conExcluidos.preferidos.length > 0 ? conExcluidos.preferidos : conExcluidos.reserva
   }
   // Un mismo alimento no puede ocupar dos anclas del mismo plato ("atún, atún y arroz"): pasa en
@@ -267,12 +295,7 @@ function elegirAlimento(
   // exactamente como antes: sin favoritos el orden que sale de aquí es idéntico al de la v1.1.
   // Si el desplazamiento se aplicara también sobre ellos, marcar un alimento como favorito
   // correría la lista y podría sacarlo del menú, que es justo lo contrario de lo que pide.
-  const favoritos =
-    ctx.perfil.favoritos.length > 0
-      ? ctx.perfil.favoritos
-          .map((id) => lista.find((a) => a.id === id))
-          .filter((a): a is Alimento => a !== undefined)
-      : []
+  const favoritos = favoritosDeLaConsulta.filter((a) => lista.includes(a))
   const resto = favoritos.length > 0 ? lista.filter((a) => !favoritos.includes(a)) : lista
   // En una toma pequeña manda el mínimo de ración, así que se empieza siempre por el primero
   // de la lista (el más ligero) en vez de por el desplazamiento del usuario. En modo sencillo,
@@ -351,17 +374,22 @@ function resolverPlantilla(
   // En una toma pequeña la búsqueda arranca en el primer candidato (el más ligero), sin sumarle
   // el índice de la comida: la variedad la da `usados`, no el desplazamiento.
   const i = ctx.tomaLigera || ctx.sencillo ? 0 : ctx.indiceComida + ctx.plato
+  // Con favoritos marcados, el hidrato y la grasa esquivan lo ya usado en el día como hace la
+  // proteína (§3.2b): sin esta guarda un favorito de esos dos roles ganaba TODAS las tomas del
+  // día —arroz en el desayuno, la comida, la merienda y la cena— y la semana se quedaba en cuatro
+  // alimentos. Sin favoritos el comportamiento es el de la v1.1, igual que antes.
+  const rotarPorFavoritos = ctx.perfil.favoritos.length > 0
   const carbohidrato = anota(
     elegirAlimento(
       p.ancla_carbohidrato,
       ctx,
       i + rotHc,
-      false,
+      rotarPorFavoritos,
       ctx.perfil.banco !== 'low_carb',
       enElPlato,
     ),
   )
-  const grasa = anota(elegirAlimento(p.ancla_grasa, ctx, i + rotHc, false, false, enElPlato))
+  const grasa = anota(elegirAlimento(p.ancla_grasa, ctx, i + rotHc, rotarPorFavoritos, false, enElPlato))
   const rotV = Math.max(0, rotVegetal)
   const verdura = anota(elegirAlimento(p.verdura, ctx, i * 2 + rotV, rotVegetal >= 0, false, enElPlato))
   const fruta = anota(elegirAlimento(p.fruta, ctx, i + rotV, rotVegetal >= 0, false, enElPlato))
@@ -508,6 +536,14 @@ function construirPlato(
   for (const p of mejor.porciones) {
     if (p.rol === 'proteina' || p.rol === 'proteina2') ctx.usados.add(p.alimento.id)
     if (p.rol === 'verdura' || p.rol === 'fruta') ctx.usados.add(p.alimento.id)
+    // Los dos roles que la v1.1 no anotaba: solo se registran cuando hay favoritos, que es cuando
+    // `resolverPlantilla` los consulta (§3.2b). Así ningún menú sin listas cambia.
+    if (
+      ctx.perfil.favoritos.length > 0 &&
+      (p.rol === 'carbohidrato' || p.rol === 'grasa')
+    ) {
+      ctx.usados.add(p.alimento.id)
+    }
   }
   for (const id of mejor.plantillas) usadas.add(id)
   return mejor
@@ -522,6 +558,7 @@ function construirPlato(
 function construirComida(comida: Comida, ctx: Contexto, banco: readonly Plantilla[], usadas: Set<string>): ComidaResuelta {
   const objetivo: Macros = { kcal: comida.kcal, prot: comida.proteina_g, carb: comida.hc_g, fat: comida.grasa_g }
   const rol = rolComidaDe(comida.nombre, comida.kcal)
+  ctx.rolComida = rol
   ctx.tomaLigera = comida.kcal < KCAL_TOMA_LIGERA
   const platos = Math.min(PLATOS_MAX, Math.max(1, Math.ceil(objetivo.kcal / KCAL_PLATO)))
 
@@ -628,6 +665,7 @@ function construirDia(o: OpcionesDia): DiaConstruido {
     priorizarFibra: o.priorizarFibra,
     tomaLigera: false,
     plato: 0,
+    rolComida: 'principal',
     sencillo: o.sencillo,
     hcAlterno: hcAlternoDe(o.perfil, bancoSencillo),
     // En modo sencillo ninguna `FoodQuery` puede salirse de la lista blanca ya filtrada por el
@@ -724,7 +762,15 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
   let dia = construirDia(opciones)
   // Modo sencillo: el día B (días pares) usa las variantes `…-B` del mismo banco corto. No viaja
   // en `Ejemplos` (§3.7.3), solo sirve para ponderar 4/3 los gramos de la lista de la compra.
-  let diaB = sencillo && bancoMenu ? construirDia({ ...opciones, banco: bancoMenu.B }) : null
+  //
+  // El día B se construye con UN SOLO favorito, el primero de la lista (§3.2b, modo sencillo): en
+  // modo sencillo la rotación por día está apagada, así que tres favoritos ganaban las dos tomas
+  // principales de los siete días y la semana entera se quedaba en cinco alimentos. Con esta
+  // regla los días 1, 3, 5 y 7 llevan todo lo que le gusta al usuario, los días 2, 4 y 6 llevan
+  // su favorito principal y la otra opción de la lista corta, y el tope de 12 sigue en pie.
+  const diaBDe = (o: OpcionesDia, banco: readonly Plantilla[]): DiaConstruido =>
+    construirDia({ ...o, banco, perfil: { ...o.perfil, favoritos: o.perfil.favoritos.slice(0, 1) } })
+  let diaB = sencillo && bancoMenu ? diaBDe(opciones, bancoMenu.B) : null
 
   // Tope de variedad del modo sencillo (§3.7.2, regla 1, y §3.2b: "sin superar nunca el tope de
   // 12"). Un favorito que sirve para un rol pero no gana todas sus consultas añade un alimento a
@@ -743,7 +789,7 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
     bancoMenu = recortado
     opciones = opcionesDe(perfilMenu, bancoMenu)
     dia = construirDia(opciones)
-    diaB = construirDia({ ...opciones, banco: bancoMenu.B })
+    diaB = diaBDe(opciones, bancoMenu.B)
   }
 
   // Comprobación de fibra (§3.3): primero se rota a verduras de más fibra; si aun así no llega, nota.
@@ -879,11 +925,19 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
     if (opcional) compra.opcional_ciclo = opcional
   }
 
+  // Favoritos REALMENTE servidos (§3.2b): el tope de 12 del modo sencillo puede retirar alguno, y
+  // un favorito que ninguna plantilla considera apto para sus tomas puede no llegar al plato. El
+  // resumen de §2.5 y §4.4 imprime esta lista y no la del cuestionario: prometer un favorito que
+  // no está ni en el menú ni en la compra es exactamente lo que la decisión G venía a evitar.
+  const enLaSemana = idsSemana(dia, diaB)
+  const favoritos_aplicados = perfil.favoritos.filter((id) => enLaSemana.has(id))
+
   return {
     entreno,
     descanso,
     consejos: consejos(resultado.objetivo_efectivo, preferencia, inputs.n_comidas),
     equivalencias: tablas,
+    ...(perfil.favoritos.length > 0 ? { favoritos_aplicados } : {}),
     // La lista de la compra se genera SIEMPRE que hay menú, en modo sencillo o normal (§3.7.3).
     compra,
     modo_sencillo: sencillo,
@@ -935,6 +989,7 @@ function rehacerConBancoNormal(
     priorizarFibra: false,
     tomaLigera: false,
     plato: 0,
+    rolComida: 'principal',
     sencillo: false,
     hcAlterno: hcAlternoDe(perfil, null),
     permitidos,

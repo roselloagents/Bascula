@@ -508,6 +508,14 @@ export interface Ejemplos {
    * `undefined` cuando no hay `resultado.ciclo` o cuando no hay menú (`renal`/`hepatica`).
    */
   alimentos_ciclo?: AlimentoCiclo[]
+  /**
+   * Favoritos del paso 14 que de verdad han llegado a la semana (§3.2b): los que están en el menú
+   * o en la lista de la compra. El tope de 12 del modo sencillo puede dejar alguno fuera, y un
+   * favorito que ninguna plantilla considera apto para sus tomas puede no salir en el plato. Es
+   * la lista que imprimen el resumen de §2.5 y la fila de §4.2/§4.4, no la del cuestionario.
+   * `undefined` cuando el usuario no ha marcado ningún favorito.
+   */
+  favoritos_aplicados?: string[]
 }
 
 /** Un alimento sugerido para los días de regla (`Ejemplos.alimentos_ciclo`, §3.8). */

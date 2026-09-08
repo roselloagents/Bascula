@@ -5,10 +5,15 @@ import type { ObjetivoEfectivo, Preferencia } from '../engine/types'
 import type { Porcion } from './escalado'
 import { redondearGramos } from './escalado'
 
-/** Nombre del alimento sin el estado entre paréntesis, para usarlo dentro de una frase. */
+/**
+ * Nombre del alimento para usarlo dentro de una frase: el `nombre_corto` de `foods.json` (§3.0),
+ * que es el que también ven los chips del paso 14, con la inicial en minúscula. El respaldo es el
+ * nombre largo sin el estado entre paréntesis, para un alimento que no lo declare.
+ */
 export function nombreCorto(a: Alimento): string {
-  const sinParentesis = a.nombre.replace(/\s*\([^)]*\)/g, '').trim()
-  return sinParentesis.charAt(0).toLowerCase() + sinParentesis.slice(1)
+  const corto = a.nombre_corto?.trim()
+  const base = corto && corto.length > 0 ? corto : a.nombre.replace(/\s*\([^)]*\)/g, '').trim()
+  return base.charAt(0).toLowerCase() + base.slice(1)
 }
 
 /** Formatea un número con coma decimal española y sin decimales innecesarios. */
@@ -158,10 +163,12 @@ export function notaFallbackSencillo(comida: string): string {
  */
 export function avisoExcluidoInevitable(alimento: Alimento, comida: string): string {
   // "el desayuno" es la única toma masculina de la tabla 3.13; el resto (media mañana, comida,
-  // merienda, cena, recena) son femeninas.
+  // merienda, cena, recena) son femeninas. Del alimento no se sabe el género —"gambas" es
+  // femenino plural y "lomo de cerdo" masculino singular—, así que la frase no lo nombra: se
+  // redacta con "ese alimento" y con un verbo que vale para todos.
   const toma = comida.toLowerCase()
   const conArticulo = toma === 'desayuno' ? `el ${toma}` : `la ${toma}`
-  return `No hemos podido evitar ${nombreCorto(alimento)} en ${conArticulo}: sin él no salen los macros de esa toma. Cámbialo por lo que quieras de la tabla de equivalencias.`
+  return `No hemos podido evitar ${nombreCorto(alimento)} en ${conArticulo}: sin ese alimento no salen los macros de esa toma. Puedes cambiarlo por lo que quieras de la tabla de equivalencias.`
 }
 
 /** Nota de la toma muy grande, repartida en varios platos. */

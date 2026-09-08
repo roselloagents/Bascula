@@ -62,23 +62,51 @@ export interface AlimentoCicloConSintoma extends AlimentoCiclo {
 }
 
 /**
- * `Ejemplos.alimentos_ciclo` (§3.8.1): se recorren los síntomas en su orden canónico y, por cada
- * uno, sus ids candidatos en orden; cada id se acepta si pasa la base, todas las restricciones y
- * los alimentos excluidos; se deduplica por `id` y se corta en 4. Un id que aparezca por dos
- * síntomas se publica una vez, con el `por_que` del primero en orden canónico.
+ * `Ejemplos.alimentos_ciclo` (§3.8.1): las cuatro plazas se reparten POR RONDAS entre los síntomas
+ * marcados, en su orden canónico —el primer candidato válido de cada síntoma, después el segundo,
+ * etc.—, y el corte a 4 se aplica al final. Llenarlas de forma voraz, síntoma a síntoma, dejaba a
+ * quien marcaba «dolor fuerte» (que tiene exactamente cuatro candidatos) con una lista compuesta
+ * al 100 % por los alimentos del dolor: el hierro del sangrado abundante, que es el motivo de la
+ * decisión I, no aparecía nunca.
+ *
+ * Cada id se acepta si pasa la base, todas las restricciones y los alimentos excluidos; se
+ * deduplica por `id`, y un id que sirva para dos síntomas se publica una vez, con el `por_que` del
+ * primero en orden canónico.
  */
 export function alimentosCiclo(resultado: Resultado, perfil: PerfilDietetico): AlimentoCicloConSintoma[] {
-  const salida: AlimentoCicloConSintoma[] = []
-  const vistos = new Set<string>()
-  for (const sintoma of sintomasDe(resultado)) {
-    for (const id of TABLA_CICLO[sintoma].ids) {
-      if (salida.length >= MAX_ALIMENTOS_CICLO) return salida
-      if (vistos.has(id)) continue
+  const sintomas = sintomasDe(resultado)
+  // Un id que sirve para dos síntomas pertenece al PRIMERO en orden canónico: así el `por_que`
+  // que se publica es siempre el suyo, como pide §3.8.1, y ninguna ronda se lo quita.
+  const dueno = new Map<string, number>()
+  sintomas.forEach((sintoma, i) => {
+    for (const id of TABLA_CICLO[sintoma].ids) if (!dueno.has(id)) dueno.set(id, i)
+  })
+  // Una cola por síntoma con sus candidatos ya filtrados, en el orden de la tabla.
+  const colas = sintomas.map((sintoma, i) =>
+    TABLA_CICLO[sintoma].ids.filter((id) => {
+      if (dueno.get(id) !== i) return false
       const a = alimentoPorId(id)
       // El tag `extra` no descarta aquí (§3.8.1, punto 2); las exclusiones del paso 14 sí.
-      if (!a || !pasaPerfil(a, perfil) || perfil.excluidos.has(id)) continue
-      vistos.add(id)
-      salida.push({ id, nombre: a.nombre, por_que: TABLA_CICLO[sintoma].por_que, sintoma, alimento: a })
+      return !!a && pasaPerfil(a, perfil) && !perfil.excluidos.has(id)
+    }),
+  )
+  const salida: AlimentoCicloConSintoma[] = []
+  const posicion = colas.map(() => 0)
+  const rondas = Math.max(0, ...colas.map((c) => c.length))
+  for (let ronda = 0; ronda < rondas && salida.length < MAX_ALIMENTOS_CICLO; ronda++) {
+    for (let i = 0; i < sintomas.length && salida.length < MAX_ALIMENTOS_CICLO; i++) {
+      if (posicion[i] >= colas[i].length) continue
+      const id = colas[i][posicion[i]]
+      posicion[i] += 1
+      const a = alimentoPorId(id)
+      if (!a) continue
+      salida.push({
+        id,
+        nombre: a.nombre,
+        por_que: TABLA_CICLO[sintomas[i]].por_que,
+        sintoma: sintomas[i],
+        alimento: a,
+      })
     }
   }
   return salida
