@@ -22,7 +22,7 @@ import type { Alimento, RolAlimento } from '../data/foods'
 import { ALIMENTOS, alimentoPorId } from '../data/foods'
 import type { Preferencia } from '../engine/types'
 import type { PerfilDietetico } from './filtros'
-import { esVarianteSinLactosa, pasaPerfil, sustituirSinLactosa } from './filtros'
+import { esVarianteSinLactosa, pasaPerfilMenu, sustituirSinLactosa } from './filtros'
 import type { FoodQuery, Plantilla } from './plantillas'
 
 /** Tope duro de alimentos distintos en la semana (§3.7.2, regla 1). */
@@ -397,12 +397,14 @@ function sirveParaRol(a: Alimento, rol: RolAlimento, perfil: PerfilDietetico): b
   // Los cereales, pastas y arroces en crudo están fuera del banco (§3.0).
   if (rol === 'carbohidrato' && a.estado === 'crudo') return false
   if (!perfil.restricciones.includes('sin_lactosa') && esVarianteSinLactosa(a)) return false
-  return pasaPerfil(a, perfil)
+  // v1.2: ni los `extra` (§3.0) ni los excluidos (§3.2b) pueden entrar por el relleno de la
+  // regla 4 de §3.7.2, igual que no pueden entrar por la lista de la tabla.
+  return pasaPerfilMenu(a, perfil)
 }
 
 function candidatoValido(id: string, perfil: PerfilDietetico): boolean {
   const a = alimentoPorId(id)
-  return a !== undefined && pasaPerfil(a, perfil)
+  return a !== undefined && pasaPerfilMenu(a, perfil)
 }
 
 function cuentaRol(ids: readonly string[], rol: RolAlimento, perfil: PerfilDietetico): number {
@@ -415,6 +417,54 @@ function cuentaRol(ids: readonly string[], rol: RolAlimento, perfil: PerfilDiete
 }
 
 /**
+ * Rol con el que un favorito entra en la lista corta: el primero de `MINIMOS_ROL_SENCILLO` que
+ * el alimento sirve. La legumbre, que declara `proteina` y `carbohidrato`, entra como proteína,
+ * que es su papel en las plantillas del banco sencillo.
+ */
+function rolDeFavorito(a: Alimento, perfil: PerfilDietetico): RolAlimento | null {
+  for (const { rol } of MINIMOS_ROL_SENCILLO) if (sirveParaRol(a, rol, perfil)) return rol
+  return null
+}
+
+/**
+ * Coloca los favoritos en cabeza de su rol dentro de la lista corta (§3.2b, modo sencillo).
+ * Modifica `ids` en el sitio. Un favorito ya presente sube a la primera posición de su rol; uno
+ * que falta entra a cambio del último candidato del mismo rol que no use ninguna plantilla del
+ * banco (día A ni día B). Determinista y sin `Math.random`.
+ */
+function colocarFavoritos(ids: string[], base: BancoSencillo, perfil: PerfilDietetico): void {
+  if (perfil.favoritos.length === 0) return
+  const enPlantillas = new Set(idsDeBanco(base))
+  // El orden del usuario es normativo, y se recorre al revés porque cada favorito se inserta en
+  // la primera posición de su rol: así el primero de la lista acaba delante de todos.
+  for (const id of [...perfil.favoritos].reverse()) {
+    const a = alimentoPorId(id)
+    if (!a) continue
+    const rol = rolDeFavorito(a, perfil)
+    if (!rol) continue
+    if (ids.includes(id)) {
+      ids.splice(ids.indexOf(id), 1)
+    } else {
+      // Uno entra, uno sale: se descarta el último candidato del mismo rol que ninguna plantilla
+      // esté usando (§3.2b). Si todos están en uso no se descarta ninguno y el favorito entra
+      // igual: quien vigila de verdad el tope de 12 es `generarEjemplos`, contando los alimentos
+      // de la semana ya construida y retirando favoritos si no caben.
+      for (let i = ids.length - 1; i >= 0; i--) {
+        const c = alimentoPorId(ids[i])
+        if (!c || enPlantillas.has(ids[i]) || !sirveParaRol(c, rol, perfil)) continue
+        ids.splice(i, 1)
+        break
+      }
+    }
+    const primero = ids.findIndex((otro) => {
+      const c = alimentoPorId(otro)
+      return c !== undefined && sirveParaRol(c, rol, perfil)
+    })
+    ids.splice(primero === -1 ? ids.length : primero, 0, id)
+  }
+}
+
+/**
  * Banco sencillo con la lista de candidatos ya resuelta para el perfil del usuario (§3.7.2).
  * `null` significa que ni con el relleno hay candidatos suficientes: el modo sencillo se desactiva
  * y el menú se genera con la rotación normal de §3.2, que sí tiene toda la base disponible.
@@ -423,8 +473,15 @@ export function bancoSencilloEfectivo(perfil: PerfilDietetico): BancoSencillo | 
   const base = BANCOS_SENCILLOS[perfil.banco]
   // 1 y 2: la fila del banco, con las variantes sin lactosa en su misma posición.
   const conVariantes = sustituirSinLactosa(base.candidatos, perfil)
-  // 3: filtrado por la conjunción base + todas las restricciones.
+  // 3: filtrado por la conjunción base + todas las restricciones y, desde la v1.2, retirada de
+  // los excluidos (§3.2b, modo sencillo, punto 2) justo después de ese filtrado.
   const ids: string[] = conVariantes.filter((id) => candidatoValido(id, perfil))
+  // 3 bis (§3.2b, modo sencillo, punto 3): los favoritos que pasan el filtro y el rol se colocan
+  // en las primeras posiciones de la lista corta de su rol, en el orden del usuario, delante de
+  // los candidatos de la tabla. Un favorito que no estaba en la lista ENTRA, y para no tocar el
+  // tope de variedad se descarta el último candidato de ese rol que ninguna plantilla del día A
+  // ni del día B esté usando; si todos están en uso, el favorito no entra.
+  colocarFavoritos(ids, base, perfil)
 
   // 4: relleno por rol, parando en cuanto se llega al mínimo.
   const respaldoOmnivoro = sustituirSinLactosa(BANCOS_SENCILLOS.omnivoro.candidatos, perfil)

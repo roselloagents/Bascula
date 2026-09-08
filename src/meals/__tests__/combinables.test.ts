@@ -68,6 +68,9 @@ function perfilDe(c: Combinacion): PerfilDietetico {
     base: c.base,
     restricciones: c.restricciones,
     low_carb: c.lowCarb === true,
+    // v1.2 (§3.2b): estas combinaciones no marcan nada en el paso 14.
+    excluidos: new Set<string>(),
+    favoritos: [],
   }
 }
 

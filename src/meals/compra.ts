@@ -6,7 +6,7 @@
 // por tienda y por semana y envejecen mal en un PDF descargado).
 //
 // Módulo puro y determinista: mismas entradas → misma lista, incluido el orden de `items`.
-import type { ItemCompra, ListaCompra, SeccionSuper } from '../engine/types'
+import type { ItemCompra, ListaCompra, SeccionOpcionalCompra, SeccionSuper } from '../engine/types'
 import { ORDEN_SECCIONES, formatoCompra } from '../data/mercadona'
 
 /** Gramos de un alimento en un día del menú. */
@@ -93,6 +93,50 @@ export const DIAS_A = 4
 export const DIAS_B = 3
 
 /**
+ * Una línea de la lista a partir de los gramos de la semana: formato de venta, envases, duración
+ * y consejo, con las fórmulas de §3.7.3. La usan la lista del plan y la sección opcional del
+ * ciclo (§3.8.2), que solo se diferencian en de dónde salen esos gramos.
+ */
+export function itemDeCompra(id: string, nombre: string, gramosSemana: number): ItemCompra | null {
+  const gramos_semana = Math.round(gramosSemana)
+  if (gramos_semana <= 0) return null
+  const gramos_dia = redondea1(gramos_semana / 7)
+
+  const fila = formatoCompra(id)
+  // `mercadona.json` cubre los 105 alimentos de `foods.json` (lo comprueba
+  // `src/data/__tests__/mercadona.test.ts`); esta rama solo evita que un alimento nuevo sin
+  // ficha desaparezca en silencio de la lista.
+  const envase_g = fila && fila.envase_g > 0 ? fila.envase_g : Math.max(1, gramos_semana)
+  const conservacion = fila?.conservacion ?? 'despensa'
+  const conservacion_dias = fila?.conservacion_dias ?? 7
+
+  const envases = Math.max(1, Math.ceil(gramos_semana / envase_g))
+  const duraBruto = gramos_dia > 0 ? Math.floor((envases * envase_g) / gramos_dia) : conservacion_dias
+  const dura_dias = Math.max(1, Math.min(duraBruto, conservacion_dias))
+  // Partir la compra en dos solo tiene sentido si de verdad se compra más de un envase: con un
+  // único paquete el consejo era materialmente imposible y tapaba el consejo del catálogo.
+  const consejo =
+    conservacion === 'fresco' && duraBruto > conservacion_dias && envases >= 2 && gramos_semana > envase_g
+      ? CONSEJO_FRESCO_DOS_VECES
+      : fila?.consejo
+
+  return {
+    alimento_id: id,
+    nombre,
+    producto: fila?.producto ?? nombre,
+    seccion: fila?.seccion ?? 'otros',
+    conservacion,
+    gramos_dia,
+    gramos_semana,
+    envase_g,
+    envase_descripcion: fila?.envase_descripcion ?? 'formato aproximado',
+    envases,
+    dura_dias,
+    ...(consejo ? { consejo } : {}),
+  }
+}
+
+/**
  * Lista de la compra de un menú semanal. `diaB` solo se pasa en modo sencillo: la semana son
  * cuatro días del día A y tres del día B, contando 0 en el día donde el alimento no aparece.
  */
@@ -111,42 +155,8 @@ export function listaCompraDeDias(
     const gB = b?.get(id)?.gramos ?? 0
     // La semana es la que publica el calendario de §3.7.2 (4 días A + 3 días B), no la media de
     // los dos días: promediar dejaba corto todo alimento que pesa más en el día A.
-    const gramos_semana = b ? Math.round(DIAS_A * gA + DIAS_B * gB) : Math.round(gA * 7)
-    if (gramos_semana <= 0) continue
-    const gramos_dia = redondea1(gramos_semana / 7)
-
-    const fila = formatoCompra(id)
-    // `mercadona.json` cubre los 101 alimentos de `foods.json` (lo comprueba
-    // `src/data/__tests__/mercadona.test.ts`); esta rama solo evita que un alimento nuevo sin
-    // ficha desaparezca en silencio de la lista.
-    const envase_g = fila && fila.envase_g > 0 ? fila.envase_g : Math.max(1, gramos_semana)
-    const conservacion = fila?.conservacion ?? 'despensa'
-    const conservacion_dias = fila?.conservacion_dias ?? 7
-
-    const envases = Math.max(1, Math.ceil(gramos_semana / envase_g))
-    const duraBruto = gramos_dia > 0 ? Math.floor((envases * envase_g) / gramos_dia) : conservacion_dias
-    const dura_dias = Math.max(1, Math.min(duraBruto, conservacion_dias))
-    // Partir la compra en dos solo tiene sentido si de verdad se compra más de un envase: con un
-    // único paquete el consejo era materialmente imposible y tapaba el consejo del catálogo.
-    const consejo =
-      conservacion === 'fresco' && duraBruto > conservacion_dias && envases >= 2 && gramos_semana > envase_g
-        ? CONSEJO_FRESCO_DOS_VECES
-        : fila?.consejo
-
-    items.push({
-      alimento_id: id,
-      nombre,
-      producto: fila?.producto ?? nombre,
-      seccion: fila?.seccion ?? 'otros',
-      conservacion,
-      gramos_dia,
-      gramos_semana,
-      envase_g,
-      envase_descripcion: fila?.envase_descripcion ?? 'formato aproximado',
-      envases,
-      dura_dias,
-      ...(consejo ? { consejo } : {}),
-    })
+    const item = itemDeCompra(id, nombre, b ? DIAS_A * gA + DIAS_B * gB : gA * 7)
+    if (item) items.push(item)
   }
 
   // Orden de recorrido de la tienda y, dentro de cada sección, alfabético en español (§3.7.3).
@@ -164,4 +174,46 @@ export function listaCompraDeDias(
     alimentos_distintos: items.length,
     notas: [...NOTAS_COMPRA],
   }
+}
+
+// ---------- Sección opcional "Para los días de regla" (§3.8.2) ----------
+
+/** Encabezado literal de la sección opcional (§3.8.2). */
+export const TITULO_OPCIONAL_CICLO = 'Para los días de regla (opcional)'
+
+/** Nota fija de la sección opcional: deja claro que no está contada en el plan (§3.8.2). */
+export const NOTA_OPCIONAL_CICLO =
+  'No está contado en las cantidades de tu plan: son compras pequeñas para 2-3 días al mes. Si no te apetece, sáltatela.'
+
+/** Como mucho tres líneas (§3.8.2). */
+export const MAX_ITEMS_OPCIONAL_CICLO = 3
+
+/** Un candidato de la sección opcional: el alimento del ciclo con su ración típica. */
+export interface CandidatoCiclo {
+  id: string
+  nombre: string
+  racionTipica_g: number
+}
+
+/**
+ * Sección opcional de la lista de la compra (§3.8.2). Entran, en el orden recibido y parando en
+ * tres, los alimentos del ciclo cuyo `id` **no esté ya** en la lista del plan: si ya lo compras
+ * para el menú, no hace falta una línea nueva. La cantidad es fija y pequeña —dos raciones
+ * típicas— y el resto de columnas sale de las mismas fórmulas de §3.7.3.
+ *
+ * No cuenta en `alimentos_distintos` ni en el tope de 12 del modo sencillo: no es del plan.
+ */
+export function seccionOpcionalCiclo(
+  candidatos: readonly CandidatoCiclo[],
+  yaEnLaLista: ReadonlySet<string>,
+): SeccionOpcionalCompra | undefined {
+  const items: ItemCompra[] = []
+  for (const c of candidatos) {
+    if (items.length >= MAX_ITEMS_OPCIONAL_CICLO) break
+    if (yaEnLaLista.has(c.id)) continue
+    const item = itemDeCompra(c.id, c.nombre, 2 * c.racionTipica_g)
+    if (item) items.push(item)
+  }
+  if (items.length === 0) return undefined
+  return { titulo: TITULO_OPCIONAL_CICLO, nota: NOTA_OPCIONAL_CICLO, items }
 }

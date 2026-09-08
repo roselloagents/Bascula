@@ -7,7 +7,7 @@ import { ALIMENTOS } from '../data/foods'
 import type { Preferencia, TablaEquivalencia, TablasEquivalencia } from '../engine/types'
 import { limiteRacion, textoMedida } from './escalado'
 import type { PerfilDietetico } from './filtros'
-import { esVarianteSinLactosa, pasaPerfil, perfilDePreferencia } from './filtros'
+import { esVarianteSinLactosa, pasaPerfilMenu, perfilDePreferencia } from './filtros'
 
 /** Múltiplo de 5 g: la rejilla de báscula doméstica de §3.3. */
 const round5 = (x: number): number => 5 * Math.round(x / 5)
@@ -60,8 +60,11 @@ export function equivalencias(preferencia: Preferencia | PerfilDietetico): Tabla
   const base = ALIMENTOS.filter(
     // Los cereales, pastas y arroces en crudo están fuera del banco (§3.0): tampoco son
     // sustituciones servibles tal cual. Las variantes `_sl` solo se ofrecen a quien las necesita.
+    // Y, desde la v1.2, `pasaPerfilMenu` deja fuera los alimentos con tag `extra` (§3.0: existen
+    // solo para la tarjeta del ciclo) y los que el usuario ha marcado como "no me gusta" (§3.2b:
+    // un excluido no puede aparecer en NINGÚN sitio, tampoco en una tabla de equivalencias).
     (a) =>
-      pasaPerfil(a, perfil) &&
+      pasaPerfilMenu(a, perfil) &&
       !(a.grupo === 'carbohidrato' && a.estado === 'crudo') &&
       (sinLactosa || !esVarianteSinLactosa(a)),
   )

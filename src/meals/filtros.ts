@@ -27,6 +27,47 @@ export interface PerfilDietetico {
   base: PreferenciaBase
   restricciones: readonly Restriccion[]
   low_carb: boolean
+  /**
+   * v1.2 (§3.2b): ids de `foods.json` que el usuario no quiere ver. Se filtran DESPUÉS de la base
+   * y de las restricciones y ANTES de cualquier otro criterio, y no pueden aparecer en ningún
+   * sitio: menú, alternativas, equivalencias, lista de la compra ni alimentos del ciclo.
+   */
+  excluidos: ReadonlySet<string>
+  /**
+   * v1.2 (§3.2b): ids marcados como favoritos, **en el orden del usuario** (ese orden es
+   * normativo). Solo cambian el ORDEN dentro de una consulta, nunca la validez: un favorito que
+   * no pasa la base, una restricción o la `FoodQuery` simplemente no aparece.
+   */
+  favoritos: readonly string[]
+}
+
+/** Listas de alimentos vacías: el perfil de quien no ha marcado nada en el paso 14. */
+const SIN_LISTAS: Pick<PerfilDietetico, 'excluidos' | 'favoritos'> = {
+  excluidos: new Set<string>(),
+  favoritos: [],
+}
+
+/**
+ * Normalización de §3.2b, **una sola vez al construir el perfil**: se descartan los ids que no
+ * existen en `foods.json`, se deduplica conservando el orden del usuario y un id que esté en las
+ * dos listas cuenta solo como excluido (se retira de favoritos).
+ */
+export function normalizarListasAlimentos(
+  excluidos: readonly string[] | null | undefined,
+  favoritos: readonly string[] | null | undefined,
+): Pick<PerfilDietetico, 'excluidos' | 'favoritos'> {
+  const limpia = (ids: readonly string[] | null | undefined): string[] => {
+    const vistos = new Set<string>()
+    const lista: string[] = []
+    for (const id of ids ?? []) {
+      if (typeof id !== 'string' || vistos.has(id) || alimentoPorId(id) === undefined) continue
+      vistos.add(id)
+      lista.push(id)
+    }
+    return lista
+  }
+  const fuera = new Set(limpia(excluidos))
+  return { excluidos: fuera, favoritos: limpia(favoritos).filter((id) => !fuera.has(id)) }
 }
 
 export function pasaBase(a: Alimento, base: PreferenciaBase): boolean {
@@ -69,7 +110,21 @@ export function perfilDePreferencia(preferencia: Preferencia): PerfilDietetico {
     preferencia === 'vegano' || preferencia === 'vegetariano' ? preferencia : 'omnivoro'
   const restricciones: Restriccion[] =
     preferencia === 'sin_lactosa' ? ['sin_lactosa'] : preferencia === 'sin_gluten' ? ['sin_gluten'] : []
-  return { banco: preferencia, base, restricciones, low_carb: preferencia === 'low_carb' }
+  return { banco: preferencia, base, restricciones, low_carb: preferencia === 'low_carb', ...SIN_LISTAS }
+}
+
+/**
+ * v1.2 (§3.0): los alimentos con tag `extra` existen solo para la tarjeta del ciclo (§3.8) y no
+ * pueden entrar en ninguna `FoodQuery` del menú, ni en las alternativas, ni en las tablas de
+ * equivalencias. Así se añaden alimentos a la base sin cambiar ni un menú existente.
+ */
+export function esExtra(a: Alimento): boolean {
+  return a.tags.includes('extra')
+}
+
+/** Filtro completo del menú (§3.2 + §3.2b): perfil, fuera los `extra` y fuera los excluidos. */
+export function pasaPerfilMenu(a: Alimento, perfil: PerfilDietetico): boolean {
+  return pasaPerfil(a, perfil) && !esExtra(a) && !perfil.excluidos.has(a.id)
 }
 
 /** Deduplica y ordena las restricciones en el orden canónico de §1.1. */
@@ -82,7 +137,7 @@ function normalizarRestricciones(rs: readonly Restriccion[] | null | undefined):
  * publica los tres campos ya normalizados (§1.1 y Paso 6.8, donde `diabetes` anula el low-carb).
  * Un `Resultado` que no los traiga se deduce de `preferencia_efectiva` con la regla de traducción.
  */
-export function perfilDeResultado(resultado: Resultado): PerfilDietetico {
+export function perfilDeResultado(resultado: Resultado, inputs?: Inputs): PerfilDietetico {
   const heredado = perfilDePreferencia(resultado.preferencia_efectiva)
   return {
     banco: resultado.preferencia_efectiva,
@@ -91,6 +146,10 @@ export function perfilDeResultado(resultado: Resultado): PerfilDietetico {
       ? normalizarRestricciones(resultado.restricciones)
       : heredado.restricciones,
     low_carb: resultado.low_carb ?? heredado.low_carb,
+    // Las dos listas del paso 14 salen de `InputCalculo`, **no de `Resultado`**: el motor las
+    // ignora por completo y por eso no las publica (§3.2b). Sin `inputs` —un `Resultado` suelto
+    // en un test— el perfil queda sin listas, que es el comportamiento de la v1.1.
+    ...normalizarListasAlimentos(inputs?.alimentos_excluidos, inputs?.alimentos_favoritos),
   }
 }
 
@@ -101,21 +160,27 @@ export function perfilDeResultado(resultado: Resultado): PerfilDietetico {
  * cuestionario, que `diabetes` no toca.
  */
 export function perfilDeInputs(inputs: Inputs, banco: Preferencia): PerfilDietetico {
+  const listas = normalizarListasAlimentos(inputs.alimentos_excluidos, inputs.alimentos_favoritos)
   if (inputs.preferencia_base === null || inputs.preferencia_base === undefined) {
     const antiguo = perfilDePreferencia(inputs.preferencia)
-    return { ...antiguo, banco, low_carb: banco === 'low_carb' }
+    return { ...antiguo, banco, low_carb: banco === 'low_carb', ...listas }
   }
   return {
     banco,
     base: inputs.preferencia_base,
     restricciones: normalizarRestricciones(inputs.restricciones),
     low_carb: banco === 'low_carb',
+    ...listas,
   }
 }
 
 /** Clave estable de un perfil: sirve de índice de caché y de etiqueta en los tests. */
 export function clavePerfil(perfil: PerfilDietetico): string {
-  return `${perfil.banco}|${perfil.base}|${perfil.restricciones.join('+')}|${perfil.low_carb ? 'lc' : ''}`
+  // Las dos listas del paso 14 entran en la clave: la caché de `alimentosDePerfil` alimenta las
+  // alternativas por comida, que ni pueden nombrar un excluido ni ignoran el orden de favoritos.
+  const excluidos = [...perfil.excluidos].sort().join(',')
+  const favoritos = perfil.favoritos.join(',')
+  return `${perfil.banco}|${perfil.base}|${perfil.restricciones.join('+')}|${perfil.low_carb ? 'lc' : ''}|${excluidos}|${favoritos}`
 }
 
 /**

@@ -150,6 +150,20 @@ export function notaFallbackSencillo(comida: string): string {
   return `${comida}: con la combinación básica no salían las calorías de esa toma, así que ese plato se resuelve con una receta del menú normal. Todo lo que lleva está en la lista de la compra.`
 }
 
+/**
+ * Aviso del respaldo de exclusiones (§3.2b): un alimento marcado como "no me gusta" que ha
+ * tenido que volver porque sin él la toma no cierra sus macros. Va en `Ejemplos.avisos_menu`, uno
+ * por alimento y comida y sin duplicados. Preferimos esto a una comida sin proteína; lo que no
+ * es aceptable es hacerlo en silencio.
+ */
+export function avisoExcluidoInevitable(alimento: Alimento, comida: string): string {
+  // "el desayuno" es la única toma masculina de la tabla 3.13; el resto (media mañana, comida,
+  // merienda, cena, recena) son femeninas.
+  const toma = comida.toLowerCase()
+  const conArticulo = toma === 'desayuno' ? `el ${toma}` : `la ${toma}`
+  return `No hemos podido evitar ${nombreCorto(alimento)} en ${conArticulo}: sin él no salen los macros de esa toma. Cámbialo por lo que quieras de la tabla de equivalencias.`
+}
+
 /** Nota de la toma muy grande, repartida en varios platos. */
 export function notaDosPlatos(comida: string, kcal: number, platos: number): string {
   const cuantos = platos >= 4 ? 'cuatro platos' : platos === 3 ? 'tres platos' : 'dos platos'
