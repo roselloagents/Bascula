@@ -623,11 +623,83 @@
   background: var(--hueso);
 }
 
+/* Resumen vivo y "Mostrar todos" comparten fila: la barra fija no puede pasar de 130 px en
+   375 px y con el buscador dentro ya no cabía una fila por cosa (§1 paso 14, v1.2.1). */
+.segmentado-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--e-4);
+  /* Altura fija: sin ella la barra encogía 24 px al escribir la primera letra (el botón se va) y
+     la lista entera daba un salto justo cuando el usuario está leyendo resultados. */
+  min-height: 24px;
+}
+
 .segmentado-resumen {
   margin: 0;
   color: var(--tinta-media);
   font-size: var(--t-xs);
-  text-align: center;
+}
+
+/* Botón de texto: 24 px de alto reales (WCAG 2.5.8). No puede medir 44 como los chips sin
+   comerse la altura que le queda a la barra fija. */
+.plegar-todos {
+  flex: none;
+  min-height: 24px;
+  padding: 0 var(--e-2);
+  border: none;
+  background: none;
+  color: var(--verde);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* Buscador (§1 paso 14, v1.2.1): 103 chips repartidos en siete grupos median 3 553 px, cuatro
+   pantallas de móvil, y encontrar el brócoli era todo scroll. */
+.buscador {
+  display: flex;
+  gap: var(--e-4);
+}
+
+/* 36 px y no 44: la barra fija no puede pasar de 130 px en 375 px y los 44 se los quedan el
+   control segmentado y los chips, que es donde se marca. */
+.buscador-campo {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: var(--e-2) var(--e-6);
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--r-sm);
+  background: var(--papel);
+  font-size: var(--t-sm);
+}
+
+/* La cruz nativa de WebKit se solapaba con el botón "Borrar", que es el que sí se puede tocar. */
+.buscador-campo::-webkit-search-cancel-button {
+  display: none;
+}
+
+.buscador-borrar {
+  flex: none;
+  padding: 0 var(--e-6);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-sm);
+  background: var(--papel);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+/* Cuántos alimentos responden a lo escrito. Vacía no ocupa sitio, pero la región sigue en el DOM
+   para que un lector de pantalla anuncie el cambio. */
+.busqueda-resultados {
+  margin: 0;
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}
+
+.busqueda-resultados:empty {
+  display: none;
 }
 
 .segmentado {
@@ -656,6 +728,14 @@
   color: var(--papel);
 }
 
+/* Los siete grupos, plegados por defecto salvo los que ya tienen algo marcado (§1 paso 14,
+   v1.2.1). Gap propio y más corto que el de `.pantalla-cuerpo`: plegados son siete filas
+   seguidas y con 24 px entre ellas la pantalla volvía a crecer sin necesidad. */
+.grupos-alimentos {
+  display: grid;
+  gap: var(--e-4);
+}
+
 .grupo-chips {
   display: grid;
   gap: var(--e-6);
@@ -666,6 +746,53 @@
   font-family: var(--display);
   font-size: var(--t-md);
   font-weight: 600;
+}
+
+/* Cabecera-botón del desplegable: 44 px de alto real, el nombre a la izquierda y el recuento con
+   las marcas ("14 · ✕ 2 · ★ 1") a la derecha. La versión hablada va en `.etiqueta-oculta`. */
+.grupo-chips-boton,
+.grupo-chips-fija {
+  display: flex;
+  align-items: center;
+  gap: var(--e-4);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--e-4) 0;
+  border: none;
+  border-top: 1px solid var(--linea);
+  background: none;
+  text-align: left;
+}
+
+.grupo-chips-nombre {
+  flex: 1;
+  min-width: 0;
+}
+
+.grupo-chips-datos {
+  flex: none;
+  color: var(--tinta-media);
+  font-family: var(--texto);
+  font-size: var(--t-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* La flecha gira al abrir. Con `prefers-reduced-motion` el token `--dur` ya vale 1 ms. */
+.grupo-chips-flecha {
+  flex: none;
+  color: var(--tinta-media);
+  transition: transform var(--dur) var(--salida);
+}
+
+.grupo-chips-flecha[data-abierto='true'] {
+  transform: rotate(90deg);
+}
+
+/* `.chips` es `display: flex`, que gana al `display: none` de agente de usuario de `[hidden]`:
+   sin esta regla el grupo plegado seguía pintándose entero. */
+.chips[hidden] {
+  display: none;
 }
 
 .chips {

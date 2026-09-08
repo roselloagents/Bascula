@@ -18,10 +18,10 @@ import {
   CLAVE_ALMACEN,
   type Borrador,
 } from '../borrador'
-import { PasoAlimentos } from '../pasos/PasoAlimentos'
+import { GruposPlegables, PasoAlimentos } from '../pasos/PasoAlimentos'
 import { PasoRegla } from '../pasos/PasosPerfil'
 import { PasoRitmo } from '../pasos/PasosVida'
-import { gruposDeAlimentos, resumenMarcados } from '../../utiles/alimentos'
+import { cuentaAlimentos, gruposDeAlimentos, resumenMarcados } from '../../utiles/alimentos'
 import { firmaDeInputs } from '../../resultados/ajuste'
 
 const almacen = new Map<string, string>()
@@ -214,6 +214,110 @@ describe('paso de alimentos', () => {
   it('el resumen vivo cuenta en plural y desaparece sin nada marcado', () => {
     expect(resumenMarcados(['a', 'b', 'c'], ['d', 'e'])).toBe('3 que no te gustan · 2 favoritos')
     expect(resumenMarcados([], [])).toBe('')
+  })
+})
+
+describe('paso de alimentos: buscador y grupos plegables (v1.2.1)', () => {
+  const TODOS = gruposDeAlimentos({ base: 'omnivoro', restricciones: [] })
+
+  /** `GruposPlegables` es puro: se le pasa el texto buscado y el plegado, sin simular tecleo. */
+  function pintaGrupos(props: {
+    busqueda?: string
+    abiertos?: string[]
+    excluidos?: string[]
+    favoritos?: string[]
+  }): string {
+    return renderToStaticMarkup(
+      createElement(GruposPlegables as never, {
+        grupos: TODOS,
+        busqueda: props.busqueda ?? '',
+        abiertos: props.abiertos ?? [],
+        excluidos: props.excluidos ?? [],
+        favoritos: props.favoritos ?? [],
+        alternarGrupo: () => {},
+        alternarChip: () => {},
+      } as never),
+    )
+  }
+
+  it('el buscador está en la barra fija, sin autofocus y sin texto', () => {
+    const html = pinta(PasoAlimentos, completo())
+    expect(html).toContain('type="search"')
+    expect(html).toContain('placeholder="Busca un alimento (p. ej. brócoli)"')
+    expect(html).toContain('for="buscador-alimentos"')
+    // El foco al entrar en el paso sigue en el contenedor, como en el resto del cuestionario.
+    expect(html.toLowerCase()).not.toContain('autofocus')
+    // "Borrar" solo se pinta con algo escrito.
+    expect(html).not.toContain('buscador-borrar')
+  })
+
+  it('sin nada marcado los siete grupos entran plegados, con su recuento', () => {
+    const html = pinta(PasoAlimentos, completo())
+    // `Ayuda` de la cabecera también es un desplegable: se cuentan solo las cabeceras de grupo.
+    const cabeceras = /class="grupo-chips-boton" aria-expanded="(true|false)"/g
+    expect(html.match(cabeceras)).toHaveLength(TODOS.length)
+    expect(html).not.toContain('class="grupo-chips-boton" aria-expanded="true"')
+    expect(html.match(/<ul class="chips" id="chips-[a-z_]+" hidden=""/g)).toHaveLength(TODOS.length)
+    const verduras = TODOS.find((g) => g.clave === 'verduras')
+    expect(html).toContain(`${verduras?.alimentos.length} alimentos`)
+    expect(html).toContain('Mostrar todos')
+  })
+
+  it('el grupo que ya tiene algo marcado entra abierto y enseña sus marcas', () => {
+    const html = pinta(
+      PasoAlimentos,
+      completo({ alimentos_excluidos: ['brocoli', 'zanahoria'], alimentos_favoritos: ['manzana'] }),
+    )
+    expect(html).toContain('aria-expanded="true" aria-controls="chips-verduras"')
+    expect(html).toContain('aria-expanded="true" aria-controls="chips-frutas"')
+    // Los otros cinco siguen plegados: solo se abre lo que trae marcas.
+    const abiertas = /class="grupo-chips-boton" aria-expanded="true"/g
+    expect(html.match(abiertas)).toHaveLength(2)
+    expect(html).toContain('✕ 2')
+    expect(html).toContain('★ 1')
+    // Y el recuento hablado acompaña al de símbolos, que va en `aria-hidden`.
+    expect(html).toContain('2 que no te gustan')
+  })
+
+  it('con texto solo se pintan los grupos que coinciden, abiertos y sin cabecera-botón', () => {
+    const html = pintaGrupos({ busqueda: 'brocoli' })
+    expect(html).toContain('1 alimento para «brocoli»')
+    expect(html).toContain('Verduras')
+    expect(html).toContain('Brócoli')
+    expect(html).not.toContain('Carne y pescado')
+    expect(html).not.toContain('Frutas')
+    expect(html).not.toContain('hidden=""')
+    expect(html).not.toContain('aria-expanded')
+  })
+
+  it('la búsqueda no distingue acentos y mira también el nombre largo', () => {
+    expect(pintaGrupos({ busqueda: 'BRÓCOLI' })).toContain('Brócoli')
+    // "sin piel" solo aparece en el nombre largo de los pollos, nunca en el chip.
+    const pollos = pintaGrupos({ busqueda: 'sin piel' })
+    expect(pollos).toContain('Pechuga de pollo')
+    expect(pollos).toContain('Muslo de pollo')
+    expect(pollos).not.toContain('Verduras')
+  })
+
+  it('[SPEC] sin resultados no hay ningún grupo y sale el mensaje literal', () => {
+    const html = pintaGrupos({ busqueda: 'chuletón de unicornio' })
+    expect(html).toContain(
+      'Ningún alimento se llama así. Prueba con otro nombre o mira los grupos.',
+    )
+    expect(html).not.toContain('grupo-chips')
+  })
+
+  it('la línea de resultados vive siempre en el DOM para que se pueda anunciar', () => {
+    const sinBuscar = pintaGrupos({})
+    expect(sinBuscar).toContain('class="busqueda-resultados" role="status" aria-live="polite"')
+    expect(sinBuscar).not.toContain('alimentos para «')
+    expect(cuentaAlimentos(TODOS)).toBeGreaterThan(0)
+  })
+
+  it('buscando se pintan los chips marcados con su estado, sin perder la búsqueda', () => {
+    const html = pintaGrupos({ busqueda: 'brocoli', excluidos: ['brocoli'] })
+    expect(html).toContain('aria-label="Brócoli, no me gusta"')
+    expect(html).toContain('1 alimento para «brocoli»')
   })
 })
 
