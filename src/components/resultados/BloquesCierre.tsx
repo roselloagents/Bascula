@@ -43,17 +43,33 @@ export function BloquePeso({ inputs, resultado, avisos }: PropsCierre) {
   const avisoSinCrono = avisos.find((a) => CODIGOS_SIN_CRONOGRAMA.includes(a.codigo))
   const adaptacion = buscarAviso(avisos, 'INFO_ADAPTACION')
 
+  // El peso que ha escrito el usuario se enseña SIEMPRE como cifra principal (v1.2): con la grasa
+  // estimada (`mostrar_central === false`) la tarjeta titulaba una franja que él no había pedido y
+  // que además dejaba su número fuera, mientras la gráfica, la tabla y los avisos sí hablaban de
+  // él. La franja propuesta pasa a nota. El titular de franja se reserva para quien no dio meta.
+  const metaDelUsuario = inputs.peso_objetivo !== null && inputs.peso_objetivo !== undefined
+  const conCifra = po.efectivo !== null && (po.mostrar_central || metaDelUsuario)
+
   return (
     <Seccion titulo="A dónde vas y en cuánto tiempo">
-      {po.efectivo !== null && po.mostrar_central ? (
+      {conCifra && po.efectivo !== null ? (
         <>
           <p className="cifra peso-cifra">{numCorto(po.efectivo, 1)} kg</p>
-          <p className="peso-etiqueta">tu objetivo</p>
-          {inputs.peso_objetivo === null ? (
+          <p className="peso-etiqueta">{metaDelUsuario ? 'tu objetivo' : 'el peso que te proponemos'}</p>
+          {!metaDelUsuario ? (
             <p className="nota">
               Te proponemos este peso según tu altura y tu porcentaje de grasa actual; puedes cambiarlo
               cuando quieras.
             </p>
+          ) : null}
+          {!po.mostrar_central ? (
+            <>
+              <p className="nota">
+                Por tu masa magra estimada te propondríamos entre {numCorto(po.rango[0], 1)} y{' '}
+                {numCorto(po.rango[1], 1)} kg, pero el número que manda es el tuyo.
+              </p>
+              <p className="nota">{NOTA_PESO_OBJETIVO}</p>
+            </>
           ) : null}
         </>
       ) : (

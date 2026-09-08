@@ -32,8 +32,14 @@ export function mensajeFechaPesaje(fecha: string, fechaInicio: string, hoy: stri
   const desdeInicio = diasEntre(fechaInicio, fecha)
   const hastaHoy = diasEntre(fecha, hoy)
   if (desdeInicio === null || hastaHoy === null) return 'Pon la fecha del día en que te pesaste.'
+  // El día 1 el rango válido es un único día: decir "elige una posterior" mandaba al usuario a la
+  // otra mitad del error ("no puedes apuntar una fecha futura") y de vuelta.
+  const soloHoy = diasEntre(fechaInicio, hoy) === 0
+  if (soloHoy && (desdeInicio < 0 || hastaHoy < 0)) {
+    return `Hoy es el primer día de tu plan: de momento solo puedes apuntar el pesaje del ${fechaCorta(hoy)}.`
+  }
   if (desdeInicio < 0) {
-    return `Esa fecha es anterior al día en que empezaste el plan (${fechaCorta(fechaInicio)}). Elige una posterior.`
+    return `Esa fecha es anterior al día en que empezaste el plan (${fechaCorta(fechaInicio)}). Elige una entre ese día y hoy.`
   }
   if (hastaHoy < 0) return 'Todavía no puedes apuntar un peso de una fecha futura.'
   return null

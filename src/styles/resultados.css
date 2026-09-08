@@ -911,6 +911,25 @@ li[data-macro='carbo'] .leyenda-punto {
   font-size: var(--t-sm);
 }
 
+/* Barra fija abajo: quitar un alimento del desayuno dejaba el aviso —y su "Deshacer"— tres
+   pantallas más abajo, así que en la práctica la acción no se podía deshacer (§2.5). */
+.aviso-flotante {
+  position: fixed;
+  left: 50%;
+  bottom: var(--e-12);
+  z-index: 40;
+  width: min(calc(100% - 2 * var(--e-12)), 32rem);
+  transform: translateX(-50%);
+  margin: 0;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+}
+
+.resumen-alimentos-nota {
+  width: 100%;
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+}
+
 .resumen-alimentos-menu {
   display: flex;
   flex-wrap: wrap;

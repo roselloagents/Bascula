@@ -21,7 +21,9 @@ export type ClaveGrupoChips =
 
 export const GRUPOS_CHIPS: { clave: ClaveGrupoChips; nombre: string }[] = [
   { clave: 'carne_pescado', nombre: 'Carne y pescado' },
-  { clave: 'huevos_lacteos', nombre: 'Huevos y lácteos' },
+  // Las bebidas vegetales viven en el grupo `lacteo` de `foods.json` por su papel en el menú,
+  // pero quien no toma lácteos las busca justo aquí: el rótulo las nombra (§1 paso 14).
+  { clave: 'huevos_lacteos', nombre: 'Huevos, lácteos y bebidas vegetales' },
   { clave: 'legumbres', nombre: 'Legumbres y soja' },
   { clave: 'cereales', nombre: 'Arroz, pasta, pan y patata' },
   { clave: 'frutas', nombre: 'Frutas' },
@@ -34,7 +36,7 @@ const HUEVOS = ['huevo_entero', 'clara_huevo']
 /**
  * Grupo legible de un alimento. Las tres filas de `grupo === 'proteina'` se evalúan **en el orden
  * de la tabla** de §1 paso 14: primero huevos, después legumbres y soja, y lo que queda es carne y
- * pescado. Así `huevo_entero` cae en "Huevos y lácteos" y `tofu` en "Legumbres y soja".
+ * pescado. Así `huevo_entero` cae en el grupo de los lácteos y `tofu` en "Legumbres y soja".
  */
 export function grupoDeChip(a: Alimento): ClaveGrupoChips | null {
   if (a.grupo === 'lacteo' || HUEVOS.includes(a.id)) return 'huevos_lacteos'
@@ -107,6 +109,18 @@ export function listaNombresCortos(ids: readonly string[]): string {
     .map(nombreCorto)
     .filter((nombre): nombre is string => nombre !== null)
     .join(', ')
+}
+
+/**
+ * Nombres cortos de una lista de ids, ordenados alfabéticamente en español (§2.5). El orden
+ * interno de los excluidos es por `id` —estable para el borrador—, pero una persona que lee
+ * "Brócoli, Lomo de cerdo, Coliflor" ve una lista desordenada, no un orden interno.
+ */
+export function nombresCortosOrdenados(ids: readonly string[]): string[] {
+  return ids
+    .map(nombreCorto)
+    .filter((nombre): nombre is string => nombre !== null)
+    .sort((a, b) => a.localeCompare(b, 'es'))
 }
 
 /** "3 que no te gustan · 4 favoritos" (§1 paso 14). Cadena vacía si no hay nada marcado. */

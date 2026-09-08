@@ -175,11 +175,11 @@ describe('paso de alimentos', () => {
     expect(ids).toContain('cacao_puro')
   })
 
-  it('los grupos van en el orden de la spec y el huevo cae en "Huevos y lácteos"', () => {
+  it('los grupos van en el orden de la spec y el huevo cae en el de los lácteos', () => {
     const grupos = gruposDeAlimentos({ base: 'omnivoro', restricciones: [] })
     expect(grupos.map((g) => g.nombre)).toEqual([
       'Carne y pescado',
-      'Huevos y lácteos',
+      'Huevos, lácteos y bebidas vegetales',
       'Legumbres y soja',
       'Arroz, pasta, pan y patata',
       'Frutas',

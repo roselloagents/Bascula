@@ -285,8 +285,9 @@ export function PasoObjetivo({ b, set }: PropsPaso) {
                     recomposición está eligiendo el plan más lento sin saberlo. Informa, no bloquea. */}
                 {b.recomposicion_prioridad === 'perder' ? (
                   <p className="nota">
-                    Si lo que quieres sobre todo es que la báscula baje varios kilos, elige Perder
-                    grasa: tendrás ritmo, peso objetivo y fecha.
+                    Si lo que quieres sobre todo es que la báscula baje varios kilos, vuelve arriba
+                    y elige el objetivo «Perder grasa» en vez de Recomposición: tendrás ritmo, peso
+                    objetivo y fecha.
                   </p>
                 ) : null}
               </div>
@@ -401,7 +402,18 @@ export function PasoRitmo({ b, set }: PropsPaso) {
               </div>
             </div>
           ) : (
-            <button type="button" className="btn-plano" onClick={() => setConFecha(true)}>
+            <button
+              type="button"
+              className="btn-plano"
+              // Al abrir el campo, el chip elegido antes se desmarca y la previsualización se
+              // queda en blanco: con los dos a la vez no se sabía cuál manda, y una fecha vacía
+              // dejaba el plan saliendo con el chip anterior sin decirlo (§1 paso 12).
+              onClick={() => {
+                setConFecha(true)
+                setFecha('')
+                set({ plazo_semanas: null })
+              }}
+            >
               Prefiero poner una fecha
             </button>
           )}
@@ -412,7 +424,9 @@ export function PasoRitmo({ b, set }: PropsPaso) {
               ? `Son ${numCorto(delta, 1)} kg en ${semanas} semanas: unos ${Math.round(
                   (delta / semanas) * 1000,
                 )} g por semana.`
-              : 'Elige un plazo y te decimos cuántos gramos por semana serían.'}
+              : conFecha
+                ? 'Pon la fecha y te decimos cuántos gramos por semana serían.'
+                : 'Elige un plazo y te decimos cuántos gramos por semana serían.'}
           </p>
           <p className="nota">{NOTA_PLAZO}</p>
         </div>
@@ -426,6 +440,9 @@ export function PasoRitmo({ b, set }: PropsPaso) {
   )
 }
 
+/** Id de la nota del peso objetivo: la referencia el propio campo con `aria-describedby`. */
+const ID_NOTA_PESO_OBJETIVO = 'nota-peso-objetivo'
+
 /** [SPEC] SPEC-ux §1 paso 11: intro literal, solo en recomposición (v1.2). */
 const INTRO_RECOMP =
   'Aunque tu plan sea de recomposición, con este déficit la báscula debería bajar algo. Dinos a dónde te gustaría llegar y te dibujamos por dónde debería ir el peso. No te vamos a dar una fecha: en recomposición no se puede.'
@@ -433,9 +450,20 @@ const INTRO_RECOMP =
 export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
   const altura = leerNumero(b.altura_cm)
   const objetivo = leerNumero(b.peso_objetivo)
+  const peso = leerNumero(b.peso_kg)
   // Previsualización simple del IMC exigida por SPEC-ux §1 paso 11; el cálculo
   // real y cualquier corrección del peso objetivo los hace el motor.
   const imc = altura && objetivo ? objetivo / (altura / 100) ** 2 : null
+  // Meta que va en dirección contraria al objetivo elegido: el paso ya avisa por abajo (IMC de
+  // bajo peso) y callaba en el caso simétrico. No bloquea nada: el motor tiene la regla 6.2.
+  const alReves =
+    objetivo !== null && peso !== null && Math.abs(objetivo - peso) >= 1
+      ? b.objetivo === 'perder' && objetivo > peso
+        ? 'Ese peso está por encima del que tienes ahora y tu objetivo es perder grasa: revisa uno de los dos.'
+        : b.objetivo === 'ganar' && objetivo < peso
+          ? 'Ese peso está por debajo del que tienes ahora y tu objetivo es ganar músculo: revisa uno de los dos.'
+          : null
+      : null
 
   return (
     <Pantalla
@@ -479,13 +507,17 @@ export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
             error={errores.peso_objetivo}
             max={300}
             marcado={estaMarcado(marcados, 'peso_objetivo')}
+            describedPor={imc !== null && !errores.peso_objetivo ? ID_NOTA_PESO_OBJETIVO : undefined}
           />
           {imc !== null && !errores.peso_objetivo ? (
-            <p className="nota nota-recuadro">
+            // `role="status"` y `aria-live`, igual que la nota de "falta …" del cuestionario: es
+            // el aviso de seguridad del paso y hasta ahora no llegaba a un lector de pantalla.
+            <p className="nota nota-recuadro" id={ID_NOTA_PESO_OBJETIVO} role="status" aria-live="polite">
               Eso supondría un IMC aproximado de {numCorto(imc, 1)}.
               {imc < 18.5
                 ? ' Es un IMC de bajo peso: en resultados te explicaremos por qué te proponemos ajustarlo.'
                 : ''}
+              {alReves ? ` ${alReves}` : ''}
             </p>
           ) : null}
         </div>

@@ -5,7 +5,7 @@
 // por base y restricciones salen de `src/data/foods.ts` y `src/meals/filtros.ts`: aquí no se
 // duplica ninguna regla.
 
-import { useState } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { gruposDeAlimentos, resumenMarcados } from '../../utiles/alimentos'
 import { Pantalla, type PropsPaso } from './comun'
 
@@ -15,9 +15,31 @@ type Modo = 'excluir' | 'favorito'
 const INTRO =
   'Márcalos y no aparecerán ni en tus menús ni en tu lista de la compra. Y si hay alguno que te encanta, márcalo como favorito y lo pondremos primero. Esto no cambia ni una caloría de tu plan: solo cambia qué comes.'
 
+const MODOS: { valor: Modo; icono: string; titulo: string }[] = [
+  { valor: 'excluir', icono: '✕', titulo: 'No me gusta' },
+  { valor: 'favorito', icono: '★', titulo: 'Favorito' },
+]
+
 export function PasoAlimentos({ b, set }: PropsPaso) {
   const [modo, setModo] = useState<Modo>('excluir')
+  const botones = useRef<(HTMLButtonElement | null)[]>([])
   const grupos = gruposDeAlimentos({ base: b.preferencia_base, restricciones: b.restricciones })
+
+  // Patrón ARIA de `radiogroup` (§1 paso 14): un solo botón en el orden de tabulación y las
+  // flechas mueven la selección. Antes los dos tenían `tabIndex 0` y las flechas no hacían nada.
+  const teclas = (evento: KeyboardEvent<HTMLButtonElement>, indice: number) => {
+    const salto =
+      evento.key === 'ArrowRight' || evento.key === 'ArrowDown'
+        ? 1
+        : evento.key === 'ArrowLeft' || evento.key === 'ArrowUp'
+          ? -1
+          : 0
+    if (salto === 0) return
+    evento.preventDefault()
+    const siguiente = (indice + salto + MODOS.length) % MODOS.length
+    setModo(MODOS[siguiente].valor)
+    botones.current[siguiente]?.focus()
+  }
 
   // Reglas de §1 paso 14: el chip sin marcar toma el modo activo; el marcado en ese mismo modo se
   // desmarca; el marcado en el otro modo cambia de lista. Un alimento nunca está en las dos.
@@ -53,27 +75,30 @@ export function PasoAlimentos({ b, set }: PropsPaso) {
       intro={INTRO}
       ayuda="Solo te enseñamos los alimentos que encajan con cómo comes: si eres vegana no verás pollo, y si evitas el gluten no verás pan de trigo. Marcar o desmarcar aquí no toca tus calorías ni tus macros; rehacemos el menú, las equivalencias y la lista de la compra, nada más."
     >
-      <div className="segmentado" role="radiogroup" aria-label="Qué haces al tocar un alimento">
-        <button
-          type="button"
-          role="radio"
-          aria-checked={modo === 'excluir'}
-          className="segmentado-boton"
-          data-sel={modo === 'excluir'}
-          onClick={() => setModo('excluir')}
-        >
-          <span aria-hidden="true">✕</span> No me gusta
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={modo === 'favorito'}
-          className="segmentado-boton"
-          data-sel={modo === 'favorito'}
-          onClick={() => setModo('favorito')}
-        >
-          <span aria-hidden="true">★</span> Favorito
-        </button>
+      <div className="segmentado-barra">
+        <div className="segmentado" role="radiogroup" aria-label="Qué haces al tocar un alimento">
+          {MODOS.map(({ valor, icono, titulo }, i) => (
+            <button
+              key={valor}
+              type="button"
+              role="radio"
+              aria-checked={modo === valor}
+              tabIndex={modo === valor ? 0 : -1}
+              ref={(nodo) => {
+                botones.current[i] = nodo
+              }}
+              className="segmentado-boton"
+              data-sel={modo === valor}
+              onClick={() => setModo(valor)}
+              onKeyDown={(evento) => teclas(evento, i)}
+            >
+              <span aria-hidden="true">{icono}</span> {titulo}
+            </button>
+          ))}
+        </div>
+        {/* El mismo resumen vivo que hay al final, aquí arriba: la pantalla mide cuatro pantallas
+            de móvil y el recuento quedaba fuera de la vista todo el rato (§1 paso 14). */}
+        {resumen !== '' ? <p className="segmentado-resumen">{resumen}</p> : null}
       </div>
 
       {grupos.map((grupo) => (

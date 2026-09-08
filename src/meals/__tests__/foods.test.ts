@@ -49,11 +49,14 @@ describe('base de alimentos', () => {
     expect(ids.size).toBe(ALIMENTOS.length)
   })
 
-  it('da a cada alimento un `nombre_corto` de 18 caracteres o menos y único', () => {
+  // El tope subió de 18 a 24 en la v1.2: abreviar ("Prot. de guisante", "Queso batido s/lac")
+  // hacía el chip más corto y la pantalla peor, y en 375 px un chip largo simplemente ocupa su
+  // fila entera. Lo que no se negocia es que dos alimentos distintos no compartan nombre corto.
+  it('da a cada alimento un `nombre_corto` de 24 caracteres o menos y único', () => {
     const cortos = new Set<string>()
     for (const a of ALIMENTOS) {
       expect(a.nombre_corto, a.id).toBeTruthy()
-      expect(a.nombre_corto.length, `${a.id}: "${a.nombre_corto}"`).toBeLessThanOrEqual(18)
+      expect(a.nombre_corto.length, `${a.id}: "${a.nombre_corto}"`).toBeLessThanOrEqual(24)
       expect(cortos.has(a.nombre_corto), `${a.id}: "${a.nombre_corto}" repetido`).toBe(false)
       cortos.add(a.nombre_corto)
     }

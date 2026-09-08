@@ -87,11 +87,14 @@ function GraficaProyeccion({ proyeccion, pesajes, objetivo }: GraficaProps) {
 
   const primero = proyeccion[0]
   const ultimo = proyeccion[proyeccion.length - 1]
+  // Con la banda cerrada los dos extremos redondean al mismo número, y la frase quedaba en "entre
+  // 63 y 63 kg": quien no ve la gráfica recibía una frase rota.
+  const finMin = numCorto(ultimo.peso_min, 1)
+  const finMax = numCorto(ultimo.peso_max, 1)
+  const final = finMin === finMax ? `a ${finMin} kg` : `a entre ${finMin} y ${finMax} kg`
   const resumen = `Proyección de peso: de ${numCorto(primero.peso_esp, 1)} kg en la semana ${
     primero.semana
-  } a entre ${numCorto(ultimo.peso_min, 1)} y ${numCorto(ultimo.peso_max, 1)} kg en la semana ${
-    ultimo.semana
-  }.`
+  } ${final} en la semana ${ultimo.semana}.`
 
   return (
     <svg

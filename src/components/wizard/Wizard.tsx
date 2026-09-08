@@ -148,6 +148,14 @@ export function Wizard({
     setPasoActual(pasos[indice + 1])
   }
 
+  // El botón de salida del paso 14 solo existe mientras no hay nada marcado (§1 paso 14): en
+  // cuanto el usuario marca algo, "Seguir sin marcar nada" pasa a ser un botón que borra sus dos
+  // listas sin avisar y con un rótulo que miente. Quien llega desde el enlace "Cambiar" de
+  // resultados es justo quien más tiene que perder.
+  const sinMarcarNada =
+    borrador.alimentos_excluidos.length + borrador.alimentos_favoritos.length === 0
+  const salidaAlimentos = paso === 'alimentos' && sinMarcarNada
+
   /**
    * "Seguir sin marcar nada" del paso 14 (§1 paso 14): envía las dos listas vacías. Se calcula el
    * borrador limpio aquí y se pasa a `onTerminar` sin esperar al estado: dentro del mismo evento
@@ -235,7 +243,7 @@ export function Wizard({
         <div
           className="barra-navegacion"
           data-solo={indice === 0}
-          data-extra={paso === 'alimentos'}
+          data-extra={salidaAlimentos}
         >
           {indice > 0 ? (
             <button type="button" className="btn btn-secundario" onClick={retroceder}>
@@ -251,7 +259,7 @@ export function Wizard({
             {esUltimo ? (planGuardado ? 'Volver a mi plan' : 'Ver mi plan') : 'Siguiente'}
             <IconoFlecha />
           </button>
-          {paso === 'alimentos' ? (
+          {salidaAlimentos ? (
             <button type="button" className="btn btn-secundario btn-salida" onClick={seguirSinMarcar}>
               Seguir sin marcar nada
             </button>

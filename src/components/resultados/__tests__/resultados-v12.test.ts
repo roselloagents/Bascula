@@ -255,8 +255,14 @@ describe('sección opcional de la lista de la compra (§2.5b)', () => {
 describe('formulario de pesajes: fecha y peso no válidos (§2.6c, decisión J)', () => {
   it('cada motivo tiene su mensaje, y una fecha válida no dice nada', () => {
     expect(mensajeFechaPesaje('2026-08-30', '2026-09-01', '2026-09-08')).toBe(
-      'Esa fecha es anterior al día en que empezaste el plan (1/9/2026). Elige una posterior.',
+      'Esa fecha es anterior al día en que empezaste el plan (1/9/2026). Elige una entre ese día y hoy.',
     )
+    // El primer día del plan el rango válido es un solo día: un único mensaje, sin bucle entre
+    // "elige una posterior" y "no puedes apuntar una fecha futura".
+    const soloHoy = 'Hoy es el primer día de tu plan: de momento solo puedes apuntar el pesaje del 8/9/2026.'
+    expect(mensajeFechaPesaje('2026-09-01', '2026-09-08', '2026-09-08')).toBe(soloHoy)
+    expect(mensajeFechaPesaje('2026-09-20', '2026-09-08', '2026-09-08')).toBe(soloHoy)
+    expect(mensajeFechaPesaje('2026-09-08', '2026-09-08', '2026-09-08')).toBeNull()
     expect(mensajeFechaPesaje('2026-09-20', '2026-09-01', '2026-09-08')).toBe(
       'Todavía no puedes apuntar un peso de una fecha futura.',
     )

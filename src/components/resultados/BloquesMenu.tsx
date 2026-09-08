@@ -1,10 +1,10 @@
 // Ejemplos de menú y consejos accionables (SPEC-ux §2.5 y §2.7).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Ejemplos, InputCalculo } from '../../engine/types'
 import { Plegable } from '../ui/Controles'
 import { IconoBombilla, IconoMarca, IconoPesa } from '../ui/Iconos'
-import { listaNombresCortos, nombreCorto } from '../utiles/alimentos'
+import { nombreCorto, nombresCortosOrdenados } from '../utiles/alimentos'
 import { NOTA_MENU, NOTA_SENCILLO_SIN_OTRO_EJEMPLO, NOTA_VERDURA_FRUTA } from '../utiles/copy'
 import { entero } from '../utiles/formato'
 import { textoModoSencillo } from './compra'
@@ -46,8 +46,13 @@ export function BloqueMenus({
   // El aviso efímero se cierra solo a los 6 s; el cambio, no. Vive aquí y no en `App` porque es
   // presentación pura: ni el plan ni el borrador dependen de que se vea o no.
   const [quitado, setQuitado] = useState<{ id: string; nombre: string } | null>(null)
+  const deshacer = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (quitado === null) return
+    // El aviso es una barra fija abajo y el foco se va a "Deshacer": pintado al final del día,
+    // el aviso quedaba tres pantallas por debajo del alimento que se acababa de quitar y la
+    // acción era irreversible en la práctica (§2.5).
+    deshacer.current?.focus()
     const temporizador = window.setTimeout(() => setQuitado(null), SEGUNDOS_DESHACER * 1000)
     return () => window.clearTimeout(temporizador)
   }, [quitado])
@@ -147,12 +152,13 @@ export function BloqueMenus({
       </p>
 
       {quitado ? (
-        <p className="aviso-efimero" role="status">
+        <p className="aviso-efimero aviso-flotante" role="status">
           Fuera {quitado.nombre}. Hemos rehecho el menú y la compra.
           {onDeshacerExclusion ? (
             <button
               type="button"
               className="btn-plano"
+              ref={deshacer}
               onClick={() => {
                 onDeshacerExclusion(quitado.id)
                 setQuitado(null)
@@ -191,31 +197,53 @@ export function BloqueMenus({
         </div>
       ) : null}
 
-      <ResumenAlimentos inputs={inputs} onCambiar={onCambiarAlimentos} />
+      <ResumenAlimentos inputs={inputs} ejemplos={ejemplos} onCambiar={onCambiarAlimentos} />
     </Seccion>
   )
 }
 
+/** Nombres que se enseñan antes del "y N más" del resumen (§2.5). */
+const MAX_NOMBRES_RESUMEN = 6
+
 /**
  * "Sin: brócoli, coliflor · Favoritos: pollo, arroz · Cambiar" (§2.5, v1.2). Los nombres son los
- * cortos de `foods.json`; cada mitad se omite si su lista está vacía y, sin ninguna de las dos,
- * la línea no se pinta.
+ * cortos de `foods.json`, **ordenados alfabéticamente** para leerlos —el orden interno es por id,
+ * que a una persona le parece desorden— y cortados en seis, con un "y N más" que lleva al paso de
+ * alimentos: con cincuenta exclusiones el bloque ocupaba media pantalla. De los favoritos se
+ * nombran los que de verdad han entrado en la semana (`favoritos_aplicados`).
+ * Cada mitad se omite si su lista está vacía y, sin ninguna de las dos, la línea no se pinta.
  */
 export function ResumenAlimentos({
   inputs,
+  ejemplos,
   onCambiar,
 }: {
   inputs: InputCalculo
+  ejemplos?: Ejemplos
   onCambiar?: () => void
 }) {
-  const sin = listaNombresCortos(inputs.alimentos_excluidos ?? [])
-  const favoritos = listaNombresCortos(inputs.alimentos_favoritos ?? [])
-  if (sin === '' && favoritos === '') return null
+  const sin = nombresCortosOrdenados(inputs.alimentos_excluidos ?? [])
+  const marcados = inputs.alimentos_favoritos ?? []
+  const servidos = ejemplos?.favoritos_aplicados ?? marcados
+  const favoritos = nombresCortosOrdenados(servidos)
+  const fuera = marcados.length - servidos.length
+  if (sin.length === 0 && favoritos.length === 0) return null
+  const recortada = (nombres: string[]): string => {
+    if (nombres.length <= MAX_NOMBRES_RESUMEN) return nombres.join(', ')
+    return `${nombres.slice(0, MAX_NOMBRES_RESUMEN).join(', ')} y ${nombres.length - MAX_NOMBRES_RESUMEN} más`
+  }
   return (
     <p className="resumen-alimentos-menu">
-      {sin !== '' ? <span>Sin: {sin}</span> : null}
-      {sin !== '' && favoritos !== '' ? <span aria-hidden="true"> · </span> : null}
-      {favoritos !== '' ? <span>Favoritos: {favoritos}</span> : null}
+      {sin.length > 0 ? <span>Sin: {recortada(sin)}</span> : null}
+      {sin.length > 0 && favoritos.length > 0 ? <span aria-hidden="true"> · </span> : null}
+      {favoritos.length > 0 ? <span>Favoritos: {recortada(favoritos)}</span> : null}
+      {fuera > 0 ? (
+        <span className="resumen-alimentos-nota">
+          {fuera === 1
+            ? 'Un favorito más no ha entrado en el menú de esta semana.'
+            : `${fuera} favoritos más no han entrado en el menú de esta semana.`}
+        </span>
+      ) : null}
       {onCambiar ? (
         <button type="button" className="btn-plano" onClick={onCambiar}>
           Cambiar

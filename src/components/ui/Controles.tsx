@@ -177,6 +177,11 @@ interface CampoNumeroProps {
    * `estadoPaso`, que es quien produce el texto del error.
    */
   max?: number
+  /**
+   * Id de un texto de la pantalla que explica el campo (una nota de seguridad, por ejemplo): se
+   * añade al `aria-describedby` del input, detrás del error si lo hay.
+   */
+  describedPor?: string
 }
 
 export function CampoNumero({
@@ -191,6 +196,7 @@ export function CampoNumero({
   marcado = false,
   placeholder,
   max,
+  describedPor,
 }: CampoNumeroProps) {
   const id = useId()
   const idError = `${id}-error`
@@ -217,7 +223,9 @@ export function CampoNumero({
           placeholder={placeholder}
           value={valor}
           aria-invalid={Boolean(errorVisible) || marcado}
-          aria-describedby={errorVisible ? idError : undefined}
+          aria-describedby={
+            [errorVisible ? idError : null, describedPor ?? null].filter(Boolean).join(' ') || undefined
+          }
           autoFocus={autoFoco}
           onBlur={() => setTocado(true)}
           onChange={(evento) => onCambio(evento.target.value.replace(/[^\d.,]/g, ''))}

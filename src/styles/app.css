@@ -611,10 +611,26 @@
    no se sabe qué hace el siguiente toque. Se queda JUSTO DEBAJO de la barra de progreso, que ya
    es `sticky` en `top: 0` y mide 86 px: con los dos a cero, el progreso (z-index mayor) tapaba
    el control entero y los chips pasaban por debajo sin nada que dijera qué modo estaba activo. */
-.segmentado {
+/* La barra pegada arriba lleva el control y el recuento: la pantalla mide cuatro pantallas de
+   móvil y el resumen vivo, al final del todo, no se veía nunca (§1 paso 14). */
+.segmentado-barra {
   position: sticky;
   top: 5.4rem;
   z-index: 4;
+  display: grid;
+  gap: var(--e-2);
+  padding-bottom: var(--e-2);
+  background: var(--hueso);
+}
+
+.segmentado-resumen {
+  margin: 0;
+  color: var(--tinta-media);
+  font-size: var(--t-xs);
+  text-align: center;
+}
+
+.segmentado {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--e-2);
