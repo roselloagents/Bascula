@@ -7,9 +7,18 @@ import {
   GRASA_OBJETIVO_MUJER,
   GRASA_OBJETIVO_MUJER_65,
   IMC_OBJETIVO_MIN,
+  KCAL_POR_KG_GRASA,
+  PLAZO_EPSILON,
+  RITMOS_POR_SUAVIDAD,
+  RITMO_PERDIDA,
+  SUPERAVIT,
+  SUPERAVIT_MAX,
+  SUPERAVIT_MIN,
+  SUPERAVIT_SIN_FUERZA,
 } from './constants'
 import type { EmitirAviso } from './messages'
 import { bancoDe } from './preferences'
+import { clamp } from './round'
 import type {
   BandaGrasa,
   Condicion,
@@ -36,6 +45,8 @@ export interface EntradaObjetivo {
   low_carb_pedido: boolean
   /** `menstruacion` normalizada del paso 0: siempre `null` en hombres. */
   menstruacion: Menstruacion | null
+  /** TDEE del paso 5: lo necesita el paso 6.7ter para traducir el superávit de `ganar` a kg/semana. */
+  tdee: number
 }
 
 export interface SalidaObjetivo {
@@ -43,6 +54,13 @@ export interface SalidaObjetivo {
   /** Objetivo resuelto por la regla 6.1 (solo con `objetivo === 'no_se'`). */
   objetivo_propuesto?: ObjetivoEfectivo
   ritmo_efectivo: Ritmo
+  /**
+   * Ritmo que eligió el plazo en el paso 6.7ter, o `null` si el plazo no se leyó (sin
+   * `plazo_semanas`, sin `peso_objetivo` o con un objetivo intermedio que no es `perder`/`ganar`).
+   * El paso 17 lo compara con `ritmo_efectivo`: si un suavizado de seguridad lo ha bajado, la
+   * fecha ya no se alcanza e `INFO_RITMO_POR_PLAZO` pasa a ser `WARN_PLAZO_IRREAL`.
+   */
+  ritmo_plazo: Ritmo | null
   preferencia_efectiva: Preferencia
   /** Trío efectivo publicado en `Resultado` (paso 6.8). */
   preferencia_base: PreferenciaBase
@@ -140,6 +158,43 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
 
   // 6.7 — ritmo efectivo
   let ritmo_efectivo: Ritmo = inputs.ritmo
+
+  // 6.7ter — PLAZO (v1.2, decisión H). Se evalúa AQUÍ, lo primero del paso 7 y ANTES de cualquier
+  // suavizado de seguridad: fija el ritmo de PARTIDA a partir de la fecha que ha pedido el usuario,
+  // y los suavizados de 6.7 (tca, edad ≥ 65) y 6.7bis (regla) se aplican después sobre él y MANDAN.
+  // El `ritmo` que eligió el usuario se descarta: ha pedido una fecha, y la fecha es más concreta.
+  const plazo = typeof inputs.plazo_semanas === 'number' && Number.isFinite(inputs.plazo_semanas)
+    ? inputs.plazo_semanas
+    : null
+  let ritmo_plazo: Ritmo | null = null
+  if (plazo !== null && pobj !== null && (obj === 'perder' || obj === 'ganar')) {
+    const ritmo_req = Math.abs(pobj - PC) / plazo // kg por semana que exige la fecha
+    // kg/semana que da cada ritmo de la tabla, con la misma aritmética del paso 7.
+    const kgSem = (r: Ritmo): number | null => {
+      if (obj === 'perder') {
+        const fila = RITMO_PERDIDA[banda as 'muy_alto' | 'alto' | 'medio'] as Record<Ritmo, number> | undefined
+        return fila ? fila[r] / 100 * PC : null
+      }
+      const sup_pct = perfil !== 'fuerza' ? SUPERAVIT_SIN_FUERZA : SUPERAVIT[exp][r]
+      return clamp(sup_pct * e.tdee, SUPERAVIT_MIN, SUPERAVIT_MAX) * 7 / KCAL_POR_KG_GRASA
+    }
+    for (const r of RITMOS_POR_SUAVIDAD) {
+      const v = kgSem(r)
+      if (v !== null && v >= ritmo_req - PLAZO_EPSILON) {
+        ritmo_plazo = r
+        break
+      }
+    }
+    if (ritmo_plazo === null) {
+      // Ni el agresivo llega: se aplica igualmente y el aviso lo dice sin adornos.
+      ritmo_plazo = 'agresivo'
+      emitir('WARN_PLAZO_IRREAL')
+    } else {
+      emitir('INFO_RITMO_POR_PLAZO')
+    }
+    ritmo_efectivo = ritmo_plazo
+  }
+
   if (condiciones.includes('tca')) {
     // El texto no menciona la causa: la respuesta del cribado es privada.
     emitir('INFO_RITMO_SUAVE')
@@ -176,6 +231,7 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
     objetivo_efectivo: obj,
     objetivo_propuesto,
     ritmo_efectivo,
+    ritmo_plazo,
     preferencia_efectiva,
     preferencia_base: e.pref_base,
     restricciones,

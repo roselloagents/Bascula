@@ -6,6 +6,7 @@ import { ajustarMacros, techoHidratosAjuste } from './adjust'
 import { calcularGrasa } from './bodyfat'
 import { calcularBmr, calcularMlg } from './bmr'
 import { calcularCalorias } from './calories'
+import { calcularCiclo } from './ciclo'
 import {
   AJUSTE_KCAL_FACTOR_MAX,
   AJUSTE_KCAL_FACTOR_MIN,
@@ -123,6 +124,7 @@ export function calcular(inputs: Inputs): Resultado {
       restricciones,
       low_carb_pedido,
       menstruacion,
+      tdee: tdee.valor,
     },
     emitir,
   )
@@ -306,8 +308,47 @@ export function calcular(inputs: Inputs): Resultado {
       (c) => c !== 'INFO_RECOMP_PRIORIDAD_PERDER' && c !== 'INFO_RECOMP_PRIORIDAD_GANAR',
     )
   }
+  // v1.2 (recomposición con déficit): el aviso afirma que "el peso objetivo no se usa", y con la
+  // proyección del paso 14 sí se usa, como meta de la curva. Las calorías siguen saliendo de la
+  // tabla 3.9, y eso lo explica INFO_PROYECCION_RECOMP.
+  if (objetivo_efectivo === 'recomposicion' && peso_objetivo.efectivo !== null) {
+    avisos = avisos.filter((c) => c !== 'INFO_OBJETIVO_IGNORADO')
+  }
+  // v1.2 (PLAZO): los dos avisos del paso 6.7ter hablan de una fecha para una meta de peso. Si el
+  // plan final ya no es de perder/ganar se retiran; si un suavizado de seguridad ha bajado el ritmo
+  // que el plazo había elegido, o si el propio cronograma sale más largo que el plazo, la promesa
+  // deja de ser cierta y el aviso pasa a ser el de plazo irreal.
+  const plazo = typeof inputs.plazo_semanas === 'number' && Number.isFinite(inputs.plazo_semanas)
+    ? inputs.plazo_semanas
+    : null
+  if (
+    plazo === null ||
+    inputs.peso_objetivo === null ||
+    inputs.peso_objetivo === undefined ||
+    (objetivo_efectivo !== 'perder' && objetivo_efectivo !== 'ganar')
+  ) {
+    avisos = avisos.filter((c) => c !== 'INFO_RITMO_POR_PLAZO' && c !== 'WARN_PLAZO_IRREAL')
+  } else if (objetivo.ritmo_plazo !== null) {
+    const no_llega =
+      objetivo.ritmo_efectivo !== objetivo.ritmo_plazo ||
+      (cronograma !== null && cronograma.semanas[0] > plazo)
+    if (no_llega) {
+      avisos = avisos.filter((c) => c !== 'INFO_RITMO_POR_PLAZO')
+      if (!avisos.includes('WARN_PLAZO_IRREAL')) avisos.push('WARN_PLAZO_IRREAL')
+    }
+  }
   const tiene_tca = condiciones.includes('tca')
   avisos = filtrarAvisos(avisos, tiene_tca)
+
+  // ---------------- Paso 19 — ciclo (v1.2). Va después del 17 porque depende de `INFO_CICLO` ya
+  // filtrado, y no toca ni un número: solo publica `Resultado.ciclo`.
+  const ciclo = calcularCiclo({
+    hay_info_ciclo: avisos.includes('INFO_CICLO'),
+    sintomas_regla: inputs.sintomas_regla ?? null,
+    pref_base: objetivo.preferencia_base,
+    restricciones: objetivo.restricciones,
+    low_carb: objetivo.low_carb,
+  })
 
   // ---------------- Paso 18 — límites del ajuste manual (se publican SIEMPRE, también sin ajuste).
   // Con `'tca'` no hay panel de ajuste: `limites_ajuste` queda `undefined`, igual que `proyeccion`.
@@ -405,6 +446,8 @@ export function calcular(inputs: Inputs): Resultado {
     // se retiran los avisos de cronograma (paso 17).
     proyeccion: tiene_tca ? undefined : proyeccion,
     limites_ajuste,
+    // ---------------- v1.2
+    ciclo,
   }
 }
 

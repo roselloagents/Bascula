@@ -15,6 +15,8 @@ import {
   IMC_OBJETIVO_MIN,
   IMC_OBJETIVO_MIN_65,
   OBJETIVO_LEJANO_UMBRAL,
+  RECOMP_DEFICIT_MIN,
+  RECOMP_META_MARGEN_KG,
 } from './constants'
 import type { EmitirAviso } from './messages'
 import { clamp, round05, roundDown05, roundUp05 } from './round'
@@ -87,7 +89,20 @@ export function calcularPesoObjetivo(e: EntradaPesoObjetivo, emitir: EmitirAviso
   let metodo: MetodoPesoObjetivo = 'actual'
   let piso_peso = min185
 
-  if (e.objetivo_efectivo === 'perder') {
+  // v1.2 (decisión H): la recomposición CON déficit real —prioridad `perder`, o `equilibrado` con
+  // una banda que sí resta— propone y valida la meta exactamente como `perder`: mismos suelos
+  // (IMC mínimo y grasa esencial) y mismos avisos. La comprobación `PC − meta ≥ 0,5` va ANTES de
+  // ejecutar la rama, no después: si se ejecutara primero y se descartara luego, el informe se
+  // llevaría avisos sobre una meta que no se le enseña a nadie. Con prioridad `ganar` nunca se
+  // llega aquí (`kcal ≈ TDEE`, así que `TDEE − kcal < 50`).
+  const recomp_con_deficit =
+    e.objetivo_efectivo === 'recomposicion' && e.tdee - e.kcal >= RECOMP_DEFICIT_MIN
+  const meta_cand = recomp_con_deficit ? (pobj === null ? sugerido : pobj) : null
+  const rama_perder =
+    e.objetivo_efectivo === 'perder' ||
+    (meta_cand !== null && PC - meta_cand >= RECOMP_META_MARGEN_KG)
+
+  if (rama_perder) {
     metodo = 'grasa'
     if (pobj === null) {
       efectivo = sugerido

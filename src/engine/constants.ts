@@ -102,6 +102,20 @@ export const AJUSTE_KCAL_FACTOR_MIN = 0.80
 export const AJUSTE_KCAL_FACTOR_MAX = 1.20
 /** Déficit por debajo del cual el plan ajustado deja de ser una pérdida (`WARN_KCAL_AJUSTE_ALTA`). */
 export const AJUSTE_DEFICIT_MIN = 100
+// ---------- §3.1 v1.2 — plazo, recomposición con déficit y ciclo ----------
+/** Semanas admitidas en `plazo_semanas` (§1 fila 24). */
+export const PLAZO_SEMANAS_MIN = 4
+export const PLAZO_SEMANAS_MAX = 52
+/** Orden en que el paso 6.7ter prueba los ritmos: gana el PRIMERO que llega a la fecha. */
+export const RITMOS_POR_SUAVIDAD = ['suave', 'moderado', 'agresivo'] as const
+/** Tolerancia de la comparación `kg_sem(r) ≥ ritmo_req` (paso 6.7ter). */
+export const PLAZO_EPSILON = 1e-9
+/** Déficit real mínimo (kcal/día) para que una recomposición tenga meta y curva (pasos 13 y 14). */
+export const RECOMP_DEFICIT_MIN = 50
+/** Margen mínimo entre el peso actual y la meta para que haya meta que dar (paso 13). */
+export const RECOMP_META_MARGEN_KG = 0.5
+/** Semanas mínimas de la curva de recomposición: los hitos de 4, 8 y 12 tienen que existir. */
+export const SEM_PROYECCION_RECOMP_MIN = 12
 /** Orden canónico de las restricciones combinables (§1.1). */
 export const RESTRICCIONES_CANONICAS = ['sin_lactosa', 'sin_gluten'] as const
 /** Bases dietéticas excluyentes (§1.1). */

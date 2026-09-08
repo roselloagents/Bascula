@@ -94,6 +94,10 @@ export type CodigoAviso =
   | 'INFO_AJUSTE_MANUAL'
   | 'WARN_HC_BAJO_MINIMO'
   | 'WARN_KCAL_AJUSTE_ALTA'
+  // ---------- v1.2 ----------
+  | 'INFO_RITMO_POR_PLAZO'
+  | 'WARN_PLAZO_IRREAL'
+  | 'INFO_PROYECCION_RECOMP'
 
 /** Emisor de avisos del motor: idempotente, sin duplicados. */
 export type EmitirAviso = (codigo: CodigoAviso) => void
@@ -146,6 +150,23 @@ function sueloEa(ctx: Contexto): number {
 /** El fragmento sobre el calendario se omite cuando no hay cronograma. */
 const conCalendario = (ctx: Contexto, fragmento: string): string =>
   ctx.resultado.cronograma === null ? '' : fragmento
+
+/**
+ * Entero con separador de miles español (1875 → «1.875»). No se usa `toLocaleString`: el locale
+ * `es-ES` no agrupa los números de cuatro cifras y la §4 pide el punto «si pasa de 999».
+ */
+const miles = (x: number): string =>
+  String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+
+/**
+ * `{ritmo_req_g}` de los dos avisos del plazo (§4): los gramos por semana que **exige la fecha**,
+ * no los del plan. Por eso en `WARN_PLAZO_IRREAL` siempre es mayor que el ritmo que se aplica.
+ */
+function ritmoRequeridoG(ctx: Contexto): string {
+  const pobj = ctx.inputs.peso_objetivo ?? 0
+  const plazo = ctx.inputs.plazo_semanas ?? 1
+  return miles(Math.abs(pobj - ctx.inputs.peso_kg) / plazo * 1000)
+}
 
 interface Plantilla {
   severidad: Severidad
@@ -643,6 +664,39 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
       }.`
     },
   },
+  INFO_RITMO_POR_PLAZO: {
+    severidad: 'info',
+    titulo: 'El ritmo lo ha elegido tu fecha',
+    // `{suave/moderado/agresivo}` es `ritmo_efectivo`: en este aviso coincide siempre con el que
+    // eligió el plazo, porque si un suavizado lo hubiera bajado el paso 17 ya lo habría cambiado
+    // por WARN_PLAZO_IRREAL.
+    texto: (ctx) =>
+      `Nos has dicho que quieres llegar a ${num(ctx.inputs.peso_objetivo ?? 0)} kg en ${ctx.inputs.plazo_semanas} semanas: son unos ${ritmoRequeridoG(ctx)} g por semana. Hemos puesto el ritmo ${ctx.resultado.ritmo_efectivo}, el más suave de los nuestros que llega a esa fecha, y hemos ignorado el que habías elegido antes. Si la fecha no es tan importante, un ritmo más suave se sostiene mejor y cuesta menos músculo.`,
+  },
+  WARN_PLAZO_IRREAL: {
+    severidad: 'warn',
+    titulo: 'Esa fecha no te la podemos prometer',
+    // Dos situaciones distintas lo emiten —ningún ritmo llega, o un suavizado de seguridad bajó el
+    // que llegaba—, y la frase de "el más rápido de nuestra tabla" sería falsa en la segunda.
+    texto: (ctx) => {
+      const cg = ctx.resultado.cronograma
+      const comoQueda =
+        ctx.resultado.ritmo_efectivo === 'agresivo'
+          ? 'Hemos puesto el más rápido de nuestra tabla.'
+          : 'Hemos aplicado el ritmo que tu caso permite.'
+      const calendario = conCalendario(
+        ctx,
+        ` Con este plan el cálculo da entre ${cg?.semanas[0]} y ${cg?.semanas[1]} semanas.`,
+      )
+      return `Para llegar a ${num(ctx.inputs.peso_objetivo ?? 0)} kg en ${ctx.inputs.plazo_semanas} semanas harían falta unos ${ritmoRequeridoG(ctx)} g por semana, y ese no es un ritmo que podamos proponerte con seguridad. ${comoQueda} No te prometemos esa fecha: la buena es la que sale de tu plan real.${calendario} Perder más rápido no es perder mejor: por debajo de cierto ritmo lo que se va es músculo.`
+    },
+  },
+  INFO_PROYECCION_RECOMP: {
+    severidad: 'info',
+    titulo: 'Tu curva de recomposición',
+    texto:
+      'En recomposición la báscula baja mucho más despacio de lo que cambia tu cuerpo: puedes perder grasa y ganar músculo a la vez y quedarte casi en el mismo peso. Por eso no te damos una fecha, sino una banda: por abajo, lo que bajarías si todo lo que pierdes fuese grasa; por arriba, quedarte en el peso de hoy porque el músculo lo compensa. Las dos cosas serían un buen resultado. Mídete también la cintura y hazte fotos cada cuatro semanas: ahí se ve lo que la báscula no enseña.',
+  },
   INFO_PROYECCION_PLANA: {
     severidad: 'info',
     titulo: 'Sin curva de peso',
@@ -687,6 +741,8 @@ export const CRONOGRAMA_FAMILIA: CodigoAviso[] = [
   'WARN_CRONOGRAMA_LARGO',
   ...CRONOGRAMA_CORTE,
   'INFO_PROYECCION_PLANA',
+  // v1.2: la curva de recomposición depende de las kcal, así que el paso 18 también la rehace.
+  'INFO_PROYECCION_RECOMP',
 ]
 
 /** Avisos que `ajustarMacros` retira antes de reevaluarlos con las kcal y los HC nuevos (paso 18). */
@@ -715,6 +771,12 @@ export const TCA_OCULTOS: CodigoAviso[] = [
   'INFO_CRONOGRAMA_NO_ESTIMABLE',
   'INFO_CRONOGRAMA_FUERA_DE_HORIZONTE',
   'INFO_PROYECCION_PLANA',
+  // v1.2: la curva de recomposición no se publica con `'tca'` (`proyeccion` queda `undefined`), y
+  // los dos del plazo hablan de un ritmo y de una fecha para una meta de peso justo en el informe
+  // en el que el motor ha forzado el ritmo más suave sin nombrar la causa.
+  'INFO_PROYECCION_RECOMP',
+  'INFO_RITMO_POR_PLAZO',
+  'WARN_PLAZO_IRREAL',
 ]
 
 /** Reglas de supresión de avisos contradictorios (paso 6, más la de la v1.1). La lista es cerrada. */
@@ -740,6 +802,11 @@ export const SUPRESIONES: ReadonlyArray<readonly [CodigoAviso, readonly CodigoAv
   ...CRONOGRAMA_CORTE.map(
     (c) => [c, ['INFO_ADAPTACION', 'WARN_CRONOGRAMA_LARGO']] as readonly [CodigoAviso, readonly CodigoAviso[]],
   ),
+  // v1.2: las dos formas de la proyección sin cronograma son excluyentes (la plana afirma "esperamos
+  // que tu peso se mantenga", que es justo lo que la de recomposición contradice), y de los dos
+  // avisos del plazo uno dice que llegamos a la fecha y el otro que no.
+  ['INFO_PROYECCION_RECOMP', ['INFO_PROYECCION_PLANA']],
+  ['WARN_PLAZO_IRREAL', ['INFO_RITMO_POR_PLAZO']],
 ]
 
 /** Aplica las supresiones del paso 6 y el filtro de protección del cribado TCA del paso 17. */

@@ -21,11 +21,14 @@ import {
   HORIZONTE_MAX_SEMANAS_GANAR,
   KCAL_POR_KG_GRASA,
   PRECISION_MES_UMBRAL_SEMANAS,
+  RECOMP_DEFICIT_MIN,
+  RECOMP_META_MARGEN_KG,
   SEM_PROYECCION_MAX,
   SEM_PROYECCION_PLANA,
+  SEM_PROYECCION_RECOMP_MIN,
 } from './constants'
 import type { EmitirAviso } from './messages'
-import { round05, round1, sumarDias } from './round'
+import { clamp, round05, round1, sumarDias } from './round'
 import type { ObjetivoEfectivo, PuntoProyeccion, ResultadoCronograma } from './types'
 
 export interface EntradaCronograma {
@@ -77,6 +80,35 @@ function proyeccionCurva(
   return puntos
 }
 
+/**
+ * Paso 14b — proyección de RECOMPOSICIÓN CON DÉFICIT REAL (v1.2, decisión H). No hay cronograma
+ * —en recomposición no se promete fecha—, pero sí hay déficit, y esconderlo tras una banda plana
+ * de ±1 kg era mentir en la dirección contraria: quien pide recomposición con prioridad `perder`
+ * lleva un déficit de verdad y veía una raya horizontal.
+ *
+ *   borde inferior = la curva del déficit (la misma regla lineal de 7 700 kcal/kg que el
+ *                    `peso_min` de `perder`), acotada por la meta;
+ *   borde superior = el peso actual (todo lo que pierdes de grasa lo compensa el músculo);
+ *   esperado       = el punto medio, y el copy no lo disfraza de pronóstico afinado.
+ */
+function proyeccionRecomp(PC: number, delta_kg: number, ritmo_kg_sem: number): PuntoProyeccion[] {
+  const sem_lineal = delta_kg / ritmo_kg_sem
+  // Nunca menos de 12 semanas (los hitos de 4, 8 y 12 tienen que existir) ni más de 26.
+  const S = clamp(Math.ceil(sem_lineal), SEM_PROYECCION_RECOMP_MIN, SEM_PROYECCION_MAX)
+  const puntos: PuntoProyeccion[] = []
+  for (let s = 0; s <= S; s++) {
+    const rapido = Math.min(ritmo_kg_sem * s, delta_kg)
+    const inferior = PC - rapido
+    puntos.push({
+      semana: s,
+      peso_min: round1(inferior),
+      peso_esp: round1((inferior + PC) / 2),
+      peso_max: round1(PC),
+    })
+  }
+  return puntos
+}
+
 /** Paso 14b — sin cronograma lo esperable es que el peso no cambie (±1 kg de agua, sal e intestino). */
 function proyeccionPlana(PC: number): PuntoProyeccion[] {
   const puntos: PuntoProyeccion[] = []
@@ -94,6 +126,20 @@ export function calcularPaso14(e: EntradaCronograma, emitir: EmitirAviso): Salid
 
   if (e.objetivo_efectivo === 'mantener' || e.objetivo_efectivo === 'recomposicion' || e.peso_obj_ef === null) {
     emitir('INFO_SIN_CRONOGRAMA')
+    // v1.2: recomposición con déficit real y con una meta por debajo del peso actual. El cronograma
+    // sigue siendo `null` (no se promete fecha); lo único que cambia es la curva.
+    if (
+      e.objetivo_efectivo === 'recomposicion' &&
+      e.peso_obj_ef !== null &&
+      e.tdee - e.kcal >= RECOMP_DEFICIT_MIN &&
+      e.pesoKg - e.peso_obj_ef >= RECOMP_META_MARGEN_KG
+    ) {
+      const ritmo_kg_sem = (e.tdee - e.kcal) * 7 / KCAL_POR_KG_GRASA
+      if (ritmo_kg_sem >= CRONOGRAMA_RITMO_MIN) {
+        proyeccion = proyeccionRecomp(e.pesoKg, e.pesoKg - e.peso_obj_ef, ritmo_kg_sem)
+        emitir('INFO_PROYECCION_RECOMP')
+      }
+    }
   } else {
     const perder = e.objetivo_efectivo === 'perder'
     const delta_kcal = perder ? e.tdee - e.kcal : e.kcal - e.tdee

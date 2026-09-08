@@ -382,8 +382,10 @@ describe('Paso 14b — proyección semana a semana (decisión F)', () => {
     }
   })
 
-  it('sin cronograma la proyección es plana: 13 puntos y ±1 kg desde la semana 1', () => {
-    const r = calcular(CASO_16)
+  it('sin cronograma y sin déficit real la proyección es plana: 13 puntos y ±1 kg desde la semana 1', () => {
+    // Con prioridad `ganar` la recomposición no lleva déficit (`kcal ≈ TDEE`), así que sigue
+    // cayendo en la banda plana: la curva de la v1.2 exige `TDEE − kcal ≥ 50` (paso 14).
+    const r = calcular({ ...CASO_16, recomposicion_prioridad: 'ganar' })
     expect(r.cronograma).toBeNull()
     expect(r.avisos).toContain('INFO_PROYECCION_PLANA')
     const p = r.proyeccion ?? []
@@ -443,7 +445,11 @@ describe('Paso 14b — proyección semana a semana (decisión F)', () => {
                 if (r.objetivo_efectivo === 'perder') expect(ult.peso_min).toBeGreaterThanOrEqual(meta - 0.051)
                 if (r.objetivo_efectivo === 'ganar') expect(ult.peso_max).toBeLessThanOrEqual(meta + 0.051)
               } else {
-                expect(r.avisos).toContain('INFO_PROYECCION_PLANA')
+                // v1.2: sin cronograma la curva es la plana o la de recomposición con déficit,
+                // y las dos son excluyentes (regla de supresión de la §4).
+                const plana = r.avisos.includes('INFO_PROYECCION_PLANA')
+                const recomp = r.avisos.includes('INFO_PROYECCION_RECOMP')
+                expect(plana !== recomp, 'una proyección sin cronograma y solo un aviso').toBe(true)
               }
             }
           }

@@ -1,4 +1,4 @@
-// Vectores de prueba normativos de docs/SPEC-calculo.md §5 (los dieciséis casos), más las
+// Vectores de prueba normativos de docs/SPEC-calculo.md §5 (los diecinueve casos), más las
 // exclusiones del paso 0, la validación de la §1 y los casos borde de las tablas 3.x.
 //
 // Convención de la §5: los intermedios se comparan con tolerancia ±0,15 (la spec la fija así
@@ -143,7 +143,7 @@ interface Vector {
   avisos: string[]
 }
 
-// ---------------------------------------------------------------- los dieciséis vectores
+// ---------------------------------------------------------------- los diecinueve vectores
 
 const VECTORES: Vector[] = [
   {
@@ -222,8 +222,10 @@ const VECTORES: Vector[] = [
     kcal_cierre: 1750,
     macros: { p: 120, g: 50, hc: 205, fibra: 25, azucares: 43.5, base_kg: 60.0, base_proteina: 'peso_corporal', somatotipo: 'ectomorfo' },
     agua: { ml: 2150, rango: [1900, 2400], vasos: 9 },
+    // v1.2: recomposición con déficit real (1 879,2 − 1 740 = 139,2 ≥ 50), así que la meta se
+    // calcula como en `perder`. Hasta la v1.1: método `actual`, sugerido 60,0 y efectivo `null`.
     peso_objetivo: {
-      metodo: 'actual', sugerido: 60.0, rango: [53.0, 61.0], mostrar_central: true, efectivo: null, hito: null,
+      metodo: 'grasa', sugerido: 57.5, rango: [53.0, 61.0], mostrar_central: true, efectivo: 57.5, hito: null,
       imc22: 59.9, rango_imc: [54.4, 67.8],
       clasicas: { devine: 56.9, robinson: 57.4, miller: 59.8, hamwi: 56.4 },
     },
@@ -883,8 +885,10 @@ const VECTORES: Vector[] = [
     kcal_cierre: 1825,
     macros: { p: 130, g: 65, hc: 180, fibra: 26, azucares: 45.8, base_kg: 64.0, base_proteina: 'peso_corporal', somatotipo: 'mesomorfo' },
     agua: { ml: 2500, rango: [2250, 2750], vasos: 10 },
+    // v1.2: recomposición con déficit real (2 092,7 − 1 830 = 262,7 ≥ 50) ⇒ meta como en `perder`.
+    // Hasta la v1.1: método `actual`, sugerido 64,0, rango [57,0; 64,0] y efectivo `null`.
     peso_objetivo: {
-      metodo: 'actual', sugerido: 64.0, rango: [57.0, 64.0], mostrar_central: true, efectivo: null, hito: null,
+      metodo: 'grasa', sugerido: 60.5, rango: [57.5, 63.5], mostrar_central: true, efectivo: 60.5, hito: null,
       imc22: 59.9, rango_imc: [54.4, 67.8],
       clasicas: { devine: 56.9, robinson: 57.4, miller: 59.8, hamwi: 56.4 },
     },
@@ -896,7 +900,167 @@ const VECTORES: Vector[] = [
       { nombre: 'Merienda', hora: '17:30', pct: 15, p: 20, g: 10, hc: 35, kcal: 310, peri: true },
       { nombre: 'Cena', hora: '21:00', pct: 30, p: 40, g: 20, hc: 55, kcal: 560, peri: false },
     ],
-    avisos: ['INFO_BMR_ATLETA', 'INFO_CICLO', 'INFO_PROYECCION_PLANA', 'INFO_RECOMP_PRIORIDAD_PERDER', 'INFO_SIN_CRONOGRAMA', 'WARN_PROTEINA_TOMA_ALTA'],
+    // v1.2: INFO_PROYECCION_RECOMP sustituye a INFO_PROYECCION_PLANA (son excluyentes).
+    avisos: ['INFO_BMR_ATLETA', 'INFO_CICLO', 'INFO_PROYECCION_RECOMP', 'INFO_RECOMP_PRIORIDAD_PERDER', 'INFO_SIN_CRONOGRAMA', 'WARN_PROTEINA_TOMA_ALTA'],
+  },
+
+  // ---------------------------------------------------------------- v1.2: casos 17, 18 y 19
+  {
+    n: '17',
+    titulo: 'Mujer 45 años, recomposición con prioridad perder y peso objetivo 63 kg (H, I, G)',
+    inputs: {
+      ...BASE,
+      sexo: 'mujer',
+      edad: 45,
+      altura_cm: 165,
+      peso_kg: 68,
+      grasa: { metodo: 'medidas', cuello_cm: 33, cintura_cm: 82, cadera_cm: 102 },
+      somatotipo: null,
+      actividad_diaria: 'ligero',
+      entrenamiento: ent({ tipo: 'fuerza', dias_semana: 3, minutos_sesion: 45, intensidad: 'media', experiencia: 'novato', momento: 'tarde' }),
+      objetivo: 'recomposicion',
+      recomposicion_prioridad: 'perder',
+      ritmo: 'moderado',
+      peso_objetivo: 63,
+      n_comidas: 4,
+      preferencia_base: 'omnivoro',
+      restricciones: [],
+      low_carb: false,
+      menstruacion: 'regular',
+      sintomas_regla: ['sangrado_abundante', 'cansancio', 'hinchazon'],
+      // Los tres campos que el motor IGNORA: van aquí a propósito (invariante S33).
+      menu_sencillo: true,
+      alimentos_excluidos: ['brocoli', 'coliflor'],
+      alimentos_favoritos: ['pechuga_pollo', 'arroz_blanco_cocido'],
+    },
+    imc: 25.0,
+    imc_categoria: 'normal',
+    grasa: { pct: 33.8, margen: 4, cunbae: 36.2, deurenberg: 34.9, navy: 33.8, fiabilidad: 'media', metodo_efectivo: 'medidas', banda: 'muy_alto' },
+    mlg: 45.01,
+    bmr: { valor: 1325.3, ecuacion: 'mifflin', mifflin: 1325.3, katch: 1342.2, harris: 1392.7 },
+    tdee: { valor: 1971.5, bruto: 2075.3, pal: 1.5, ejercicio_dia: 87.4, perfil: 'fuerza', kcal_sesion: 204.0 },
+    objetivo_efectivo: 'recomposicion',
+    ritmo_efectivo: 'moderado',
+    // Tabla 3.9[muy_alto] 10 % + 5 puntos por la prioridad = 15 % (tope duro).
+    kcal: 1680,
+    kcal_cierre: 1680,
+    macros: { p: 135, g: 60, hc: 150, fibra: 24, azucares: 42.0, base_kg: 68.0, base_proteina: 'peso_corporal', somatotipo: 'mesomorfo' },
+    agua: { ml: 2400, rango: [2150, 2650], vasos: 10 },
+    peso_objetivo: {
+      metodo: 'grasa', sugerido: 58.5, rango: [54.0, 62.5], mostrar_central: true, efectivo: 63.0, hito: null,
+      imc22: 59.9, rango_imc: [54.4, 67.8],
+      clasicas: { devine: 56.9, robinson: 57.4, miller: 59.8, hamwi: 56.4 },
+    },
+    cronograma: null,
+    ffmi: { valor: 16.5, normalizado: 16.8, categoria: null },
+    comidas: [
+      { nombre: 'Desayuno', hora: '08:00', pct: 25, p: 35, g: 15, hc: 40, kcal: 435, peri: false },
+      { nombre: 'Comida', hora: '14:00', pct: 30, p: 40, g: 15, hc: 35, kcal: 435, peri: false },
+      { nombre: 'Merienda', hora: '17:30', pct: 15, p: 20, g: 10, hc: 30, kcal: 290, peri: true },
+      { nombre: 'Cena', hora: '21:00', pct: 30, p: 40, g: 20, hc: 45, kcal: 520, peri: false },
+    ],
+    // INFO_OBJETIVO_IGNORADO no aparece: lo retira la regla del paso 17, porque aquí el peso
+    // objetivo sí se usa (es la meta de la curva de recomposición).
+    avisos: ['INFO_CICLO', 'INFO_FIBRA_AJUSTADA', 'INFO_PROYECCION_RECOMP', 'INFO_RECOMP_PRIORIDAD_PERDER', 'INFO_SIN_CRONOGRAMA', 'WARN_PROTEINA_TOMA_ALTA'],
+  },
+
+  {
+    n: '18',
+    titulo: 'Hombre 38 años con plazo imposible: 15 kg en 8 semanas (H)',
+    inputs: {
+      ...BASE,
+      sexo: 'hombre',
+      edad: 38,
+      altura_cm: 180,
+      peso_kg: 95,
+      grasa: { metodo: 'desconocido' },
+      somatotipo: null,
+      actividad_diaria: 'sedentario',
+      entrenamiento: ent(),
+      objetivo: 'perder',
+      ritmo: 'suave',
+      peso_objetivo: 80,
+      plazo_semanas: 8,
+      n_comidas: 3,
+      preferencia_base: 'omnivoro',
+    },
+    imc: 29.3,
+    imc_categoria: 'sobrepeso',
+    grasa: { pct: 29.4, margen: 5, cunbae: 29.4, deurenberg: 27.7, fiabilidad: 'baja', metodo_efectivo: 'desconocido', banda: 'muy_alto' },
+    mlg: 67.11,
+    bmr: { valor: 1890.0, ecuacion: 'mifflin', mifflin: 1890.0, katch: 1819.6, harris: 2009.2 },
+    tdee: { valor: 2513.7, bruto: 2646.0, pal: 1.4, ejercicio_dia: 0.0, perfil: 'sedentario', kcal_sesion: 0.0 },
+    objetivo_efectivo: 'perder',
+    // Paso 6.7ter: ritmo_req = 15/8 = 1,875 kg/sem y ni el agresivo (0,95) llega ⇒ agresivo, y el
+    // `suave` que había elegido el usuario se descarta.
+    ritmo_efectivo: 'agresivo',
+    kcal: 1890,
+    kcal_cierre: 1890,
+    macros: { p: 160, g: 70, hc: 155, fibra: 26, azucares: 47.3, base_kg: 95.0, base_proteina: 'peso_corporal', somatotipo: 'mesomorfo' },
+    agua: { ml: 2850, rango: [2600, 3100], vasos: 11 },
+    peso_objetivo: {
+      metodo: 'grasa', sugerido: 79.0, rango: [72.5, 85.0], mostrar_central: false, efectivo: 80.0, hito: 85.5,
+      imc22: 71.3, rango_imc: [64.8, 80.7],
+      clasicas: { devine: 75.0, robinson: 72.6, miller: 71.5, hamwi: 77.3 },
+    },
+    cronograma: { ritmo_kg_sem: 0.567, ritmo_pct_sem: 0.60, delta_kg: 15.0, semanas: [30, 37], diet_breaks: 3, fecha_min: '2027-04-05', fecha_max: '2027-05-24', precision_fecha: 'mes', tramo_12sem: [5.5, 7.0] },
+    ffmi: { valor: 20.7, normalizado: 20.7, categoria: null },
+    comidas: [
+      { nombre: 'Desayuno', hora: '08:00', pct: 30, p: 50, g: 20, hc: 45, kcal: 560, peri: false },
+      { nombre: 'Comida', hora: '14:00', pct: 35, p: 55, g: 25, hc: 55, kcal: 665, peri: false },
+      { nombre: 'Cena', hora: '21:00', pct: 35, p: 55, g: 25, hc: 55, kcal: 665, peri: false },
+    ],
+    avisos: ['INFO_ADAPTACION', 'INFO_DEFICIT_CAPADO_TDEE', 'INFO_GRASA_ESTIMADA', 'WARN_PLAZO_IRREAL', 'WARN_PROTEINA_TOMA_ALTA', 'WARN_SUELO_CALORICO_BMR'],
+  },
+
+  {
+    n: '19',
+    titulo: 'Mujer 34 años con plazo holgado: 6 kg en 24 semanas (H)',
+    inputs: {
+      ...BASE,
+      sexo: 'mujer',
+      edad: 34,
+      altura_cm: 168,
+      peso_kg: 78,
+      grasa: { metodo: 'desconocido' },
+      somatotipo: null,
+      actividad_diaria: 'ligero',
+      entrenamiento: ent({ tipo: 'fuerza', dias_semana: 3, minutos_sesion: 50, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+      objetivo: 'perder',
+      ritmo: 'agresivo',
+      peso_objetivo: 72,
+      plazo_semanas: 24,
+      n_comidas: 4,
+      preferencia_base: 'omnivoro',
+    },
+    imc: 27.6,
+    imc_categoria: 'sobrepeso',
+    grasa: { pct: 38.5, margen: 5, cunbae: 38.5, deurenberg: 35.6, fiabilidad: 'baja', metodo_efectivo: 'desconocido', banda: 'muy_alto' },
+    mlg: 48.01,
+    bmr: { valor: 1499.0, ecuacion: 'mifflin', mifflin: 1499.0, katch: 1407.0, harris: 1542.1 },
+    tdee: { valor: 2241.9, bruto: 2360.0, pal: 1.5, ejercicio_dia: 111.4, perfil: 'fuerza', kcal_sesion: 259.9 },
+    objetivo_efectivo: 'perder',
+    // Paso 6.7ter: ritmo_req = 0,25 kg/sem y el suave (0,39) ya llega ⇒ gana el PRIMERO de la
+    // lista, y el `agresivo` que había elegido la usuaria se descarta.
+    ritmo_efectivo: 'suave',
+    kcal: 1810,
+    kcal_cierre: 1805,
+    macros: { p: 155, g: 65, hc: 150, fibra: 25, azucares: 45.3, base_kg: 78.0, base_proteina: 'peso_corporal', somatotipo: 'mesomorfo' },
+    agua: { ml: 2750, rango: [2500, 3000], vasos: 11 },
+    peso_objetivo: {
+      metodo: 'grasa', sugerido: 62.5, rango: [57.0, 67.0], mostrar_central: false, efectivo: 72.0, hito: null,
+      imc22: 62.1, rango_imc: [56.4, 70.3],
+      clasicas: { devine: 59.6, robinson: 59.4, miller: 61.5, hamwi: 59.0 },
+    },
+    cronograma: { ritmo_kg_sem: 0.3927, ritmo_pct_sem: 0.50, delta_kg: 6.0, semanas: [17, 19], diet_breaks: 1, fecha_min: '2027-01-04', fecha_max: '2027-01-18', precision_fecha: 'mes', tramo_12sem: [4.0, 4.5] },
+    ffmi: { valor: 17.0, normalizado: 17.1, categoria: null },
+    comidas: [
+      { nombre: 'Desayuno', hora: '08:00', pct: 25, p: 40, g: 15, hc: 40, kcal: 455, peri: false },
+      { nombre: 'Comida', hora: '14:00', pct: 30, p: 45, g: 20, hc: 35, kcal: 500, peri: false },
+      { nombre: 'Merienda', hora: '17:30', pct: 15, p: 25, g: 10, hc: 30, kcal: 310, peri: true },
+      { nombre: 'Cena', hora: '21:00', pct: 30, p: 45, g: 20, hc: 45, kcal: 540, peri: false },
+    ],
+    avisos: ['INFO_ADAPTACION', 'INFO_GRASA_ESTIMADA', 'INFO_PROTEINA_CAPADA', 'INFO_RITMO_POR_PLAZO', 'WARN_PROTEINA_TOMA_ALTA'],
   },
 ]
 
@@ -1426,7 +1590,7 @@ describe('Fragmentos condicionales de los textos (§4)', () => {
 
 // ---------------------------------------------------------------- invariantes sobre los vectores
 
-describe('Invariantes de seguridad sobre los dieciséis vectores', () => {
+describe('Invariantes de seguridad sobre los diecinueve vectores', () => {
   it('perder implica al menos 50 kcal de déficit real (S24)', () => {
     for (const v of VECTORES) {
       const r = calcular(v.inputs)

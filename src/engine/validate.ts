@@ -3,7 +3,7 @@
 // no se ejecuta. Se valida el dominio de los enumerados antes que los rangos numéricos: sin eso un
 // valor fuera de dominio propagaba NaN hasta devolver un plan con macros NaN.
 
-import { VISUAL_HOMBRE, VISUAL_MUJER } from './constants'
+import { PLAZO_SEMANAS_MAX, PLAZO_SEMANAS_MIN, VISUAL_HOMBRE, VISUAL_MUJER } from './constants'
 import type { Inputs } from './types'
 
 const DOMINIOS = {
@@ -25,6 +25,8 @@ const DOMINIOS = {
   menstruacion: ['regular', 'irregular', 'ausente', 'no_dice'],
   preferencia_base: ['omnivoro', 'vegetariano', 'vegano'],
   restriccion: ['sin_lactosa', 'sin_gluten'],
+  // v1.2: misma regla que los de la v1.1 (ausente o `null` es siempre válido).
+  sintoma_regla: ['dolor', 'hinchazon', 'antojos', 'cansancio', 'sangrado_abundante'],
 } as const satisfies Record<string, readonly string[]>
 
 /** Etiquetas legibles de cada campo, para el texto de `ERR_INPUT_RANGO`. */
@@ -61,6 +63,10 @@ export const ETIQUETAS_CAMPO: Record<string, string> = {
   preferencia_base: 'la base de tu alimentación',
   restricciones: 'las restricciones alimentarias',
   low_carb: 'la opción baja en hidratos',
+  plazo_semanas: 'el plazo en semanas (entre 4 y 52, número entero)',
+  sintomas_regla: 'lo que notas los días de regla',
+  alimentos_excluidos: 'los alimentos que no quieres ver',
+  alimentos_favoritos: 'tus alimentos favoritos',
 }
 
 const enDominio = (dominio: readonly string[], valor: unknown): boolean =>
@@ -127,6 +133,34 @@ export function validarInputs(inputs: Inputs): string[] {
   if (inputs.low_carb !== undefined && inputs.low_carb !== null && typeof inputs.low_carb !== 'boolean') {
     e.push('low_carb')
   }
+
+  // --- v1.2: misma regla (ausente o `null` siempre válido). Los dos campos de alimentos el motor
+  // los ignora, pero se validan igual: la §1 los declara y `src/meals` da por hecho que son arrays
+  // de cadenas. Los ids NO se comprueban contra `foods.json`: eso es cosa del generador de menús,
+  // que simplemente descarta los que no conoce.
+  if (
+    inputs.plazo_semanas !== undefined &&
+    inputs.plazo_semanas !== null &&
+    (!Number.isInteger(inputs.plazo_semanas) ||
+      inputs.plazo_semanas < PLAZO_SEMANAS_MIN ||
+      inputs.plazo_semanas > PLAZO_SEMANAS_MAX)
+  ) {
+    e.push('plazo_semanas')
+  }
+  if (
+    inputs.sintomas_regla !== undefined &&
+    inputs.sintomas_regla !== null &&
+    (!Array.isArray(inputs.sintomas_regla) ||
+      inputs.sintomas_regla.some((s) => !enDominio(DOMINIOS.sintoma_regla, s)))
+  ) {
+    e.push('sintomas_regla')
+  }
+  const listaDeIds = (valor: unknown, campo: string): void => {
+    if (valor === undefined || valor === null) return
+    if (!Array.isArray(valor) || valor.some((x) => typeof x !== 'string')) e.push(campo)
+  }
+  listaDeIds(inputs.alimentos_excluidos, 'alimentos_excluidos')
+  listaDeIds(inputs.alimentos_favoritos, 'alimentos_favoritos')
 
   // --- enteros y formato de fecha
   if (!Number.isInteger(inputs.edad)) e.push('edad')
