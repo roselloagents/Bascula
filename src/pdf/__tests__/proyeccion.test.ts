@@ -72,7 +72,12 @@ describe('escala de la gráfica', () => {
   })
 
   it('la polilínea se escribe como pares x,y', () => {
-    expect(puntosPolilinea([{ x: 1, y: 2.345 }, { x: 3, y: 4 }])).toBe('1.00,2.35 3.00,4.00')
+    expect(
+      puntosPolilinea([
+        { x: 1, y: 2.345 },
+        { x: 3, y: 4 },
+      ]),
+    ).toBe('1.00,2.35 3.00,4.00')
   })
 })
 
@@ -107,7 +112,9 @@ describe('frase de balance (§2.6c)', () => {
   ]
 
   it('con menos de dos pesajes no dice nada: un punto no es una tendencia', () => {
-    expect(fraseBalance([{ fecha: '2026-09-07', kg: 84 }], CURVA, inicio, 'perder', false)).toBeNull()
+    expect(
+      fraseBalance([{ fecha: '2026-09-07', kg: 84 }], CURVA, inicio, 'perder', false),
+    ).toBeNull()
     expect(fraseBalance([], CURVA, inicio, 'perder', false)).toBeNull()
     expect(fraseBalance(dos(83), undefined, inicio, 'perder', false)).toBeNull()
   })
@@ -143,7 +150,9 @@ describe('frase de balance (§2.6c)', () => {
       { fecha: '2026-09-07', kg: 58.4 },
       { fecha: '2026-10-05', kg: kg },
     ]
-    expect(fraseBalance(pesajes(58.1), PLANA, inicio, 'mantener', true)![0]).toContain('dentro de lo previsto')
+    expect(fraseBalance(pesajes(58.1), PLANA, inicio, 'mantener', true)![0]).toContain(
+      'dentro de lo previsto',
+    )
     const fuera = fraseBalance(pesajes(61), PLANA, inicio, 'mantener', true)!
     expect(fuera[0]).toContain('más de un kilo respecto al de partida')
     expect(fuera[fuera.length - 1]).toBe(CIERRE_BALANCE)

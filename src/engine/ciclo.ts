@@ -47,7 +47,12 @@ const CONSEJOS: Record<SintomaRegla, PlantillaConsejo> = {
     texto:
       'El dolor de regla lo producen las prostaglandinas, y el omega-3 compite con ellas: en los ensayos, 1-2 g al día durante dos o tres ciclos reducen el dolor y la necesidad de analgésicos. Es lento, no notarás nada el primer mes. El magnesio tiene evidencia más floja, pero por comida es barato y seguro. A corto plazo lo que mejor funciona sigue siendo el calor local y el movimiento suave. Si el dolor te impide hacer vida normal, eso no es normal: consúltalo.',
     alimentos: {
-      omnivoro: ['Pescado azul (salmón, sardinas en lata)', 'Nueces', 'Semillas de lino molidas', 'Cacao puro'],
+      omnivoro: [
+        'Pescado azul (salmón, sardinas en lata)',
+        'Nueces',
+        'Semillas de lino molidas',
+        'Cacao puro',
+      ],
       vegetariano: ['Nueces', 'Semillas de lino molidas', 'Semillas de chía', 'Cacao puro'],
       vegano: ['Nueces', 'Semillas de lino molidas', 'Semillas de chía', 'Cacao puro'],
     },
@@ -67,9 +72,24 @@ const CONSEJOS: Record<SintomaRegla, PlantillaConsejo> = {
     texto:
       'En la segunda mitad del ciclo el hambre sube de verdad: se han medido entre 100 y 300 kcal más al día. No es falta de fuerza de voluntad. Tienes dos formas de manejarlo y las dos valen: comer 100-200 kcal más esos días y compensarlas en el resto de la semana, o dejar el plan como está y apoyarte en proteína y fibra, que son lo que más sacia. Si te pide dulce, el cacao puro o una o dos onzas de chocolate del 85 % cunden mucho más que una tableta con leche.',
     alimentos: {
-      omnivoro: ['Yogur griego 0%', 'Fruta (manzana, plátano)', 'Cacao puro', 'Chocolate negro 85%'],
-      vegetariano: ['Yogur griego 0%', 'Fruta (manzana, plátano)', 'Cacao puro', 'Chocolate negro 85%'],
-      vegano: ['Yogur de soja alto en proteína', 'Fruta (manzana, plátano)', 'Cacao puro', 'Almendras'],
+      omnivoro: [
+        'Yogur griego 0%',
+        'Fruta (manzana, plátano)',
+        'Cacao puro',
+        'Chocolate negro 85%',
+      ],
+      vegetariano: [
+        'Yogur griego 0%',
+        'Fruta (manzana, plátano)',
+        'Cacao puro',
+        'Chocolate negro 85%',
+      ],
+      vegano: [
+        'Yogur de soja alto en proteína',
+        'Fruta (manzana, plátano)',
+        'Cacao puro',
+        'Almendras',
+      ],
     },
   },
   cansancio: {
@@ -92,7 +112,12 @@ const CONSEJOS: Record<SintomaRegla, PlantillaConsejo> = {
     // recomendación y no una alarma gratuita.
     fe: ' Si además te notas cansada, pide a tu médico una analítica con ferritina: es el dato que dice si tienes las reservas bajas, y un hemograma normal puede no verlo.',
     alimentos: {
-      omnivoro: ['Lentejas o garbanzos', 'Carne roja magra (ternera)', 'Mejillones o berberechos al natural', 'Espinacas'],
+      omnivoro: [
+        'Lentejas o garbanzos',
+        'Carne roja magra (ternera)',
+        'Mejillones o berberechos al natural',
+        'Espinacas',
+      ],
       vegetariano: ['Lentejas o garbanzos', 'Espinacas', 'Tofu', 'Almendras'],
       vegano: ['Lentejas o garbanzos', 'Espinacas', 'Tofu', 'Almendras'],
     },
@@ -144,7 +169,11 @@ function alimentosDe(
 ): string[] {
   const lista = CONSEJOS[clave].alimentos[pref_base]
     .filter((n) => !(n === 'Avena' && restricciones.includes('sin_gluten')))
-    .map((n) => (n === 'Yogur griego 0%' && restricciones.includes('sin_lactosa') ? 'Yogur griego 0% sin lactosa' : n))
+    .map((n) =>
+      n === 'Yogur griego 0%' && restricciones.includes('sin_lactosa')
+        ? 'Yogur griego 0% sin lactosa'
+        : n,
+    )
   return sinExcluidos(lista, excluidos)
 }
 
@@ -158,7 +187,8 @@ export function sinExcluidos(
   alimentos: readonly string[],
   excluidos: ReadonlySet<string> | readonly string[] | null | undefined,
 ): string[] {
-  const fuera = excluidos instanceof Set ? excluidos : new Set(Array.isArray(excluidos) ? excluidos : [])
+  const fuera =
+    excluidos instanceof Set ? excluidos : new Set(Array.isArray(excluidos) ? excluidos : [])
   if (fuera.size === 0) return [...alimentos]
   return alimentos.filter((n) => {
     const ids = IDS_DE_ALIMENTO_CONSEJO[n]

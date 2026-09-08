@@ -25,8 +25,9 @@ export function calcularTdee(inputs: Inputs, bmr: number, emitir: EmitirAviso): 
   const pal = PAL_BASE[inputs.actividad_diaria]
   const met = perfil === 'sedentario' ? 0 : MET[t.tipo][t.intensidad]
   // MET neto: se resta el reposo, ya incluido en BMR · PAL.
-  const kcal_sesion = perfil === 'sedentario' ? 0 : (met - 1) * inputs.peso_kg * t.minutos_sesion / 60
-  const ejercicio_dia = kcal_sesion * dias / 7
+  const kcal_sesion =
+    perfil === 'sedentario' ? 0 : ((met - 1) * inputs.peso_kg * t.minutos_sesion) / 60
+  const ejercicio_dia = (kcal_sesion * dias) / 7
   const bruto = bmr * pal + ejercicio_dia
   const valor = bruto * FACTOR_CORRECCION
 

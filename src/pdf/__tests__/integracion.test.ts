@@ -25,7 +25,6 @@ import type { DatosPdf, Pesaje } from '../../engine/types'
  */
 const PAGINAS_MAX = 10
 
-
 /** Tope de alimentos distintos del modo sencillo (SPEC-ux-comidas-pdf.md §3.7.2). */
 const ALIMENTOS_MAX_SENCILLO = 12
 
@@ -33,7 +32,13 @@ function datosDe(indice: number, sencillo = false): DatosPdf {
   const inputs = { ...VECTORES[indice].inputs, menu_sencillo: sencillo }
   const resultado = calcular(inputs)
   const ejemplos = generarEjemplos(inputs, resultado)
-  return { inputs, resultado, ejemplos, avisos: textosAvisos(resultado, inputs), fecha: '2026-09-07' }
+  return {
+    inputs,
+    resultado,
+    ejemplos,
+    avisos: textosAvisos(resultado, inputs),
+    fecha: '2026-09-07',
+  }
 }
 
 /**
@@ -46,7 +51,8 @@ function fueraDeWinAnsi(texto: string): string[] {
   for (const c of texto) {
     const code = c.codePointAt(0) ?? 0
     const imprimible = (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff)
-    if (!imprimible && c !== '\n' && !CP1252_EXTRA.includes(c)) malos.push(`${c} (U+${code.toString(16)})`)
+    if (!imprimible && c !== '\n' && !CP1252_EXTRA.includes(c))
+      malos.push(`${c} (U+${code.toString(16)})`)
   }
   return malos
 }
@@ -54,7 +60,8 @@ function fueraDeWinAnsi(texto: string): string[] {
 function cadenas(valor: unknown, salida: string[] = []): string[] {
   if (typeof valor === 'string') salida.push(valor)
   else if (Array.isArray(valor)) valor.forEach((v) => cadenas(v, salida))
-  else if (valor && typeof valor === 'object') Object.values(valor).forEach((v) => cadenas(v, salida))
+  else if (valor && typeof valor === 'object')
+    Object.values(valor).forEach((v) => cadenas(v, salida))
   return salida
 }
 
@@ -89,7 +96,6 @@ describe('PDF — vectores de la §5 de punta a punta', () => {
     }
   }, 180_000)
 
-
   // El modo sencillo llega al PDF por el mismo camino que a la pantalla: no hay fixture de por
   // medio. Se comprueba que el generador rellena la lista, que respeta su tope, y que la página
   // de la compra no desborda el máximo de páginas con una lista real.
@@ -104,7 +110,9 @@ describe('PDF — vectores de la §5 de punta a punta', () => {
       const sinMenu = datos.ejemplos.entreno.comidas.length === 0
       expect(compra === undefined, `caso ${v.n}`).toBe(sinMenu)
       if (!sinMenu) {
-        expect(compra!.alimentos_distintos, `caso ${v.n}`).toBeLessThanOrEqual(ALIMENTOS_MAX_SENCILLO)
+        expect(compra!.alimentos_distintos, `caso ${v.n}`).toBeLessThanOrEqual(
+          ALIMENTOS_MAX_SENCILLO,
+        )
         expect(compra!.items.length, `caso ${v.n}`).toBe(compra!.alimentos_distintos)
       }
 
@@ -160,4 +168,3 @@ describe('PDF — vectores de la §5 de punta a punta', () => {
     expect(ajustados).toBeGreaterThan(10)
   }, 180_000)
 })
-

@@ -154,14 +154,15 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
   if (e.condiciones.includes('cardiaca')) emitir('WARN_CARDIACA')
   if (e.condiciones.includes('hipertension')) emitir('WARN_HIPERTENSION')
   if (e.condiciones.includes('tiroides')) emitir('WARN_TIROIDES')
-  if (e.condiciones.includes('bariatrica') || e.condiciones.includes('glp1')) emitir('WARN_BARIATRICA_GLP1')
+  if (e.condiciones.includes('bariatrica') || e.condiciones.includes('glp1'))
+    emitir('WARN_BARIATRICA_GLP1')
   if (e.condiciones.includes('otra')) emitir('WARN_CONDICION_OTRA')
 
   const pctCap = (): number =>
     (pref_base === 'vegano' || pref_base === 'vegetariano') && kcal < PROT_KCAL_VEGETAL_UMBRAL
       ? PROT_PCT_CAP_VEGETAL
       : PROT_PCT_CAP
-  const calcularPcap = (): number => Math.min(PROT_TECHO_GKG_PC * PC, pctCap() * kcal / 4)
+  const calcularPcap = (): number => Math.min(PROT_TECHO_GKG_PC * PC, (pctCap() * kcal) / 4)
 
   const P_raw = gkg * base
   let p_cap = calcularPcap()
@@ -207,8 +208,8 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
           : GRASA_PCT_GANAR
   const suelo_gkg = hombre ? GRASA_SUELO_GKG_HOMBRE : GRASA_SUELO_GKG_MUJER
   const pctTecho = low_carb ? GRASA_TECHO_PCT_KCAL_LOWCARB : GRASA_TECHO_PCT_KCAL
-  const calcularSueloG = (): number => Math.max(suelo_gkg * base, GRASA_SUELO_PCT_KCAL * kcal / 9)
-  const calcularTechoG = (): number => pctTecho * kcal / 9
+  const calcularSueloG = (): number => Math.max(suelo_gkg * base, (GRASA_SUELO_PCT_KCAL * kcal) / 9)
+  const calcularTechoG = (): number => (pctTecho * kcal) / 9
 
   let suelo_g = calcularSueloG()
   let techo_g = calcularTechoG()
@@ -222,7 +223,7 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
   const asegurarFranjaGrasa = (): void => {
     for (let it = 0; roundUp5(suelo_g) > techo_g; it++) {
       if (it > 10) throw new Error('paso 9: la franja de grasa no converge')
-      kcal = roundUp10(roundUp5(suelo_g) * 9 / pctTecho)
+      kcal = roundUp10((roundUp5(suelo_g) * 9) / pctTecho)
       emitir('WARN_KCAL_INSUFICIENTES_PARA_MACROS')
       suelo_g = calcularSueloG()
       techo_g = calcularTechoG()
@@ -235,9 +236,9 @@ export function calcularMacros(e: EntradaMacros, emitir: EmitirAviso): SalidaMac
   }
   asegurarFranjaGrasa()
 
-  const G0 = clamp(pct_grasa * kcal / 9, suelo_g, techo_g)
+  const G0 = clamp((pct_grasa * kcal) / 9, suelo_g, techo_g)
   const soma = clasificarSomatotipo(e.somatotipo)
-  const delta = SOMATOTIPO_DESPLAZAMIENTO * (kcal - 4 * P) / 9
+  const delta = (SOMATOTIPO_DESPLAZAMIENTO * (kcal - 4 * P)) / 9
   let G1: number
   if (!low_carb && soma === 'endomorfo') {
     G1 = Math.min(G0 + delta, techo_g)
@@ -320,11 +321,11 @@ export function calcularFibra(
   low_carb: boolean,
   emitir: EmitirAviso,
 ): SalidaFibra {
-  const fibra_prop = FIBRA_POR_1000_KCAL * kcal / 1000
+  const fibra_prop = (FIBRA_POR_1000_KCAL * kcal) / 1000
   const suelo_fibra = low_carb
-    ? Math.max(FIBRA_SUELO_LOWCARB, FIBRA_LOWCARB_POR_1000_KCAL * kcal / 1000)
+    ? Math.max(FIBRA_SUELO_LOWCARB, (FIBRA_LOWCARB_POR_1000_KCAL * kcal) / 1000)
     : Math.min(FIBRA_REFERENCIA, FIBRA_SUELO_PCT_HC * hc)
   const fibra_g = Math.round(clamp(fibra_prop, suelo_fibra, FIBRA_MAX))
   if (fibra_g < FIBRA_REFERENCIA) emitir('INFO_FIBRA_AJUSTADA')
-  return { fibra_g, azucares_libres_max_g: 0.10 * kcal / 4 }
+  return { fibra_g, azucares_libres_max_g: (0.1 * kcal) / 4 }
 }

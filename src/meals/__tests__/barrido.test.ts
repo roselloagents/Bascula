@@ -7,7 +7,14 @@ import { generarEjemplos } from '../index'
 import type { OpcionesPlan } from './fixtures'
 import { inputsDe, resultadoDe } from './fixtures'
 
-const PREFERENCIAS: Preferencia[] = ['omnivoro', 'vegetariano', 'vegano', 'sin_lactosa', 'sin_gluten', 'low_carb']
+const PREFERENCIAS: Preferencia[] = [
+  'omnivoro',
+  'vegetariano',
+  'vegano',
+  'sin_lactosa',
+  'sin_gluten',
+  'low_carb',
+]
 const COMIDAS: NComidas[] = [2, 3, 4, 5, 6]
 const KCAL = [1300, 1800, 2300, 2800, 3500]
 const PESOS = [55, 75, 100]
@@ -65,7 +72,10 @@ describe('barrido de planes', () => {
       // los alimentos contables: las esquinas del barrido —vegano de 100 kg con 1.300 kcal, 110 g
       // de proteína en una sola toma— dejan de cerrar y salen con su nota, que es exactamente lo
       // que §3.3 manda hacer con ellas.
-      expect(dentro / tomas, `${preferencia}: solo ${dentro} de ${tomas} tomas dentro`).toBeGreaterThan(0.87)
+      expect(
+        dentro / tomas,
+        `${preferencia}: solo ${dentro} de ${tomas} tomas dentro`,
+      ).toBeGreaterThan(0.87)
     })
   }
 })

@@ -63,8 +63,14 @@ describe('motor + generador de menús — vectores de la §5', () => {
           const alimento = alimentoPorId(a.id)!
           const { min, max } = limiteRacion(alimento)
           const techo = max * platos
-          expect(a.gramos, `${etiqueta} · ${a.id}: ${a.gramos} g (máx ${techo})`).toBeLessThanOrEqual(techo)
-          expect(a.gramos, `${etiqueta} · ${a.id}: ${a.gramos} g (mín ${min})`).toBeGreaterThanOrEqual(min)
+          expect(
+            a.gramos,
+            `${etiqueta} · ${a.id}: ${a.gramos} g (máx ${techo})`,
+          ).toBeLessThanOrEqual(techo)
+          expect(
+            a.gramos,
+            `${etiqueta} · ${a.id}: ${a.gramos} g (mín ${min})`,
+          ).toBeGreaterThanOrEqual(min)
         }
       }
     })
@@ -75,10 +81,16 @@ describe('motor + generador de menús — vectores de la §5', () => {
         const dProt = Math.abs(comida.totales.prot - comida.objetivo.prot) / comida.objetivo.prot
         const notas = ejemplos.entreno.notas.filter((n) => n.startsWith(`${comida.comida}:`))
         if (dKcal > 0.1) {
-          expect(notas.some((n) => n.includes('kcal de tu objetivo')), `${etiqueta} · ${comida.comida}`).toBe(true)
+          expect(
+            notas.some((n) => n.includes('kcal de tu objetivo')),
+            `${etiqueta} · ${comida.comida}`,
+          ).toBe(true)
         }
         if (dProt > 0.15) {
-          expect(notas.some((n) => n.includes('proteína')), `${etiqueta} · ${comida.comida}`).toBe(true)
+          expect(
+            notas.some((n) => n.includes('proteína')),
+            `${etiqueta} · ${comida.comida}`,
+          ).toBe(true)
         }
       }
     })
@@ -100,8 +112,10 @@ describe('motor + generador de menús — vectores de la §5', () => {
       const ejemplos = generarEjemplos(v.inputs, resultado)
       for (const comida of ejemplos.entreno.comidas) {
         for (const a of comida.alimentos) {
-          expect(a.id.endsWith('_sl'), `caso ${v.n} · ${a.id} con preferencia ${resultado.preferencia_efectiva}`)
-            .toBe(false)
+          expect(
+            a.id.endsWith('_sl'),
+            `caso ${v.n} · ${a.id} con preferencia ${resultado.preferencia_efectiva}`,
+          ).toBe(false)
         }
       }
     }
@@ -114,7 +128,10 @@ describe('motor + generador de menús — vectores de la §5', () => {
     expect(resultado.preferencia_efectiva).toBe('low_carb')
     const desviacion =
       Math.abs(ejemplos.entreno.totales.carb - resultado.macros.hc_g) / resultado.macros.hc_g
-    expect(desviacion, `${ejemplos.entreno.totales.carb} g frente a ${resultado.macros.hc_g} g`).toBeLessThanOrEqual(0.2)
+    expect(
+      desviacion,
+      `${ejemplos.entreno.totales.carb} g frente a ${resultado.macros.hc_g} g`,
+    ).toBeLessThanOrEqual(0.2)
   })
 
   it('con diabetes, una desviación de hidrato lleva su nota (caso 4)', () => {
@@ -191,7 +208,9 @@ describe('motor + lista de la compra — los catorce vectores en los dos modos',
         for (const item of rehecha.items) {
           const gA = diaA.get(item.alimento_id) ?? 0
           const contexto = `${etiqueta} (rehecha) · ${item.alimento_id}`
-          expect(item.gramos_semana, contexto).toBeGreaterThanOrEqual(sencillo ? DIAS_A * gA : 7 * gA)
+          expect(item.gramos_semana, contexto).toBeGreaterThanOrEqual(
+            sencillo ? DIAS_A * gA : 7 * gA,
+          )
           expect(item.gramos_dia, contexto).toBe(Math.round((item.gramos_semana / 7) * 10) / 10)
         }
       }

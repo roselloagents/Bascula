@@ -16,7 +16,9 @@ describe('nombresCortos', () => {
 
 describe('resumenAlimentos', () => {
   it('junta las dos mitades con el separador de la §2.5', () => {
-    expect(resumenAlimentos(['brocoli'], ['pechuga_pollo'])).toBe('Sin: Brócoli · Favoritos: Pechuga de pollo')
+    expect(resumenAlimentos(['brocoli'], ['pechuga_pollo'])).toBe(
+      'Sin: Brócoli · Favoritos: Pechuga de pollo',
+    )
   })
 
   it('omite la mitad que no aplica', () => {

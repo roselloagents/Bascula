@@ -91,13 +91,29 @@ export function crearEscala(
   for (let s = 0; s <= semanaMax; s += 4) marcasX.push(s)
   const marcasY = [0, 1, 2, 3, 4].map((i) => kgMin + ((kgMax - kgMin) * i) / 4)
 
-  return { ancho: GRAFICA.ancho, alto: GRAFICA.alto, x0, x1, y0, y1, semanaMax, kgMin, kgMax, x, y, marcasX, marcasY }
+  return {
+    ancho: GRAFICA.ancho,
+    alto: GRAFICA.alto,
+    x0,
+    x1,
+    y0,
+    y1,
+    semanaMax,
+    kgMin,
+    kgMax,
+    x,
+    y,
+    marcasX,
+    marcasY,
+  }
 }
 
 /** Path de la banda: de izquierda a derecha por `peso_max` y de vuelta por `peso_min`. */
 export function pathBanda(puntos: readonly PuntoProyeccion[], e: EscalaProyeccion): string {
   if (puntos.length === 0) return ''
-  const ida = puntos.map((p, i) => `${i === 0 ? 'M' : 'L'} ${e.x(p.semana).toFixed(2)} ${e.y(p.peso_max).toFixed(2)}`)
+  const ida = puntos.map(
+    (p, i) => `${i === 0 ? 'M' : 'L'} ${e.x(p.semana).toFixed(2)} ${e.y(p.peso_max).toFixed(2)}`,
+  )
   const vuelta = [...puntos]
     .reverse()
     .map((p) => `L ${e.x(p.semana).toFixed(2)} ${e.y(p.peso_min).toFixed(2)}`)
@@ -123,7 +139,11 @@ function aFecha(iso: string | null | undefined): number | null {
 }
 
 /** `s = floor((fecha_pesaje - fecha_inicio) / 7 días)`, acotada a `[0, última semana]` (§2.6c). */
-export function semanaDePesaje(fechaPesaje: string, fechaInicio: string, semanaMax: number): number {
+export function semanaDePesaje(
+  fechaPesaje: string,
+  fechaInicio: string,
+  semanaMax: number,
+): number {
   const a = aFecha(fechaPesaje)
   const b = aFecha(fechaInicio)
   if (a === null || b === null) return 0

@@ -160,7 +160,9 @@ export function BloqueMacros({ resultado, avisos }: PropsBloque) {
               {numCorto(t.gkg, 2)} g por kilo de peso · {pctDeFraccion(t.pct)} de tus calorías
             </p>
             <p className="macro-frase">{t.frase}</p>
-            {t.clave === 'proteina' ? <AvisoSiExiste avisos={avisos} codigo="INFO_PROTEINA_CAPADA" /> : null}
+            {t.clave === 'proteina' ? (
+              <AvisoSiExiste avisos={avisos} codigo="INFO_PROTEINA_CAPADA" />
+            ) : null}
           </article>
         ))}
         <article className="macro" data-macro="fibra">
@@ -256,8 +258,8 @@ export function BloqueAgua({ inputs, resultado, avisos }: PropsBloque) {
         Entre {entero(min)} y {entero(max)} ml al día
       </p>
       <p className="agua-secundaria cifra">
-        {entero(agua.ml)} ml de referencia ({numCorto(agua.ml / 1000, 1)} litros), ≈ {num(agua.vasos)}{' '}
-        vasos de 250 ml
+        {entero(agua.ml)} ml de referencia ({numCorto(agua.ml / 1000, 1)} litros), ≈{' '}
+        {num(agua.vasos)} vasos de 250 ml
       </p>
       <p className="nota">{NOTA_AGUA}</p>
       {inputs.edad >= 65 ? <AvisoSiExiste avisos={avisos} codigo="INFO_AGUA_MAYORES" /> : null}

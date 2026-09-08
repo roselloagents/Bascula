@@ -123,7 +123,15 @@ export function redondearGramos(a: Alimento, gramos: number): number {
 /** Siguiente gramaje válido en la dirección pedida, o el mismo valor si la palanca está agotada. */
 export function siguienteGramaje(a: Alimento, gramos: number, direccion: 1 | -1): number {
   const { min, max } = limiteRacion(a)
-  const salto = esContable(a) ? a.unidad_g : direccion < 0 ? (gramos > 100 ? 10 : 5) : gramos >= 100 ? 10 : 5
+  const salto = esContable(a)
+    ? a.unidad_g
+    : direccion < 0
+      ? gramos > 100
+        ? 10
+        : 5
+      : gramos >= 100
+        ? 10
+        : 5
   const g = Math.min(max, Math.max(min, gramos + direccion * salto))
   return g
 }
@@ -148,7 +156,9 @@ export const sumaFibra = (s: readonly Porcion[]): number =>
 export const kcalPublicada = (s: readonly Porcion[]): number =>
   s.reduce((t, x) => t + Math.round((x.alimento.kcal * x.gramos) / 100), 0)
 export const proteinaPublicada = (s: readonly Porcion[]): number =>
-  Math.round(s.reduce((t, x) => t + Math.round((x.alimento.proteina * x.gramos) / 10) / 10, 0) * 10) / 10
+  Math.round(
+    s.reduce((t, x) => t + Math.round((x.alimento.proteina * x.gramos) / 10) / 10, 0) * 10,
+  ) / 10
 
 /** Tolerancia normativa de kcal por comida (§3.3). */
 export const TOLERANCIA_KCAL = 0.1
@@ -160,7 +170,11 @@ export const TOLERANCIA_PROTEINA = 0.15
  * Orden: verdura y fruta (ración fija, descontadas) → proteína → segunda proteína →
  * carbohidrato → grasa de ajuste → cierre de kcal.
  */
-export function escalarComida(objetivo: Macros, plan: PlantillaResuelta, lowCarb: boolean): Porcion[] {
+export function escalarComida(
+  objetivo: Macros,
+  plan: PlantillaResuelta,
+  lowCarb: boolean,
+): Porcion[] {
   const sel: Porcion[] = []
   const anadir = (rol: RolPorcion, alimento: Alimento, gramos: number): void => {
     if (gramos > 0) sel.push({ rol, alimento, gramos })
@@ -268,7 +282,8 @@ function cerrarProteina(sel: Porcion[], objetivo: Macros): void {
   const ancla = sel.find((x) => x.rol === 'proteina')
   if (!ancla) return
   const compensa = sel.find((x) => x.rol === 'carbohidrato') ?? sel.find((x) => x.rol === 'grasa')
-  const desvProteina = (): number => Math.abs(proteinaPublicada(sel) - objetivo.prot) / objetivo.prot
+  const desvProteina = (): number =>
+    Math.abs(proteinaPublicada(sel) - objetivo.prot) / objetivo.prot
   const desvKcal = (): number => Math.abs(kcalPublicada(sel) - objetivo.kcal) / objetivo.kcal
 
   for (let i = 0; i < 100 && desvProteina() > TOLERANCIA_PROTEINA; i++) {

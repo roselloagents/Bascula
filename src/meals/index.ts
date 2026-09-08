@@ -232,7 +232,9 @@ function candidatos(
     .map((id) => validos.find((a) => a.id === id))
     .filter((a): a is Alimento => a !== undefined && !favoritos.includes(a))
   const preferidos = [...favoritos, ...declarados]
-  const reserva = validos.filter((a) => !preferidos.includes(a)).sort((x, y) => x.id.localeCompare(y.id))
+  const reserva = validos
+    .filter((a) => !preferidos.includes(a))
+    .sort((x, y) => x.id.localeCompare(y.id))
   return { preferidos, reserva, favoritos }
 }
 
@@ -251,13 +253,11 @@ function elegirAlimento(
 ): Alimento | null {
   if (!q) return null
   const favoritoLibre = ctx.rolComida === 'principal'
-  const { preferidos, reserva, favoritos: favoritosDeLaConsulta } = candidatos(
-    q,
-    ctx.perfil,
-    ctx.permitidos,
-    false,
-    favoritoLibre,
-  )
+  const {
+    preferidos,
+    reserva,
+    favoritos: favoritosDeLaConsulta,
+  } = candidatos(q, ctx.perfil, ctx.permitidos, false, favoritoLibre)
   let lista = preferidos.length > 0 ? preferidos : reserva
   if (lista.length === 0 && ctx.permitirExcluidos && obligatoria) {
     // Respaldo de §3.2b: la consulta se ha quedado sin candidatos por las exclusiones y el
@@ -273,13 +273,15 @@ function elegirAlimento(
   // preferidos sin repetir, luego con la reserva sin repetir y, solo si no queda nada más, se
   // repite: antes un plato con el mismo alimento dos veces que un plato sin ancla.
   if (yaEnElPlato && yaEnElPlato.size > 0) {
-    const sinRepetir = (l: readonly Alimento[]): Alimento[] => l.filter((a) => !yaEnElPlato.has(a.id))
+    const sinRepetir = (l: readonly Alimento[]): Alimento[] =>
+      l.filter((a) => !yaEnElPlato.has(a.id))
     const primera = sinRepetir(lista)
     const segunda = primera.length > 0 ? primera : sinRepetir(lista === preferidos ? reserva : [])
     if (segunda.length > 0) lista = segunda
   }
   if (lista.length === 0) return null
-  const esVegetal = q.grupo === 'verdura' || q.grupo === 'fruta' || q.rol === 'verdura' || q.rol === 'fruta'
+  const esVegetal =
+    q.grupo === 'verdura' || q.grupo === 'fruta' || q.rol === 'verdura' || q.rol === 'fruta'
   if (ctx.priorizarFibra && (q.grupo === 'verdura' || q.rol === 'verdura')) {
     lista = [...lista].sort((x, y) => y.fibra - x.fibra)
   } else if (ctx.tomaLigera && esVegetal) {
@@ -289,7 +291,9 @@ function elegirAlimento(
   } else if (ctx.tomaLigera && q.rol === 'proteina') {
     // Ídem con la proteína: en un snack manda el mínimo de ración, no el orden de la plantilla.
     const proteinaMinima = (a: Alimento): number => (a.proteina * limiteRacion(a).min) / 100
-    lista = [...lista].sort((x, y) => proteinaMinima(x) - proteinaMinima(y) || x.id.localeCompare(y.id))
+    lista = [...lista].sort(
+      (x, y) => proteinaMinima(x) - proteinaMinima(y) || x.id.localeCompare(y.id),
+    )
   }
   // Los favoritos van SIEMPRE delante (§3.2b) y la rotación se aplica al resto de la lista
   // exactamente como antes: sin favoritos el orden que sale de aquí es idéntico al de la v1.1.
@@ -302,11 +306,7 @@ function elegirAlimento(
   // por lo mismo: gana el primer candidato de la lista que quepa dentro de la ración (§3.7.2).
   const base = ctx.tomaLigera || ctx.sencillo ? rotacion : ctx.offset + rotacion
   const inicio = resto.length > 0 ? ((base % resto.length) + resto.length) % resto.length : 0
-  const orden = [
-    ...favoritos,
-    ...resto.slice(inicio),
-    ...resto.slice(0, inicio),
-  ]
+  const orden = [...favoritos, ...resto.slice(inicio), ...resto.slice(0, inicio)]
   if (evitarUsados && !ctx.sencillo) {
     for (const c of orden) if (!ctx.usados.has(c.id)) return c
   }
@@ -357,7 +357,13 @@ function resolverPlantilla(
 ): PlantillaResuelta | null {
   // El ancla de proteína es siempre obligatoria (§3.2b); el ancla de hidrato lo es fuera de
   // low-carb, donde la propia §3.2 la declara opcional.
-  const proteina = elegirAlimento(p.ancla_proteina, ctx, Math.max(0, rotProteina), rotProteina >= 0, true)
+  const proteina = elegirAlimento(
+    p.ancla_proteina,
+    ctx,
+    Math.max(0, rotProteina),
+    rotProteina >= 0,
+    true,
+  )
   if (!proteina) return null
   // Ningún alimento ocupa dos anclas del mismo plato: sin esta lista, un favorito que sirve para
   // dos roles (los garbanzos son proteína e hidrato) llenaba la comida entera él solo. La guarda
@@ -389,9 +395,13 @@ function resolverPlantilla(
       enElPlato,
     ),
   )
-  const grasa = anota(elegirAlimento(p.ancla_grasa, ctx, i + rotHc, rotarPorFavoritos, false, enElPlato))
+  const grasa = anota(
+    elegirAlimento(p.ancla_grasa, ctx, i + rotHc, rotarPorFavoritos, false, enElPlato),
+  )
   const rotV = Math.max(0, rotVegetal)
-  const verdura = anota(elegirAlimento(p.verdura, ctx, i * 2 + rotV, rotVegetal >= 0, false, enElPlato))
+  const verdura = anota(
+    elegirAlimento(p.verdura, ctx, i * 2 + rotV, rotVegetal >= 0, false, enElPlato),
+  )
   const fruta = anota(elegirAlimento(p.fruta, ctx, i + rotV, rotVegetal >= 0, false, enElPlato))
   // Una FoodQuery obligatoria sin alimentos válidos descarta la plantilla (§3.2).
   if (p.ancla_carbohidrato && !carbohidrato && ctx.perfil.banco !== 'low_carb') return null
@@ -400,8 +410,24 @@ function resolverPlantilla(
   // Cereal normal de respaldo, solo en low-carb: lo usa `escalarComida` si el ancla low-carb no
   // puede cubrir el hidrato del plan ni con su ración máxima (§3.2). En modo sencillo la consulta
   // llega recortada a un único id que ya está en la lista corta, para no romper el tope de 12.
-  const carbohidrato_alterno = elegirAlimento(ctx.hcAlterno, ctx, i + rotHc, false, false, enElPlato)
-  return { id: p.id, proteina, proteina2, carbohidrato, carbohidrato_alterno, grasa, verdura, fruta }
+  const carbohidrato_alterno = elegirAlimento(
+    ctx.hcAlterno,
+    ctx,
+    i + rotHc,
+    false,
+    false,
+    enElPlato,
+  )
+  return {
+    id: p.id,
+    proteina,
+    proteina2,
+    carbohidrato,
+    carbohidrato_alterno,
+    grasa,
+    verdura,
+    fruta,
+  }
 }
 
 function redondea1(n: number): number {
@@ -498,9 +524,14 @@ function construirPlato(
           const resuelta = resolverPlantilla(plantilla, ctx, rotProteina, rotVegetal, rotHc)
           if (!resuelta) continue
           const porciones = escalarComida(objetivo, resuelta, ctx.perfil.banco === 'low_carb')
-          const desvKcal = objetivo.kcal > 0 ? Math.abs(kcalPublicada(porciones) - objetivo.kcal) / objetivo.kcal : 0
+          const desvKcal =
+            objetivo.kcal > 0
+              ? Math.abs(kcalPublicada(porciones) - objetivo.kcal) / objetivo.kcal
+              : 0
           const desvProt =
-            objetivo.prot > 0 ? Math.abs(proteinaPublicada(porciones) - objetivo.prot) / objetivo.prot : 0
+            objetivo.prot > 0
+              ? Math.abs(proteinaPublicada(porciones) - objetivo.prot) / objetivo.prot
+              : 0
           // Nota combinada: 1 es justo el límite de cada tolerancia; manda la peor de las dos.
           const nota = Math.max(desvKcal / TOLERANCIA_KCAL, desvProt / TOLERANCIA_PROTEINA)
           if (nota < mejorNota) {
@@ -538,10 +569,7 @@ function construirPlato(
     if (p.rol === 'verdura' || p.rol === 'fruta') ctx.usados.add(p.alimento.id)
     // Los dos roles que la v1.1 no anotaba: solo se registran cuando hay favoritos, que es cuando
     // `resolverPlantilla` los consulta (§3.2b). Así ningún menú sin listas cambia.
-    if (
-      ctx.perfil.favoritos.length > 0 &&
-      (p.rol === 'carbohidrato' || p.rol === 'grasa')
-    ) {
+    if (ctx.perfil.favoritos.length > 0 && (p.rol === 'carbohidrato' || p.rol === 'grasa')) {
       ctx.usados.add(p.alimento.id)
     }
   }
@@ -555,8 +583,18 @@ function construirPlato(
  * plantilla y su parte del objetivo— en vez de ampliar las raciones, que es lo que la §3.3
  * prohíbe expresamente ("respetando siempre los límites de ración").
  */
-function construirComida(comida: Comida, ctx: Contexto, banco: readonly Plantilla[], usadas: Set<string>): ComidaResuelta {
-  const objetivo: Macros = { kcal: comida.kcal, prot: comida.proteina_g, carb: comida.hc_g, fat: comida.grasa_g }
+function construirComida(
+  comida: Comida,
+  ctx: Contexto,
+  banco: readonly Plantilla[],
+  usadas: Set<string>,
+): ComidaResuelta {
+  const objetivo: Macros = {
+    kcal: comida.kcal,
+    prot: comida.proteina_g,
+    carb: comida.hc_g,
+    fat: comida.grasa_g,
+  }
   const rol = rolComidaDe(comida.nombre, comida.kcal)
   ctx.rolComida = rol
   ctx.tomaLigera = comida.kcal < KCAL_TOMA_LIGERA
@@ -588,8 +626,10 @@ function construirComida(comida: Comida, ctx: Contexto, banco: readonly Plantill
   }
   // Las desviaciones se miden sobre los totales publicados (los de `totales`), no sobre las
   // sumas internas sin redondear: es lo que ve la pantalla y lo que comprueban los tests.
-  const desviacionProteina = objetivo.prot > 0 ? Math.abs(totales.prot - objetivo.prot) / objetivo.prot : 0
-  const desviacionKcal = objetivo.kcal > 0 ? Math.abs(totales.kcal - objetivo.kcal) / objetivo.kcal : 1
+  const desviacionProteina =
+    objetivo.prot > 0 ? Math.abs(totales.prot - objetivo.prot) / objetivo.prot : 0
+  const desviacionKcal =
+    objetivo.kcal > 0 ? Math.abs(totales.kcal - objetivo.kcal) / objetivo.kcal : 1
 
   return {
     ejemplo: {
@@ -643,7 +683,10 @@ interface OpcionesDia {
  * Cereal de respaldo de §3.2: solo en low-carb. En modo sencillo llega recortado a un único id de
  * la lista blanca (`bancoSencillo.hcAlterno`), para no romper el tope de 12 alimentos.
  */
-function hcAlternoDe(perfil: PerfilDietetico, bancoSencillo: BancoSencillo | null): FoodQuery | null {
+function hcAlternoDe(
+  perfil: PerfilDietetico,
+  bancoSencillo: BancoSencillo | null,
+): FoodQuery | null {
   if (perfil.banco !== 'low_carb') return null
   return bancoSencillo ? bancoSencillo.hcAlterno : HC_LOW_CARB_ALTERNO
 }
@@ -706,7 +749,12 @@ function totalesDia(comidas: readonly ComidaResuelta[]): Macros {
 
 /** Día sin menú: condición renal o hepática (§3.1). */
 function diaSinMenu(tipo: 'entreno' | 'descanso'): EjemploDia {
-  return { tipo, comidas: [], totales: { kcal: 0, prot: 0, carb: 0, fat: 0 }, notas: [TEXTO_SIN_MENU] }
+  return {
+    tipo,
+    comidas: [],
+    totales: { kcal: 0, prot: 0, carb: 0, fat: 0 },
+    notas: [TEXTO_SIN_MENU],
+  }
 }
 
 /**
@@ -769,7 +817,11 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
   // regla los días 1, 3, 5 y 7 llevan todo lo que le gusta al usuario, los días 2, 4 y 6 llevan
   // su favorito principal y la otra opción de la lista corta, y el tope de 12 sigue en pie.
   const diaBDe = (o: OpcionesDia, banco: readonly Plantilla[]): DiaConstruido =>
-    construirDia({ ...o, banco, perfil: { ...o.perfil, favoritos: o.perfil.favoritos.slice(0, 1) } })
+    construirDia({
+      ...o,
+      banco,
+      perfil: { ...o.perfil, favoritos: o.perfil.favoritos.slice(0, 1) },
+    })
   let diaB = sencillo && bancoMenu ? diaBDe(opciones, bancoMenu.B) : null
 
   // Tope de variedad del modo sencillo (§3.7.2, regla 1, y §3.2b: "sin superar nunca el tope de
@@ -808,7 +860,14 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
   // promesa del modo; si lo rompe, se prefiere el menú sencillo con su nota de desviación.
   const notasFallback: string[] = []
   if (sencillo && diaB && bancoMenu) {
-    const conFallback = aplicarFallbackSencillo(dia, diaB, resultado.comidas, perfilMenu, bancoMenu, offset)
+    const conFallback = aplicarFallbackSencillo(
+      dia,
+      diaB,
+      resultado.comidas,
+      perfilMenu,
+      bancoMenu,
+      offset,
+    )
     if (conFallback) {
       dia = conFallback.dia
       diaB = conFallback.diaB
@@ -876,7 +935,8 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
   }
   if (
     resultado.macros.grasa_g > 0 &&
-    Math.abs(totalesDelDia.fat - resultado.macros.grasa_g) / resultado.macros.grasa_g > TOLERANCIA_MACRO_DIA
+    Math.abs(totalesDelDia.fat - resultado.macros.grasa_g) / resultado.macros.grasa_g >
+      TOLERANCIA_MACRO_DIA
   ) {
     notas.push(notaMacroDia('grasa', totalesDelDia.fat, resultado.macros.grasa_g, false))
   }
@@ -955,7 +1015,8 @@ export function generarEjemplos(inputs: Inputs, resultado: Resultado, variante =
 function gramosDeDia(dia: DiaConstruido): GramosAlimento[] {
   const lista: GramosAlimento[] = []
   for (const c of dia.comidas) {
-    for (const a of c.ejemplo.alimentos) lista.push({ id: a.id, nombre: a.nombre, gramos: a.gramos })
+    for (const a of c.ejemplo.alimentos)
+      lista.push({ id: a.id, nombre: a.nombre, gramos: a.gramos })
   }
   return lista
 }
@@ -1051,7 +1112,8 @@ function aplicarFallbackSencillo(
     // de la tolerancia de §3.3 o, al menos, no peor que la toma que sustituye. Sin esta guarda,
     // una toma muy grande cambiaba una desviación de calorías por una de 60 puntos de proteína.
     const peor = Math.max(a.desviacionProteina, b.desviacionProteina)
-    if (alterna.desviacionProteina > TOLERANCIA_PROTEINA && alterna.desviacionProteina > peor) continue
+    if (alterna.desviacionProteina > TOLERANCIA_PROTEINA && alterna.desviacionProteina > peor)
+      continue
     alternas.set(i, alterna)
   }
   if (alternas.size === 0) return null
@@ -1129,7 +1191,11 @@ const PREFERENCIAS: readonly Preferencia[] = [
  * pertenencia total, un solo alimento raro dejaba sin encajar a las seis preferencias y la
  * respuesta caía en `inputs.preferencia`, que puede no ser la efectiva.
  */
-function preferenciaDelMenu(ejemplos: Ejemplos, comidas: readonly EjemploComida[], inputs: Inputs): Preferencia {
+function preferenciaDelMenu(
+  ejemplos: Ejemplos,
+  comidas: readonly EjemploComida[],
+  inputs: Inputs,
+): Preferencia {
   if (ejemplos.preferencia_efectiva) return ejemplos.preferencia_efectiva
   const ids = new Set(gramosDeEjemplo(comidas).map((g) => g.id))
   // La del usuario va primero: con empate a votos, gana ella.

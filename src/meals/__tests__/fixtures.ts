@@ -21,7 +21,11 @@ interface FilaReparto {
 
 const TABLA_313: Record<NComidas, FilaReparto> = {
   2: { nombres: ['Comida', 'Cena'], horas: ['14:00', '21:00'], pct: [45, 55] },
-  3: { nombres: ['Desayuno', 'Comida', 'Cena'], horas: ['08:00', '14:00', '21:00'], pct: [30, 35, 35] },
+  3: {
+    nombres: ['Desayuno', 'Comida', 'Cena'],
+    horas: ['08:00', '14:00', '21:00'],
+    pct: [30, 35, 35],
+  },
   4: {
     nombres: ['Desayuno', 'Comida', 'Merienda', 'Cena'],
     horas: ['08:00', '14:00', '17:30', '21:00'],
@@ -145,7 +149,11 @@ export function resultadoDe(o: OpcionesPlan): Resultado {
       referencias: { cunbae: 20, deurenberg: 20 },
     },
     mlg: peso * 0.8,
-    bmr: { valor: 1700, ecuacion: 'mifflin', referencias: { mifflin: 1700, katch: 1690, harris: 1720 } },
+    bmr: {
+      valor: 1700,
+      ecuacion: 'mifflin',
+      referencias: { mifflin: 1700, katch: 1690, harris: 1720 },
+    },
     tdee: { valor: o.kcal, bruto: o.kcal, pal: 1.5, ejercicio_dia: 250, perfil: 'fuerza' },
     objetivo_efectivo: o.objetivo ?? 'mantener',
     ritmo_efectivo: 'moderado',
@@ -169,7 +177,7 @@ export function resultadoDe(o: OpcionesPlan): Resultado {
       base_proteina: 'peso_corporal',
       base_kg: peso,
       somatotipo: 'mesomorfo',
-    pct_cap: 0.35,
+      pct_cap: 0.35,
     },
     agua: { ml: 2500, rango: [2200, 2800], vasos: 10 },
     peso_objetivo: {
@@ -189,7 +197,9 @@ export function resultadoDe(o: OpcionesPlan): Resultado {
 }
 
 /** `Inputs` sintéticos coherentes con el `Resultado` de arriba. */
-export function inputsDe(o: OpcionesPlan & { objetivoCrudo?: Objetivo; condiciones?: Inputs['condiciones'] }): Inputs {
+export function inputsDe(
+  o: OpcionesPlan & { objetivoCrudo?: Objetivo; condiciones?: Inputs['condiciones'] },
+): Inputs {
   return {
     sexo: 'hombre',
     edad: o.edad ?? 35,
@@ -211,7 +221,11 @@ export function inputsDe(o: OpcionesPlan & { objetivoCrudo?: Objetivo; condicion
     peso_objetivo: null,
     preferencia: o.preferencia,
     ...(o.base
-      ? { preferencia_base: o.base, restricciones: o.restricciones ?? [], low_carb: o.lowCarb === true }
+      ? {
+          preferencia_base: o.base,
+          restricciones: o.restricciones ?? [],
+          low_carb: o.lowCarb === true,
+        }
       : {}),
     n_comidas: o.nComidas,
     clima_caluroso: false,

@@ -92,7 +92,9 @@ describe('textos de la §4 con números condicionales', () => {
     }
     const resultado = calcular(delgada)
     expect(resultado.objetivo_propuesto).toBe('mantener')
-    const aviso = textosAvisos(resultado, delgada).find((a) => a.codigo === 'INFO_OBJETIVO_RESUELTO')
+    const aviso = textosAvisos(resultado, delgada).find(
+      (a) => a.codigo === 'INFO_OBJETIVO_RESUELTO',
+    )
     expect(aviso!.texto).toContain('mantener tu peso')
   })
 

@@ -77,7 +77,10 @@ export function IconoPesa({ tam = 18, className }: IconoProps) {
 export function IconoGota({ tam = 20, className }: IconoProps) {
   return (
     <svg viewBox="0 0 24 24" width={tam} height={tam} aria-hidden="true" className={className}>
-      <path {...base} d="M12 3.5c3.4 4 5.5 6.6 5.5 9.4A5.5 5.5 0 0 1 6.5 12.9c0-2.8 2.1-5.4 5.5-9.4Z" />
+      <path
+        {...base}
+        d="M12 3.5c3.4 4 5.5 6.6 5.5 9.4A5.5 5.5 0 0 1 6.5 12.9c0-2.8 2.1-5.4 5.5-9.4Z"
+      />
     </svg>
   )
 }
@@ -120,8 +123,22 @@ export function IconoPapelera({ tam = 18, className }: IconoProps) {
 /** Rueda de carga: se detiene con prefers-reduced-motion (regla en el CSS). */
 export function Cargador({ tam = 18, className }: IconoProps) {
   return (
-    <svg viewBox="0 0 24 24" width={tam} height={tam} aria-hidden="true" className={`cargador ${className ?? ''}`}>
-      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+    <svg
+      viewBox="0 0 24 24"
+      width={tam}
+      height={tam}
+      aria-hidden="true"
+      className={`cargador ${className ?? ''}`}
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="8.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        opacity="0.25"
+      />
       <path {...base} strokeWidth={2} d="M20.5 12a8.5 8.5 0 0 0-8.5-8.5" />
     </svg>
   )
@@ -133,8 +150,16 @@ export function Logotipo({ tam = 26, className }: IconoProps) {
     <svg viewBox="0 0 32 32" width={tam} height={tam} aria-hidden="true" className={className}>
       <path {...base} strokeWidth={1.8} d="M16 5.5v20M8.5 25.5h15" />
       <path {...base} strokeWidth={1.8} d="M5 10.5h22" />
-      <path {...base} strokeWidth={1.8} d="M2.5 19c0-.3 3.5-8.5 3.5-8.5S9.5 18.7 9.5 19a3.5 3.5 0 0 1-7 0Z" />
-      <path {...base} strokeWidth={1.8} d="M22.5 19c0-.3 3.5-8.5 3.5-8.5S29.5 18.7 29.5 19a3.5 3.5 0 0 1-7 0Z" />
+      <path
+        {...base}
+        strokeWidth={1.8}
+        d="M2.5 19c0-.3 3.5-8.5 3.5-8.5S9.5 18.7 9.5 19a3.5 3.5 0 0 1-7 0Z"
+      />
+      <path
+        {...base}
+        strokeWidth={1.8}
+        d="M22.5 19c0-.3 3.5-8.5 3.5-8.5S29.5 18.7 29.5 19a3.5 3.5 0 0 1-7 0Z"
+      />
     </svg>
   )
 }

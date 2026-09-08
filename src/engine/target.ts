@@ -45,7 +45,10 @@ export interface EntradaPesoObjetivo {
   tdee: number
 }
 
-export function calcularPesoObjetivo(e: EntradaPesoObjetivo, emitir: EmitirAviso): ResultadoPesoObjetivo {
+export function calcularPesoObjetivo(
+  e: EntradaPesoObjetivo,
+  emitir: EmitirAviso,
+): ResultadoPesoObjetivo {
   const hombre = e.sexo === 'hombre'
   const PC = e.pesoKg
   const h2 = e.h2
@@ -58,7 +61,7 @@ export function calcularPesoObjetivo(e: EntradaPesoObjetivo, emitir: EmitirAviso
   const rangoB: [number, number] = [20 * h2, 24.9 * h2]
   const imc_min = e.edad >= 65 ? IMC_OBJETIVO_MIN_65 : IMC_OBJETIVO_MIN
   const min185 = imc_min * h2
-  const ensanche = e.mlg * (ENSANCHE_POR_FIABILIDAD[e.fiabilidad] / 100) / (1 - e.g_c / 100)
+  const ensanche = (e.mlg * (ENSANCHE_POR_FIABILIDAD[e.fiabilidad] / 100)) / (1 - e.g_c / 100)
   const pulg = e.alturaCm / CM_POR_PULGADA
   // Fórmulas clínicas de los años 60-80: fuera de 150-200 cm devuelven pesos absurdos.
   const clasicas =
@@ -129,7 +132,7 @@ export function calcularPesoObjetivo(e: EntradaPesoObjetivo, emitir: EmitirAviso
     hito_intermedio = (PC - efectivo) / PC > HITO_UMBRAL ? round05(PC * HITO_FACTOR) : null
   } else if (e.objetivo_efectivo === 'ganar') {
     metodo = 'ritmo_16_semanas'
-    const ritmo_kg = (e.kcal - e.tdee) * 7 / 7700
+    const ritmo_kg = ((e.kcal - e.tdee) * 7) / 7700
     sugerido = round05(PC + ritmo_kg * 16)
     rango = [round05(PC + ritmo_kg * 12), round05(PC + ritmo_kg * 20)]
     if (sugerido < min185) sugerido = roundUp05(min185)

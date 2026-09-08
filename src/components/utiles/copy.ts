@@ -71,7 +71,8 @@ export const TEXTO_CONDICIONES_FIJO =
   'Estas condiciones cambian de verdad tus necesidades y ninguna calculadora general puede afinarlas: enséñale este plan a tu médico o a un/a dietista-nutricionista antes de aplicarlo.'
 
 /** [SPEC] SPEC-ux §2.4, horas de referencia. */
-export const NOTA_HORAS = 'son horas de referencia: puedes desplazarlas sin que cambie ningún número'
+export const NOTA_HORAS =
+  'son horas de referencia: puedes desplazarlas sin que cambie ningún número'
 
 /** [SPEC] SPEC-ux §2.5. */
 export const NOTA_MENU =

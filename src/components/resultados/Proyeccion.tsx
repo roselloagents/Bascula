@@ -68,8 +68,7 @@ function GraficaProyeccion({ proyeccion, pesajes, objetivo }: GraficaProps) {
   const kgMax = kgMin + paso * 4
   const rango = kgMax - kgMin
 
-  const x = (semana: number) =>
-    M.izquierda + (semana / ultima) * (ANCHO - M.izquierda - M.derecha)
+  const x = (semana: number) => M.izquierda + (semana / ultima) * (ANCHO - M.izquierda - M.derecha)
   const y = (kg: number) => M.arriba + ((kgMax - kg) / rango) * (ALTO - M.arriba - M.abajo)
 
   const banda = [
@@ -134,7 +133,12 @@ function GraficaProyeccion({ proyeccion, pesajes, objetivo }: GraficaProps) {
             y1={y(objetivo)}
             y2={y(objetivo)}
           />
-          <text className="grafica-etiqueta" x={ANCHO - M.derecha} y={y(objetivo) - 4} textAnchor="end">
+          <text
+            className="grafica-etiqueta"
+            x={ANCHO - M.derecha}
+            y={y(objetivo) - 4}
+            textAnchor="end"
+          >
             objetivo {numCorto(objetivo, 1)} kg
           </text>
         </g>
@@ -143,7 +147,12 @@ function GraficaProyeccion({ proyeccion, pesajes, objetivo }: GraficaProps) {
       {hitos.map((p) => (
         <g key={p.semana}>
           <circle className="grafica-hito" cx={x(p.semana)} cy={y(p.peso_esp)} r={3.5} />
-          <text className="grafica-etiqueta" x={x(p.semana)} y={y(p.peso_esp) - 7} textAnchor="middle">
+          <text
+            className="grafica-etiqueta"
+            x={x(p.semana)}
+            y={y(p.peso_esp) - 7}
+            textAnchor="middle"
+          >
             {numCorto(p.peso_esp, 1)} kg
           </text>
         </g>
@@ -211,7 +220,10 @@ export function BloqueProyeccion({ inputs, resultado, avisos, pesajes }: Proyecc
   const puntos = pesajesEnSemanas(pesajes, inputs.fecha_inicio, ultima)
 
   return (
-    <Seccion titulo="Cómo debería ir la cosa" descripcion="Semana a semana, con el margen que toca.">
+    <Seccion
+      titulo="Cómo debería ir la cosa"
+      descripcion="Semana a semana, con el margen que toca."
+    >
       <GraficaProyeccion
         proyeccion={proyeccion}
         pesajes={puntos}
@@ -449,11 +461,7 @@ export function BloqueSeguimiento({
           )}
 
           {recientes.length > 0 ? (
-            <button
-              type="button"
-              className="btn-plano"
-              onClick={() => setConfirmarBorrado(true)}
-            >
+            <button type="button" className="btn-plano" onClick={() => setConfirmarBorrado(true)}>
               Borrar todo el seguimiento
             </button>
           ) : null}

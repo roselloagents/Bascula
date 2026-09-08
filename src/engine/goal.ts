@@ -80,9 +80,14 @@ export interface SalidaObjetivo {
 
 /** %grasa objetivo central y rango por sexo y edad (paso 13, usado ya en el paso 6.3). */
 export function grasaObjetivo(hombre: boolean, edad: number): [number, number, number] {
-  const t = edad >= 65
-    ? hombre ? GRASA_OBJETIVO_HOMBRE_65 : GRASA_OBJETIVO_MUJER_65
-    : hombre ? GRASA_OBJETIVO_HOMBRE : GRASA_OBJETIVO_MUJER
+  const t =
+    edad >= 65
+      ? hombre
+        ? GRASA_OBJETIVO_HOMBRE_65
+        : GRASA_OBJETIVO_MUJER_65
+      : hombre
+        ? GRASA_OBJETIVO_HOMBRE
+        : GRASA_OBJETIVO_MUJER
   return [t[0], t[1], t[2]]
 }
 
@@ -168,7 +173,11 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
 
   // 6.4 — ganancia
   if (obj === 'ganar') {
-    if (imc >= IMC_OBJETIVO_MIN && (exp === 'novato' || perfil !== 'fuerza') && (banda === 'alto' || banda === 'muy_alto')) {
+    if (
+      imc >= IMC_OBJETIVO_MIN &&
+      (exp === 'novato' || perfil !== 'fuerza') &&
+      (banda === 'alto' || banda === 'muy_alto')
+    ) {
       obj = 'recomposicion'
       emitir('WARN_RECOMPOSICION_SUGERIDA')
     } else if (perfil !== 'fuerza') {
@@ -178,7 +187,11 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
   // 6.5
   if (obj === 'recomposicion' && perfil !== 'fuerza') emitir('WARN_RECOMPOSICION_SIN_FUERZA')
   // 6.6
-  if ((obj === 'mantener' || obj === 'recomposicion') && pobj !== null && Math.abs(pobj - PC) >= 1) {
+  if (
+    (obj === 'mantener' || obj === 'recomposicion') &&
+    pobj !== null &&
+    Math.abs(pobj - PC) >= 1
+  ) {
     emitir('INFO_OBJETIVO_IGNORADO')
   }
 
@@ -189,29 +202,39 @@ export function calcularObjetivo(e: EntradaObjetivo, emitir: EmitirAviso): Salid
   // suavizado de seguridad: fija el ritmo de PARTIDA a partir de la fecha que ha pedido el usuario,
   // y los suavizados de 6.7 (tca, edad ≥ 65) y 6.7bis (regla) se aplican después sobre él y MANDAN.
   // El `ritmo` que eligió el usuario se descarta: ha pedido una fecha, y la fecha es más concreta.
-  const plazo = typeof inputs.plazo_semanas === 'number' && Number.isFinite(inputs.plazo_semanas)
-    ? inputs.plazo_semanas
-    : null
+  const plazo =
+    typeof inputs.plazo_semanas === 'number' && Number.isFinite(inputs.plazo_semanas)
+      ? inputs.plazo_semanas
+      : null
   let ritmo_plazo: Ritmo | null = null
   // La meta contra la que se mide el plazo es la que el paso 13 va a PUBLICAR, no la que el
   // usuario escribió: los suelos de seguridad (IMC mínimo y grasa esencial) pueden subirla, y
   // dividir por el plazo una meta que el propio informe rechaza aplicaba un ritmo más duro que el
   // que exige el plan real. Con la meta ya en el suelo, `meta_plazo` coincide con
   // `peso_objetivo.efectivo`, que es el número que se imprime.
-  const meta_plazo = pobj === null ? null : metaSegura(pobj, obj, hombre, inputs.edad, mlg, (inputs.altura_cm / 100) ** 2)
+  const meta_plazo =
+    pobj === null
+      ? null
+      : metaSegura(pobj, obj, hombre, inputs.edad, mlg, (inputs.altura_cm / 100) ** 2)
   // Con la meta ya corregida el camino puede desaparecer (el suelo queda por encima del peso
   // actual, o el techo de `ganar` por debajo): entonces no hay fecha que juzgar y el plazo no
   // emite nada, ni ritmo ni aviso.
   const delta_plazo = meta_plazo === null ? 0 : obj === 'perder' ? PC - meta_plazo : meta_plazo - PC
-  if (plazo !== null && meta_plazo !== null && delta_plazo > 0 && (obj === 'perder' || obj === 'ganar')) {
+  if (
+    plazo !== null &&
+    meta_plazo !== null &&
+    delta_plazo > 0 &&
+    (obj === 'perder' || obj === 'ganar')
+  ) {
     // kg/semana que da cada ritmo de la tabla, con la misma aritmética del paso 7.
     const kgSem = (r: Ritmo): number | null => {
       if (obj === 'perder') {
-        const fila = RITMO_PERDIDA[banda as 'muy_alto' | 'alto' | 'medio'] as Record<Ritmo, number> | undefined
-        return fila ? fila[r] / 100 * PC : null
+        const fila = RITMO_PERDIDA[banda as 'muy_alto' | 'alto' | 'medio'] as
+          Record<Ritmo, number> | undefined
+        return fila ? (fila[r] / 100) * PC : null
       }
       const sup_pct = perfil !== 'fuerza' ? SUPERAVIT_SIN_FUERZA : SUPERAVIT[exp][r]
-      return clamp(sup_pct * e.tdee, SUPERAVIT_MIN, SUPERAVIT_MAX) * 7 / KCAL_POR_KG_GRASA
+      return (clamp(sup_pct * e.tdee, SUPERAVIT_MIN, SUPERAVIT_MAX) * 7) / KCAL_POR_KG_GRASA
     }
     // Semanas que ese ritmo produciría DE VERDAD, con la misma aritmética del paso 14: la parte
     // lineal más las semanas de mantenimiento (diet breaks). Comparar contra la tasa pelada de la

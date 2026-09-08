@@ -138,10 +138,7 @@ export function PasoRegla({ b, set }: PropsPaso) {
           No cambia ningún número: su único efecto es la tarjeta del ciclo y la compra opcional. */}
       {b.menstruacion === 'regular' || b.menstruacion === 'irregular' ? (
         <div className="subpregunta">
-          <Grupo
-            etiqueta="¿Qué notas esos días?"
-            descripcion="Opcional, puedes marcar varias."
-          >
+          <Grupo etiqueta="¿Qué notas esos días?" descripcion="Opcional, puedes marcar varias.">
             {SINTOMAS.map(({ valor, titulo }) => (
               <Opcion
                 key={valor}
@@ -154,8 +151,8 @@ export function PasoRegla({ b, set }: PropsPaso) {
             ))}
           </Grupo>
           <p className="nota">
-            Esto no cambia tus calorías ni tus macros. Te damos consejos de alimentos para esos días,
-            que es donde sí se puede hacer algo.
+            Esto no cambia tus calorías ni tus macros. Te damos consejos de alimentos para esos
+            días, que es donde sí se puede hacer algo.
           </p>
           <Ayuda>
             A los números no les afecta: lo que cambia en esos días son los micronutrientes, sobre

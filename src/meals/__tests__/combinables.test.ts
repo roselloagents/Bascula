@@ -30,7 +30,11 @@ const COMBINACIONES: Combinacion[] = [
   { nombre: 'omnívoro', base: 'omnivoro', restricciones: [] },
   { nombre: 'omnívoro + sin lactosa', base: 'omnivoro', restricciones: ['sin_lactosa'] },
   { nombre: 'omnívoro + sin gluten', base: 'omnivoro', restricciones: ['sin_gluten'] },
-  { nombre: 'omnívoro + sin lactosa + sin gluten', base: 'omnivoro', restricciones: ['sin_lactosa', 'sin_gluten'] },
+  {
+    nombre: 'omnívoro + sin lactosa + sin gluten',
+    base: 'omnivoro',
+    restricciones: ['sin_lactosa', 'sin_gluten'],
+  },
   { nombre: 'vegetariano', base: 'vegetariano', restricciones: [] },
   { nombre: 'vegetariano + sin lactosa', base: 'vegetariano', restricciones: ['sin_lactosa'] },
   { nombre: 'vegetariano + sin gluten', base: 'vegetariano', restricciones: ['sin_gluten'] },
@@ -38,7 +42,12 @@ const COMBINACIONES: Combinacion[] = [
   { nombre: 'vegano + sin gluten', base: 'vegano', restricciones: ['sin_gluten'] },
   { nombre: 'vegano + sin lactosa', base: 'vegano', restricciones: ['sin_lactosa'] },
   { nombre: 'omnívoro + bajo en hidratos', base: 'omnivoro', restricciones: [], lowCarb: true },
-  { nombre: 'vegetariano + sin gluten + bajo en hidratos', base: 'vegetariano', restricciones: ['sin_gluten'], lowCarb: true },
+  {
+    nombre: 'vegetariano + sin gluten + bajo en hidratos',
+    base: 'vegetariano',
+    restricciones: ['sin_gluten'],
+    lowCarb: true,
+  },
   { nombre: 'vegano + bajo en hidratos', base: 'vegano', restricciones: [], lowCarb: true },
 ]
 
@@ -47,7 +56,10 @@ const COMIDAS: NComidas[] = [3, 4, 5]
 
 /** Nombre corto de un alimento, tal como lo escriben las alternativas de §2.5. */
 function nombreCortoDe(a: Alimento): string {
-  return a.nombre.replace(/\s*\([^)]*\)/g, '').trim().toLowerCase()
+  return a.nombre
+    .replace(/\s*\([^)]*\)/g, '')
+    .trim()
+    .toLowerCase()
 }
 
 /**
@@ -87,7 +99,13 @@ function planDe(c: Combinacion, kcal: number, nComidas: NComidas, hcAjustado?: n
   }
 }
 
-function menu(c: Combinacion, kcal: number, nComidas: NComidas, sencillo: boolean, hcAjustado?: number) {
+function menu(
+  c: Combinacion,
+  kcal: number,
+  nComidas: NComidas,
+  sencillo: boolean,
+  hcAjustado?: number,
+) {
   const o = planDe(c, kcal, nComidas, hcAjustado)
   return generarEjemplos({ ...inputsDe(o), menu_sencillo: sencillo }, resultadoDe(o))
 }
@@ -149,7 +167,9 @@ describe('filtro combinable (§3.2): ningún alimento prohibido', () => {
     expect(bancoDe('vegano', ['sin_gluten'], true)).toBe('low_carb')
     for (const c of COMBINACIONES) {
       const e = menu(c, 2200, 4, false)
-      expect(e.preferencia_efectiva, c.nombre).toBe(bancoDe(c.base, c.restricciones, c.lowCarb === true))
+      expect(e.preferencia_efectiva, c.nombre).toBe(
+        bancoDe(c.base, c.restricciones, c.lowCarb === true),
+      )
     }
   })
 })
@@ -232,8 +252,12 @@ describe('modo sencillo con restricciones combinadas (§3.7.2)', () => {
   })
 
   it('vegano + sin gluten: el rol de hidrato queda en arroz y patata (ejemplo de la spec)', () => {
-    const banco = bancoSencilloEfectivo(perfilDe(COMBINACIONES.find((c) => c.nombre === 'vegano + sin gluten')!))!
-    const hidratos = banco.candidatos.filter((id) => alimentoPorId(id)!.roles.includes('carbohidrato'))
+    const banco = bancoSencilloEfectivo(
+      perfilDe(COMBINACIONES.find((c) => c.nombre === 'vegano + sin gluten')!),
+    )!
+    const hidratos = banco.candidatos.filter((id) =>
+      alimentoPorId(id)!.roles.includes('carbohidrato'),
+    )
     expect(hidratos).not.toContain('avena_copos')
     expect(hidratos).not.toContain('pan_integral')
     expect(hidratos).toContain('arroz_blanco_cocido')
@@ -248,7 +272,9 @@ describe('modo sencillo con restricciones combinadas (§3.7.2)', () => {
     expect(banco.candidatos).not.toContain('queso_fresco_batido_0')
     expect(banco.candidatos).not.toContain('yogur_griego_0')
     // Y la sustitución llega al plato: el menú usa la variante, no cae a la reserva.
-    const ids = new Set(menu(combinacion, 2200, 4, true).entreno.comidas.flatMap((c) => c.alimentos.map((a) => a.id)))
+    const ids = new Set(
+      menu(combinacion, 2200, 4, true).entreno.comidas.flatMap((c) => c.alimentos.map((a) => a.id)),
+    )
     expect([...ids].some((id) => id.endsWith('_sl'))).toBe(true)
   })
 
@@ -407,7 +433,12 @@ describe('barrido de combinaciones (todas las bases × todas las restricciones �
   // hidratos, vegetariano sin gluten y sin lactosa— sirve un alimento prohibido, deja una toma
   // vacía, rompe el tope de 12 o se sale de las tolerancias sin decirlo.
   const BASES: PreferenciaBase[] = ['omnivoro', 'vegetariano', 'vegano']
-  const JUEGOS: Restriccion[][] = [[], ['sin_lactosa'], ['sin_gluten'], ['sin_lactosa', 'sin_gluten']]
+  const JUEGOS: Restriccion[][] = [
+    [],
+    ['sin_lactosa'],
+    ['sin_gluten'],
+    ['sin_lactosa', 'sin_gluten'],
+  ]
   const KCAL_BARRIDO = [1400, 2000, 2600, 3200]
   const COMIDAS_BARRIDO: NComidas[] = [2, 3, 4, 5, 6]
 
@@ -415,7 +446,12 @@ describe('barrido de combinaciones (todas las bases × todas las restricciones �
   for (const base of BASES) {
     for (const restricciones of JUEGOS) {
       for (const lowCarb of [false, true]) {
-        todas.push({ nombre: `${base} + ${restricciones.join(' + ') || 'sin restricciones'}${lowCarb ? ' + bajo en hidratos' : ''}`, base, restricciones, lowCarb })
+        todas.push({
+          nombre: `${base} + ${restricciones.join(' + ') || 'sin restricciones'}${lowCarb ? ' + bajo en hidratos' : ''}`,
+          base,
+          restricciones,
+          lowCarb,
+        })
       }
     }
   }
@@ -430,16 +466,22 @@ describe('barrido de combinaciones (todas las bases × todas las restricciones �
             const etiqueta = `${c.nombre} · ${kcal} kcal · ${n} comidas`
             if (sencillo) {
               expect(e.modo_sencillo, etiqueta).toBe(true)
-              expect(e.compra!.alimentos_distintos, etiqueta).toBeLessThanOrEqual(MAX_ALIMENTOS_SENCILLO)
+              expect(e.compra!.alimentos_distintos, etiqueta).toBeLessThanOrEqual(
+                MAX_ALIMENTOS_SENCILLO,
+              )
             }
             for (const { id, donde } of idsVisibles(e)) {
-              expect(pasaPerfil(alimentoPorId(id)!, perfil), `${etiqueta} ${donde}: ${id}`).toBe(true)
+              expect(pasaPerfil(alimentoPorId(id)!, perfil), `${etiqueta} ${donde}: ${id}`).toBe(
+                true,
+              )
             }
             for (const toma of e.entreno.comidas) {
               expect(toma.alimentos.length, `${etiqueta} ${toma.comida}`).toBeGreaterThan(0)
               const dKcal = Math.abs(toma.totales.kcal - toma.objetivo.kcal) / toma.objetivo.kcal
               const dProt =
-                toma.objetivo.prot > 0 ? Math.abs(toma.totales.prot - toma.objetivo.prot) / toma.objetivo.prot : 0
+                toma.objetivo.prot > 0
+                  ? Math.abs(toma.totales.prot - toma.objetivo.prot) / toma.objetivo.prot
+                  : 0
               if (dKcal <= TOLERANCIA_KCAL && dProt <= TOLERANCIA_PROTEINA) continue
               expect(
                 e.entreno.notas.some((t) => t.startsWith(`${toma.comida}:`)),

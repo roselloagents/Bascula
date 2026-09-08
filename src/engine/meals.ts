@@ -55,7 +55,7 @@ export function calcularComidas(e: EntradaComidas, emitir: EmitirAviso): Comida[
   const principal = indiceMayor(p, -1)
 
   const repartir = (total: number, vector: readonly number[]): number[] => {
-    const partes = vector.map((v) => round5(total * v / 100))
+    const partes = vector.map((v) => round5((total * v) / 100))
     partes[principal] += total - partes.reduce((a, b) => a + b, 0)
     return partes
   }
@@ -76,7 +76,8 @@ export function calcularComidas(e: EntradaComidas, emitir: EmitirAviso): Comida[
   }))
 
   // Guardarraíl de proteína por toma, por los dos lados.
-  if (p.some((v, i) => v >= PROTEINA_TOMA_PCT_MIN && P_i[i] < PROTEINA_TOMA_MIN_G)) emitir('WARN_PROTEINA_POR_TOMA')
+  if (p.some((v, i) => v >= PROTEINA_TOMA_PCT_MIN && P_i[i] < PROTEINA_TOMA_MIN_G))
+    emitir('WARN_PROTEINA_POR_TOMA')
   if (P_i.some((v) => v > PROTEINA_TOMA_ALTA_GKG * e.pesoKg)) emitir('WARN_PROTEINA_TOMA_ALTA')
 
   return comidas

@@ -80,7 +80,10 @@ export function calcular(inputs: Inputs): Resultado {
 
   // ---------------- Paso 0 — normalización de condiciones y exclusiones, en este orden exacto
   const condiciones: Condicion[] = [...inputs.condiciones]
-  if ((inputs.cribado_tca === 'positivo' || inputs.cribado_tca === 'evitado') && !condiciones.includes('tca')) {
+  if (
+    (inputs.cribado_tca === 'positivo' || inputs.cribado_tca === 'evitado') &&
+    !condiciones.includes('tca')
+  ) {
     condiciones.push('tca')
   }
   // Regla de traducción de las preferencias (§1.1) y normalización de la regla: se hacen aquí,
@@ -90,7 +93,8 @@ export function calcular(inputs: Inputs): Resultado {
     inputs.sexo === 'mujer' ? (inputs.menstruacion ?? null) : null // en hombres se ignora
   const imc = PC / h2
   if (inputs.edad < 18 || inputs.edad > 75) return { ...RESULTADO_BLOQUEADO, excluido: 'EXCL_EDAD' }
-  if (inputs.embarazo_lactancia === true) return { ...RESULTADO_BLOQUEADO, excluido: 'EXCL_EMBARAZO_LACTANCIA' }
+  if (inputs.embarazo_lactancia === true)
+    return { ...RESULTADO_BLOQUEADO, excluido: 'EXCL_EMBARAZO_LACTANCIA' }
   if (imc < 16) return { ...RESULTADO_BLOQUEADO, excluido: 'EXCL_IMC_MUY_BAJO' }
   if (condiciones.includes('tca') && imc < IMC_OBJETIVO_MIN) {
     return { ...RESULTADO_BLOQUEADO, excluido: 'EXCL_TCA_RIESGO' }
@@ -129,7 +133,8 @@ export function calcular(inputs: Inputs): Resultado {
     emitir,
   )
   // `null`/ausente ≡ `'equilibrado'`, que es exactamente el comportamiento v1.0 (§1 fila 22).
-  const recomposicion_prioridad: RecomposicionPrioridad = inputs.recomposicion_prioridad ?? 'equilibrado'
+  const recomposicion_prioridad: RecomposicionPrioridad =
+    inputs.recomposicion_prioridad ?? 'equilibrado'
 
   // ---------------- Paso 7
   const calorias = calcularCalorias(
@@ -277,11 +282,12 @@ export function calcular(inputs: Inputs): Resultado {
   if (grasa.fiabilidad === 'baja') emitir('INFO_GRASA_ESTIMADA')
   if (
     tdee.perfil !== 'sedentario' &&
-    tdee.dias * inputs.entrenamiento.minutos_sesion / 60 > ALTO_RENDIMIENTO_HORAS
+    (tdee.dias * inputs.entrenamiento.minutos_sesion) / 60 > ALTO_RENDIMIENTO_HORAS
   ) {
     emitir('INFO_ALTO_RENDIMIENTO')
   }
-  if (kcal < (hombre ? MICRONUTRIENTES_KCAL_HOMBRE : MICRONUTRIENTES_KCAL_MUJER)) emitir('INFO_MICRONUTRIENTES')
+  if (kcal < (hombre ? MICRONUTRIENTES_KCAL_HOMBRE : MICRONUTRIENTES_KCAL_MUJER))
+    emitir('INFO_MICRONUTRIENTES')
 
   // REGLA (decisión D). Se evalúa aquí y no en el paso 6: `objetivo_efectivo` ya no puede cambiar,
   // y la tercera cláusula mira el ritmo ELEGIDO por el usuario (el 6.7bis ya pudo suavizar el
@@ -318,9 +324,10 @@ export function calcular(inputs: Inputs): Resultado {
   // plan final ya no es de perder/ganar se retiran; si un suavizado de seguridad ha bajado el ritmo
   // que el plazo había elegido, o si el propio cronograma sale más largo que el plazo, la promesa
   // deja de ser cierta y el aviso pasa a ser el de plazo irreal.
-  const plazo = typeof inputs.plazo_semanas === 'number' && Number.isFinite(inputs.plazo_semanas)
-    ? inputs.plazo_semanas
-    : null
+  const plazo =
+    typeof inputs.plazo_semanas === 'number' && Number.isFinite(inputs.plazo_semanas)
+      ? inputs.plazo_semanas
+      : null
   if (
     plazo === null ||
     inputs.peso_objetivo === null ||
@@ -372,7 +379,8 @@ export function calcular(inputs: Inputs): Resultado {
   // ---------------- Paso 18 — límites del ajuste manual (se publican SIEMPRE, también sin ajuste).
   // Con `'tca'` no hay panel de ajuste: `limites_ajuste` queda `undefined`, igual que `proyeccion`.
   const suelo_sexo = hombre ? SUELO_KCAL_HOMBRE : SUELO_KCAL_MUJER
-  const suelo_ea_aj = (grasa.banda === 'muy_alto' ? EA_MIN_MUY_ALTO : EA_MIN) * mlg + tdee.ejercicio_dia
+  const suelo_ea_aj =
+    (grasa.banda === 'muy_alto' ? EA_MIN_MUY_ALTO : EA_MIN) * mlg + tdee.ejercicio_dia
   const suelo_aj =
     objetivo_efectivo === 'perder' || objetivo_efectivo === 'recomposicion'
       ? Math.max(suelo_sexo, bmr.valor, suelo_ea_aj)
@@ -440,9 +448,9 @@ export function calcular(inputs: Inputs): Resultado {
       fibra_g: fibra.fibra_g,
       azucares_libres_max_g: fibra.azucares_libres_max_g,
       pct: {
-        p: 4 * macros.proteina_g / kcal,
-        g: 9 * macros.grasa_g / kcal,
-        hc: 4 * macros.hc_g / kcal,
+        p: (4 * macros.proteina_g) / kcal,
+        g: (9 * macros.grasa_g) / kcal,
+        hc: (4 * macros.hc_g) / kcal,
       },
       gkg: { p: macros.proteina_g / PC, g: macros.grasa_g / PC, hc: macros.hc_g / PC },
       base_proteina: macros.base_proteina,
@@ -460,7 +468,8 @@ export function calcular(inputs: Inputs): Resultado {
     preferencia_base: objetivo.preferencia_base,
     restricciones: objetivo.restricciones,
     low_carb: objetivo.low_carb,
-    recomposicion_prioridad: objetivo_efectivo === 'recomposicion' ? recomposicion_prioridad : undefined,
+    recomposicion_prioridad:
+      objetivo_efectivo === 'recomposicion' ? recomposicion_prioridad : undefined,
     // Regla no expuesta: con `'tca'` no se publica la proyección, por el mismo motivo por el que
     // se retiran los avisos de cronograma (paso 17).
     proyeccion: tiene_tca ? undefined : proyeccion,

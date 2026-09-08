@@ -27,7 +27,11 @@ import {
   guardarAjuste,
   hayPanelAjuste,
 } from '../components/resultados/ajuste'
-import { calcularBalance, cargarPesajes, guardarPesajes } from '../components/resultados/seguimiento'
+import {
+  calcularBalance,
+  cargarPesajes,
+  guardarPesajes,
+} from '../components/resultados/seguimiento'
 
 const almacen = new Map<string, string>()
 vi.stubGlobal('window', {

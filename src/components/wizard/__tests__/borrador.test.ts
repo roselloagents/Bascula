@@ -69,7 +69,9 @@ describe('mapa de pasos', () => {
       pasosVisibles(completo({ objetivo: 'recomposicion', recomposicion_prioridad: 'perder' })),
     ).toContain('pesoObjetivo')
     expect(
-      pasosVisibles(completo({ objetivo: 'recomposicion', recomposicion_prioridad: 'equilibrado' })),
+      pasosVisibles(
+        completo({ objetivo: 'recomposicion', recomposicion_prioridad: 'equilibrado' }),
+      ),
     ).toContain('pesoObjetivo')
     expect(
       pasosVisibles(completo({ objetivo: 'recomposicion', recomposicion_prioridad: 'ganar' })),
@@ -229,7 +231,6 @@ describe('sesión: paso actual y huella del plan', () => {
   })
 })
 
-
 // Un borrador con la forma equivocada (otra versión de la app, otra pestaña, la consola) no puede
 // llegar al render: `peso_kg: 95` en vez de `'95'` reventaba `leerNumero` y dejaba la página en
 // blanco de forma permanente, porque cada recarga volvía a leer el mismo dato roto.
@@ -239,7 +240,13 @@ describe('borrador corrupto', () => {
   it('los campos de texto con el tipo equivocado vuelven a su valor inicial', () => {
     almacen.set(
       CLAVE_ALMACEN,
-      JSON.stringify({ sexo: 'mujer', peso_kg: 95, altura_cm: null, edad: { n: 30 }, peso_objetivo: [] }),
+      JSON.stringify({
+        sexo: 'mujer',
+        peso_kg: 95,
+        altura_cm: null,
+        edad: { n: 30 },
+        peso_objetivo: [],
+      }),
     )
     const b = cargarBorrador()
     expect(b.sexo).toBe('mujer')
@@ -277,7 +284,12 @@ describe('borrador corrupto', () => {
       CLAVE_ALMACEN,
       JSON.stringify({
         grasa: { metodo: 'conocido', valor: 22, fuente: 'inventada', categoria: 'gordo' },
-        entrenamiento: { tipo: 'crossfit', dias_semana: 'tres', minutos_sesion: 45, momento: 'siesta' },
+        entrenamiento: {
+          tipo: 'crossfit',
+          dias_semana: 'tres',
+          minutos_sesion: 45,
+          momento: 'siesta',
+        },
         somatotipo: { q1: 'fina', q2: 'gigante', q4: 'atletico' },
       }),
     )

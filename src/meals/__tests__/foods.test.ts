@@ -20,7 +20,11 @@ function filasAplicables(a: Alimento): string[] {
   // v1.2: la fila `extra` tiene precedencia sobre todas las demás, así que la exclusividad mutua
   // del resto se evalúa solo entre los alimentos que NO llevan ese tag (§3.3).
   if (a.tags.includes('extra')) return ['extra']
-  if (a.grupo === 'proteina' && ['crudo', 'cocido', 'listo'].includes(a.estado) && !rol('carbohidrato')) {
+  if (
+    a.grupo === 'proteina' &&
+    ['crudo', 'cocido', 'listo'].includes(a.estado) &&
+    !rol('carbohidrato')
+  ) {
     filas.push('proteina')
   }
   if (a.grupo === 'proteina' && rol('carbohidrato')) filas.push('proteina_con_hc')
@@ -33,7 +37,8 @@ function filasAplicables(a: Alimento): string[] {
   if (a.grupo === 'carbohidrato' && a.estado === 'listo') filas.push('hc_listo')
   if (a.grupo === 'carbohidrato' && a.estado === 'crudo') filas.push('hc_crudo')
   if (rol('grasa') && a.grasa >= 80) filas.push('grasa_pura')
-  if (a.grupo === 'grasa' && a.grasa >= 25 && a.grasa < 80 && !IDS_CREMAS.includes(a.id)) filas.push('frutos_secos')
+  if (a.grupo === 'grasa' && a.grasa >= 25 && a.grasa < 80 && !IDS_CREMAS.includes(a.id))
+    filas.push('frutos_secos')
   if (a.grupo === 'grasa' && IDS_CREMAS.includes(a.id)) filas.push('crema')
   if (a.id === 'aceitunas') filas.push('aceitunas')
   if (a.id === 'aguacate') filas.push('aguacate')
@@ -66,7 +71,10 @@ describe('base de alimentos', () => {
     for (const a of ALIMENTOS) {
       const atwater = 4 * a.proteina + 4 * a.carbohidratos + 9 * a.grasa
       const desviacion = Math.abs(a.kcal - atwater) / a.kcal
-      expect(desviacion, `${a.id}: ${a.kcal} kcal frente a ${atwater.toFixed(1)}`).toBeLessThanOrEqual(0.15)
+      expect(
+        desviacion,
+        `${a.id}: ${a.kcal} kcal frente a ${atwater.toFixed(1)}`,
+      ).toBeLessThanOrEqual(0.15)
     }
   })
 

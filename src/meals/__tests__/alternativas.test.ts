@@ -10,7 +10,14 @@ import { nombreCorto } from '../textos'
 import type { OpcionesPlan } from './fixtures'
 import { inputsDe, resultadoDe } from './fixtures'
 
-const PREFERENCIAS: Preferencia[] = ['omnivoro', 'vegetariano', 'vegano', 'sin_lactosa', 'sin_gluten', 'low_carb']
+const PREFERENCIAS: Preferencia[] = [
+  'omnivoro',
+  'vegetariano',
+  'vegano',
+  'sin_lactosa',
+  'sin_gluten',
+  'low_carb',
+]
 const COMIDAS: NComidas[] = [3, 4, 5]
 const KCAL = [1400, 1900, 2400, 3000]
 const PESOS = [55, 80, 105]
@@ -66,7 +73,10 @@ describe('alternativas por comida', () => {
                   lineas += 1
                   // `null` = alguno de los dos nombres no está en la base: entonces no se puede
                   // medir, pero tampoco se ha podido generar, así que no debería ocurrir.
-                  expect(d, `${preferencia} ${kcal} kcal ${variante}: "${texto}" no medible`).not.toBeNull()
+                  expect(
+                    d,
+                    `${preferencia} ${kcal} kcal ${variante}: "${texto}" no medible`,
+                  ).not.toBeNull()
                   expect(
                     d ?? 1,
                     `${preferencia} ${kcal} kcal / ${nComidas} comidas / ${pesoKg} kg ${variante}: "${texto}" se desvía un ${Math.round((d ?? 1) * 100)} %`,
@@ -77,7 +87,10 @@ describe('alternativas por comida', () => {
           }
         }
       }
-      expect(lineas, `${preferencia}: el barrido no ha generado ninguna alternativa`).toBeGreaterThan(50)
+      expect(
+        lineas,
+        `${preferencia}: el barrido no ha generado ninguna alternativa`,
+      ).toBeGreaterThan(50)
     })
   }
 })

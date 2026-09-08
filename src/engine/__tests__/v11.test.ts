@@ -59,7 +59,14 @@ const CASO_15: Inputs = con({
   altura_cm: 168,
   peso_kg: 78,
   actividad_diaria: 'ligero',
-  entrenamiento: ent({ tipo: 'fuerza', dias_semana: 3, minutos_sesion: 50, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+  entrenamiento: ent({
+    tipo: 'fuerza',
+    dias_semana: 3,
+    minutos_sesion: 50,
+    intensidad: 'media',
+    experiencia: 'intermedio',
+    momento: 'tarde',
+  }),
   objetivo: 'perder',
   ritmo: 'agresivo',
   peso_objetivo: 68,
@@ -78,7 +85,14 @@ const CASO_16: Inputs = con({
   peso_kg: 64,
   grasa: { metodo: 'conocido', valor: 27, fuente: 'fiable' },
   actividad_diaria: 'ligero',
-  entrenamiento: ent({ tipo: 'fuerza', dias_semana: 4, minutos_sesion: 55, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+  entrenamiento: ent({
+    tipo: 'fuerza',
+    dias_semana: 4,
+    minutos_sesion: 55,
+    intensidad: 'media',
+    experiencia: 'intermedio',
+    momento: 'tarde',
+  }),
   objetivo: 'recomposicion',
   ritmo: 'moderado',
   n_comidas: 4,
@@ -113,7 +127,12 @@ describe('§1.1 — regla de traducción y regla inversa de las preferencias', (
 
   it('con `preferencia_base` presente, `preferencia` deja de leerse', () => {
     const t = normalizarPreferencias(
-      con({ preferencia: 'low_carb', preferencia_base: 'vegetariano', restricciones: [], low_carb: false }),
+      con({
+        preferencia: 'low_carb',
+        preferencia_base: 'vegetariano',
+        restricciones: [],
+        low_carb: false,
+      }),
     )
     expect(t.pref_base).toBe('vegetariano')
     expect(t.low_carb_pedido).toBe(false)
@@ -121,11 +140,16 @@ describe('§1.1 — regla de traducción y regla inversa de las preferencias', (
 
   it('las restricciones se deduplican y se ordenan (sin_lactosa antes que sin_gluten)', () => {
     const t = normalizarPreferencias(
-      con({ preferencia_base: 'omnivoro', restricciones: ['sin_gluten', 'sin_lactosa', 'sin_gluten'] }),
+      con({
+        preferencia_base: 'omnivoro',
+        restricciones: ['sin_gluten', 'sin_lactosa', 'sin_gluten'],
+      }),
     )
     expect(t.restricciones).toEqual(['sin_lactosa', 'sin_gluten'])
-    expect(calcular(con({ preferencia_base: 'omnivoro', restricciones: ['sin_gluten', 'sin_lactosa'] })).restricciones)
-      .toEqual(['sin_lactosa', 'sin_gluten'])
+    expect(
+      calcular(con({ preferencia_base: 'omnivoro', restricciones: ['sin_gluten', 'sin_lactosa'] }))
+        .restricciones,
+    ).toEqual(['sin_lactosa', 'sin_gluten'])
   })
 
   it('la regla inversa elige el banco en el orden de la §1.1', () => {
@@ -140,7 +164,9 @@ describe('§1.1 — regla de traducción y regla inversa de las preferencias', (
 
   it('las restricciones no cambian ningún número: solo filtran alimentos', () => {
     const sin = calcular(con({ preferencia_base: 'omnivoro', restricciones: [] }))
-    const conRestr = calcular(con({ preferencia_base: 'omnivoro', restricciones: ['sin_lactosa', 'sin_gluten'] }))
+    const conRestr = calcular(
+      con({ preferencia_base: 'omnivoro', restricciones: ['sin_lactosa', 'sin_gluten'] }),
+    )
     expect(conRestr.kcal).toBe(sin.kcal)
     expect(conRestr.macros.proteina_g).toBe(sin.macros.proteina_g)
     expect(conRestr.macros.grasa_g).toBe(sin.macros.grasa_g)
@@ -148,8 +174,12 @@ describe('§1.1 — regla de traducción y regla inversa de las preferencias', (
   })
 
   it('la base multiplica la proteína aunque el banco sea otro (vegano + bajo en hidratos)', () => {
-    const veg = calcular(con({ peso_kg: 80, preferencia_base: 'vegano', restricciones: [], low_carb: true }))
-    const omn = calcular(con({ peso_kg: 80, preferencia_base: 'omnivoro', restricciones: [], low_carb: true }))
+    const veg = calcular(
+      con({ peso_kg: 80, preferencia_base: 'vegano', restricciones: [], low_carb: true }),
+    )
+    const omn = calcular(
+      con({ peso_kg: 80, preferencia_base: 'omnivoro', restricciones: [], low_carb: true }),
+    )
     expect(veg.preferencia_efectiva).toBe('low_carb') // el banco es el low-carb...
     expect(veg.preferencia_base).toBe('vegano') // ...pero la base sigue siendo vegana
     expect(veg.avisos).toContain('INFO_VEGANO')
@@ -160,7 +190,12 @@ describe('§1.1 — regla de traducción y regla inversa de las preferencias', (
 
   it('`diabetes` anula el interruptor pero no la base ni las restricciones', () => {
     const r = calcular(
-      con({ preferencia_base: 'vegetariano', restricciones: ['sin_gluten'], low_carb: true, condiciones: ['diabetes'] }),
+      con({
+        preferencia_base: 'vegetariano',
+        restricciones: ['sin_gluten'],
+        low_carb: true,
+        condiciones: ['diabetes'],
+      }),
     )
     expect(r.low_carb).toBe(false)
     expect(r.preferencia_base).toBe('vegetariano')
@@ -174,10 +209,16 @@ describe('§1.1 — regla de traducción y regla inversa de las preferencias', (
     const malo = calcular({ ...PERFIL_BASE, preferencia_base: 'carnivoro' as never })
     expect(malo.excluido).toBe('ERR_INPUT_RANGO')
     expect(malo.errores).toContain('preferencia_base')
-    expect(calcular({ ...PERFIL_BASE, restricciones: ['sin_sal'] as never }).errores).toContain('restricciones')
+    expect(calcular({ ...PERFIL_BASE, restricciones: ['sin_sal'] as never }).errores).toContain(
+      'restricciones',
+    )
     expect(calcular({ ...PERFIL_BASE, low_carb: 'si' as never }).errores).toContain('low_carb')
-    expect(calcular({ ...PERFIL_BASE, menstruacion: 'a_veces' as never }).errores).toContain('menstruacion')
-    expect(calcular({ ...PERFIL_BASE, recomposicion_prioridad: 'todo' as never }).errores).toContain('recomposicion_prioridad')
+    expect(calcular({ ...PERFIL_BASE, menstruacion: 'a_veces' as never }).errores).toContain(
+      'menstruacion',
+    )
+    expect(
+      calcular({ ...PERFIL_BASE, recomposicion_prioridad: 'todo' as never }).errores,
+    ).toContain('recomposicion_prioridad')
     // Ausente o `null` es siempre válido.
     const nulos = calcular({
       ...PERFIL_BASE,
@@ -191,7 +232,9 @@ describe('§1.1 — regla de traducción y regla inversa de las preferencias', (
   })
 
   it('`menstruacion` en un hombre se valida pero se ignora', () => {
-    const r = calcular(con({ sexo: 'hombre', menstruacion: 'ausente', ritmo: 'agresivo', peso_kg: 95 }))
+    const r = calcular(
+      con({ sexo: 'hombre', menstruacion: 'ausente', ritmo: 'agresivo', peso_kg: 95 }),
+    )
     expect(r.excluido).toBeUndefined()
     expect(r.ritmo_efectivo).toBe('agresivo')
     expect(r.avisos).not.toContain('INFO_CICLO')
@@ -234,9 +277,23 @@ describe('Paso 7 y 9 — recomposición con prioridad (decisión C)', () => {
   it('el déficit de `perder` tiene tope duro del 15 % del TDEE', () => {
     // Banda `alto`/`muy_alto` = 10 % en la tabla 3.9; +5 puntos = 15 %, que es el tope.
     const r = calcular(
-      con({ sexo: 'mujer', edad: 30, altura_cm: 165, peso_kg: 85, actividad_diaria: 'ligero',
-            entrenamiento: ent({ tipo: 'fuerza', dias_semana: 4, minutos_sesion: 60, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
-            objetivo: 'recomposicion', recomposicion_prioridad: 'perder' }),
+      con({
+        sexo: 'mujer',
+        edad: 30,
+        altura_cm: 165,
+        peso_kg: 85,
+        actividad_diaria: 'ligero',
+        entrenamiento: ent({
+          tipo: 'fuerza',
+          dias_semana: 4,
+          minutos_sesion: 60,
+          intensidad: 'media',
+          experiencia: 'intermedio',
+          momento: 'tarde',
+        }),
+        objetivo: 'recomposicion',
+        recomposicion_prioridad: 'perder',
+      }),
     )
     if (r.objetivo_efectivo === 'recomposicion') {
       expect(r.tdee.valor - r.kcal).toBeLessThanOrEqual(0.15 * r.tdee.valor + 10)
@@ -256,7 +313,15 @@ describe('Paso 7 y 9 — recomposición con prioridad (decisión C)', () => {
 
   it('la prioridad se ignora si el objetivo efectivo acaba siendo otro', () => {
     // IMC < 18,5: el guardarraíl 6.3 convierte la recomposición en mantenimiento.
-    const r = calcular(con({ sexo: 'mujer', altura_cm: 170, peso_kg: 50, objetivo: 'recomposicion', recomposicion_prioridad: 'perder' }))
+    const r = calcular(
+      con({
+        sexo: 'mujer',
+        altura_cm: 170,
+        peso_kg: 50,
+        objetivo: 'recomposicion',
+        recomposicion_prioridad: 'perder',
+      }),
+    )
     expect(r.objetivo_efectivo).not.toBe('recomposicion')
     expect(r.recomposicion_prioridad).toBeUndefined()
   })
@@ -264,7 +329,9 @@ describe('Paso 7 y 9 — recomposición con prioridad (decisión C)', () => {
   it('los textos de los dos avisos nuevos existen y no dejan placeholders', () => {
     for (const prioridad of ['perder', 'ganar'] as const) {
       const inputs = con({ ...CASO_16, recomposicion_prioridad: prioridad })
-      const t = textosAvisos(calcular(inputs), inputs).find((x) => x.codigo === `INFO_RECOMP_PRIORIDAD_${prioridad.toUpperCase()}`)
+      const t = textosAvisos(calcular(inputs), inputs).find(
+        (x) => x.codigo === `INFO_RECOMP_PRIORIDAD_${prioridad.toUpperCase()}`,
+      )
       expect(t, prioridad).toBeDefined()
       expect(t?.texto).not.toMatch(/[{}]/)
       expect(t?.texto.length).toBeGreaterThan(50)
@@ -276,7 +343,18 @@ describe('Paso 7 y 9 — recomposición con prioridad (decisión C)', () => {
 
 describe('Pasos 6.7bis y 17 — la regla (decisión D)', () => {
   const mujer = (o: Partial<Inputs>): Resultado =>
-    calcular(con({ sexo: 'mujer', edad: 34, altura_cm: 168, peso_kg: 78, actividad_diaria: 'ligero', objetivo: 'perder', n_comidas: 4, ...o }))
+    calcular(
+      con({
+        sexo: 'mujer',
+        edad: 34,
+        altura_cm: 168,
+        peso_kg: 78,
+        actividad_diaria: 'ligero',
+        objetivo: 'perder',
+        n_comidas: 4,
+        ...o,
+      }),
+    )
 
   it('`irregular` y `ausente` suavizan el ritmo agresivo a moderado; el resto no', () => {
     expect(mujer({ ritmo: 'agresivo', menstruacion: 'irregular' }).ritmo_efectivo).toBe('moderado')
@@ -306,9 +384,16 @@ describe('Pasos 6.7bis y 17 — la regla (decisión D)', () => {
 
   it('WARN_CICLO_AUSENTE: las tres cláusulas de la condición, contra el objetivo FINAL', () => {
     // (1) objetivo_efectivo === 'perder'
-    expect(mujer({ ritmo: 'moderado', menstruacion: 'irregular' }).avisos).toContain('WARN_CICLO_AUSENTE')
+    expect(mujer({ ritmo: 'moderado', menstruacion: 'irregular' }).avisos).toContain(
+      'WARN_CICLO_AUSENTE',
+    )
     // (2) banda muy_bajo/bajo (aquí el paso 6.3 pasa a recomposición, así que no es `perder`)
-    const magra = mujer({ ritmo: 'moderado', menstruacion: 'ausente', grasa: { metodo: 'conocido', valor: 18, fuente: 'fiable' }, peso_kg: 60 })
+    const magra = mujer({
+      ritmo: 'moderado',
+      menstruacion: 'ausente',
+      grasa: { metodo: 'conocido', valor: 18, fuente: 'fiable' },
+      peso_kg: 60,
+    })
     expect(magra.objetivo_efectivo).not.toBe('perder')
     expect(magra.grasa.banda === 'muy_bajo' || magra.grasa.banda === 'bajo').toBe(true)
     expect(magra.avisos).toContain('WARN_CICLO_AUSENTE')
@@ -317,7 +402,12 @@ describe('Pasos 6.7bis y 17 — la regla (decisión D)', () => {
     expect(mantiene.objetivo_efectivo).toBe('mantener')
     expect(mantiene.avisos).toContain('WARN_CICLO_AUSENTE')
     // Ninguna de las tres: no se emite.
-    const nada = mujer({ objetivo: 'mantener', ritmo: 'moderado', menstruacion: 'ausente', grasa: { metodo: 'conocido', valor: 30, fuente: 'fiable' } })
+    const nada = mujer({
+      objetivo: 'mantener',
+      ritmo: 'moderado',
+      menstruacion: 'ausente',
+      grasa: { metodo: 'conocido', valor: 30, fuente: 'fiable' },
+    })
     expect(nada.avisos).not.toContain('WARN_CICLO_AUSENTE')
   })
 
@@ -329,7 +419,8 @@ describe('Pasos 6.7bis y 17 — la regla (decisión D)', () => {
 
   it('el fragmento del ritmo de WARN_CICLO_AUSENTE solo aparece si se ha suavizado', () => {
     const textoDe = (inputs: Inputs): string =>
-      textosAvisos(calcular(inputs), inputs).find((t) => t.codigo === 'WARN_CICLO_AUSENTE')?.texto ?? ''
+      textosAvisos(calcular(inputs), inputs).find((t) => t.codigo === 'WARN_CICLO_AUSENTE')
+        ?.texto ?? ''
     const agresivo = con({ ...CASO_15, ritmo: 'agresivo' })
     expect(textoDe(agresivo)).toContain('Hemos suavizado el ritmo a moderado.')
     const moderado = con({ ...CASO_15, ritmo: 'moderado' })
@@ -343,12 +434,29 @@ describe('Pasos 6.7bis y 17 — la regla (decisión D)', () => {
 describe('Paso 14b — proyección semana a semana (decisión F)', () => {
   // Tabla normativa del caso 15 de la §5: 23 puntos, de la semana 0 a la 22 = semanas[1].
   const CURVA_15: Array<[number, number, number, number]> = [
-    [0, 78.0, 78.0, 78.0], [1, 77.4, 77.4, 77.5], [2, 76.8, 76.9, 77.0], [3, 76.2, 76.3, 76.5],
-    [4, 75.7, 75.8, 76.0], [5, 75.1, 75.2, 75.5], [6, 74.5, 74.7, 75.0], [7, 73.9, 74.2, 74.5],
-    [8, 73.3, 73.7, 74.0], [9, 73.3, 73.7, 74.0], [10, 72.7, 73.2, 73.5], [11, 72.2, 72.7, 73.0],
-    [12, 71.6, 72.2, 72.5], [13, 71.0, 71.7, 72.0], [14, 70.4, 71.3, 71.5], [15, 69.8, 70.8, 71.0],
-    [16, 69.2, 70.3, 70.5], [17, 68.7, 69.9, 70.0], [18, 68.7, 69.9, 70.0], [19, 68.1, 69.5, 69.5],
-    [20, 68.0, 69.0, 69.0], [21, 68.0, 68.5, 68.5], [22, 68.0, 68.0, 68.0],
+    [0, 78.0, 78.0, 78.0],
+    [1, 77.4, 77.4, 77.5],
+    [2, 76.8, 76.9, 77.0],
+    [3, 76.2, 76.3, 76.5],
+    [4, 75.7, 75.8, 76.0],
+    [5, 75.1, 75.2, 75.5],
+    [6, 74.5, 74.7, 75.0],
+    [7, 73.9, 74.2, 74.5],
+    [8, 73.3, 73.7, 74.0],
+    [9, 73.3, 73.7, 74.0],
+    [10, 72.7, 73.2, 73.5],
+    [11, 72.2, 72.7, 73.0],
+    [12, 71.6, 72.2, 72.5],
+    [13, 71.0, 71.7, 72.0],
+    [14, 70.4, 71.3, 71.5],
+    [15, 69.8, 70.8, 71.0],
+    [16, 69.2, 70.3, 70.5],
+    [17, 68.7, 69.9, 70.0],
+    [18, 68.7, 69.9, 70.0],
+    [19, 68.1, 69.5, 69.5],
+    [20, 68.0, 69.0, 69.0],
+    [21, 68.0, 68.5, 68.5],
+    [22, 68.0, 68.0, 68.0],
   ]
 
   it('caso 15: la curva coincide campo a campo con la tabla normativa', () => {
@@ -397,7 +505,9 @@ describe('Paso 14b — proyección semana a semana (decisión F)', () => {
   })
 
   it("con 'tca' no se publica proyección ni INFO_PROYECCION_PLANA (regla no expuesta)", () => {
-    const r = calcular(con({ sexo: 'mujer', altura_cm: 165, peso_kg: 78, condiciones: ['tca'], objetivo: 'perder' }))
+    const r = calcular(
+      con({ sexo: 'mujer', altura_cm: 165, peso_kg: 78, condiciones: ['tca'], objetivo: 'perder' }),
+    )
     expect(r.proyeccion).toBeUndefined()
     expect(r.avisos).not.toContain('INFO_PROYECCION_PLANA')
     expect(r.limites_ajuste).toBeUndefined()
@@ -410,9 +520,25 @@ describe('Paso 14b — proyección semana a semana (decisión F)', () => {
         for (const peso of [50, 70, 95, 130]) {
           for (const objetivo of ['perder', 'mantener', 'ganar', 'recomposicion'] as const) {
             for (const pobj of [null, peso - 12, peso + 6]) {
-              const r = calcular(con({ sexo, edad, altura_cm: 170, peso_kg: peso, objetivo, peso_objetivo: pobj,
-                actividad_diaria: 'moderado',
-                entrenamiento: ent({ tipo: 'fuerza', dias_semana: 3, minutos_sesion: 60, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }) }))
+              const r = calcular(
+                con({
+                  sexo,
+                  edad,
+                  altura_cm: 170,
+                  peso_kg: peso,
+                  objetivo,
+                  peso_objetivo: pobj,
+                  actividad_diaria: 'moderado',
+                  entrenamiento: ent({
+                    tipo: 'fuerza',
+                    dias_semana: 3,
+                    minutos_sesion: 60,
+                    intensidad: 'media',
+                    experiencia: 'intermedio',
+                    momento: 'tarde',
+                  }),
+                }),
+              )
               if (r.excluido) continue
               casos++
               const p = r.proyeccion
@@ -420,10 +546,19 @@ describe('Paso 14b — proyección semana a semana (decisión F)', () => {
               if (!p) continue
               expect(p.length).toBeGreaterThan(1)
               expect(p.length - 1).toBeLessThanOrEqual(26) // nunca pasa de la semana 26
-              expect(p[0]).toEqual({ semana: 0, peso_min: Math.round(peso * 10) / 10, peso_esp: Math.round(peso * 10) / 10, peso_max: Math.round(peso * 10) / 10 })
+              expect(p[0]).toEqual({
+                semana: 0,
+                peso_min: Math.round(peso * 10) / 10,
+                peso_esp: Math.round(peso * 10) / 10,
+                peso_max: Math.round(peso * 10) / 10,
+              })
               p.forEach((q, i) => {
                 expect(q.semana).toBe(i) // semanas correlativas desde 0
-                expect(Number.isFinite(q.peso_min) && Number.isFinite(q.peso_esp) && Number.isFinite(q.peso_max)).toBe(true)
+                expect(
+                  Number.isFinite(q.peso_min) &&
+                    Number.isFinite(q.peso_esp) &&
+                    Number.isFinite(q.peso_max),
+                ).toBe(true)
                 expect(q.peso_min).toBeLessThanOrEqual(q.peso_esp)
                 expect(q.peso_esp).toBeLessThanOrEqual(q.peso_max)
                 if (i > 0 && r.cronograma) {
@@ -442,8 +577,10 @@ describe('Paso 14b — proyección semana a semana (decisión F)', () => {
                 const meta = Math.round(r.peso_objetivo.efectivo * 10) / 10
                 const ult = p[p.length - 1]
                 // Nunca sobrepasa la meta.
-                if (r.objetivo_efectivo === 'perder') expect(ult.peso_min).toBeGreaterThanOrEqual(meta - 0.051)
-                if (r.objetivo_efectivo === 'ganar') expect(ult.peso_max).toBeLessThanOrEqual(meta + 0.051)
+                if (r.objetivo_efectivo === 'perder')
+                  expect(ult.peso_min).toBeGreaterThanOrEqual(meta - 0.051)
+                if (r.objetivo_efectivo === 'ganar')
+                  expect(ult.peso_max).toBeLessThanOrEqual(meta + 0.051)
               } else {
                 // v1.2: sin cronograma la curva es la plana o la de recomposición con déficit,
                 // y las dos son excluyentes (regla de supresión de la §4).
@@ -496,7 +633,9 @@ describe('Paso 18 — ajustarMacros (decisión B)', () => {
     ])
     // La columna de proteína es idéntica a la del plan recomendado.
     expect(a.comidas.map((c) => c.proteina_g)).toEqual(r.comidas.map((c) => c.proteina_g))
-    expect([...a.avisos].sort()).toEqual([...r.avisos, 'INFO_AJUSTE_MANUAL', 'WARN_HC_BAJO_MINIMO'].sort())
+    expect([...a.avisos].sort()).toEqual(
+      [...r.avisos, 'INFO_AJUSTE_MANUAL', 'WARN_HC_BAJO_MINIMO'].sort(),
+    )
   })
 
   it('idempotencia respecto al origen y "volver a lo recomendado" bit a bit (S27l y S27m)', () => {
@@ -512,7 +651,9 @@ describe('Paso 18 — ajustarMacros (decisión B)', () => {
   })
 
   it("con 'tca' (sin `limites_ajuste`) y con `excluido` devuelve el resultado tal cual", () => {
-    const tca = calcular(con({ sexo: 'mujer', altura_cm: 165, peso_kg: 78, condiciones: ['tca'], objetivo: 'perder' }))
+    const tca = calcular(
+      con({ sexo: 'mujer', altura_cm: 165, peso_kg: 78, condiciones: ['tca'], objetivo: 'perder' }),
+    )
     expect(ajustarMacros(tca, { hc_g: 50 })).toBe(tca)
     const excluido = calcular(con({ edad: 16 }))
     expect(ajustarMacros(excluido, { kcal: 2000 })).toBe(excluido)
@@ -535,10 +676,16 @@ describe('Paso 18 — ajustarMacros (decisión B)', () => {
     const r = calcular(CASO_15)
     const L = r.limites_ajuste
     if (!L) throw new Error('sin límites de ajuste')
-    for (const ajuste of [{ hc_g: 0 }, { hc_g: 30 }, { hc_g: 500 }, { kcal: 1500 }, { kcal: 2240, hc_g: 30 }] as AjusteMacros[]) {
+    for (const ajuste of [
+      { hc_g: 0 },
+      { hc_g: 30 },
+      { hc_g: 500 },
+      { kcal: 1500 },
+      { kcal: 2240, hc_g: 30 },
+    ] as AjusteMacros[]) {
       const a = ajustarMacros(r, ajuste)
       expect(a.macros.proteina_g, JSON.stringify(ajuste)).toBe(r.macros.proteina_g)
-      const suelo = Math.max(L.suelo_grasa_abs_g, 0.20 * a.kcal / 9)
+      const suelo = Math.max(L.suelo_grasa_abs_g, (0.2 * a.kcal) / 9)
       expect(a.macros.grasa_g, JSON.stringify(ajuste)).toBeGreaterThanOrEqual(suelo)
       // Cierre dentro del 2 % (hasta 22,5 kcal con dos macros redondeados a 5 g).
       expect(Math.abs(a.kcal_cierre - a.kcal)).toBeLessThanOrEqual(0.02 * a.kcal)
@@ -552,11 +699,13 @@ describe('Paso 18 — ajustarMacros (decisión B)', () => {
     expect(bajo.macros.hc_g).toBe(30)
     expect(bajo.avisos).toContain('WARN_HC_BAJO_MINIMO')
     // El techo de grasa del paso 9 NO se aplica aquí: es deliberado (§ paso 18).
-    expect(9 * bajo.macros.grasa_g).toBeGreaterThan(0.40 * bajo.kcal)
+    expect(9 * bajo.macros.grasa_g).toBeGreaterThan(0.4 * bajo.kcal)
   })
 
   it('WARN_HC_BAJO_MINIMO avisa pero no bloquea, y su texto imprime el mínimo real', () => {
-    const lowcarb = calcular(con({ peso_kg: 85, preferencia_base: 'omnivoro', restricciones: [], low_carb: true }))
+    const lowcarb = calcular(
+      con({ peso_kg: 85, preferencia_base: 'omnivoro', restricciones: [], low_carb: true }),
+    )
     expect(lowcarb.limites_ajuste?.hc_min_motor_g).toBe(75)
     const a = ajustarMacros(lowcarb, { hc_g: 40 })
     expect(a.macros.hc_g).toBe(40) // no bloquea
@@ -565,7 +714,9 @@ describe('Paso 18 — ajustarMacros (decisión B)', () => {
     expect(t?.texto).toContain('75 g')
     expect(t?.texto).not.toMatch(/[{}]/)
     const normal = ajustarMacros(calcular(CASO_16), { hc_g: 120 })
-    expect(textosAvisos(normal, CASO_16).find((x) => x.codigo === 'WARN_HC_BAJO_MINIMO')?.texto).toContain('130 g')
+    expect(
+      textosAvisos(normal, CASO_16).find((x) => x.codigo === 'WARN_HC_BAJO_MINIMO')?.texto,
+    ).toContain('130 g')
   })
 
   it('subir las calorías al TDEE emite WARN_KCAL_AJUSTE_ALTA y suprime WARN_DEFICIT_MINIMO', () => {
@@ -590,7 +741,7 @@ describe('Paso 18 — ajustarMacros (decisión B)', () => {
     expect(a.objetivo_efectivo).toBe(r.objetivo_efectivo)
     expect(a.limites_ajuste).toEqual(r.limites_ajuste) // se copia tal cual, nunca se recalcula
     expect(a.cronograma).not.toBeNull()
-    expect((a.cronograma?.semanas[0] ?? 0)).toBeLessThan(r.cronograma?.semanas[0] ?? 0)
+    expect(a.cronograma?.semanas[0] ?? 0).toBeLessThan(r.cronograma?.semanas[0] ?? 0)
     expect(a.proyeccion?.length).toBe((a.cronograma?.semanas[1] ?? 0) + 1)
     expect(a.proyeccion?.[0].peso_esp).toBe(78)
   })
@@ -609,19 +760,41 @@ describe('Paso 18 — ajustarMacros (decisión B)', () => {
 
   it('barrido de invariantes del ajuste sobre perfiles y ajustes variados', () => {
     const ajustes: AjusteMacros[] = [
-      {}, { hc_g: 30 }, { hc_g: 60 }, { hc_g: 120 }, { hc_g: 400 },
-      { kcal: 1200 }, { kcal: 3000 }, { kcal: 1800, hc_g: 40 }, { kcal: 2400, hc_g: 300 },
+      {},
+      { hc_g: 30 },
+      { hc_g: 60 },
+      { hc_g: 120 },
+      { hc_g: 400 },
+      { kcal: 1200 },
+      { kcal: 3000 },
+      { kcal: 1800, hc_g: 40 },
+      { kcal: 2400, hc_g: 300 },
     ]
     let casos = 0
     for (const sexo of ['hombre', 'mujer'] as const) {
       for (const peso of [55, 75, 100, 140]) {
         for (const objetivo of ['perder', 'mantener', 'ganar', 'recomposicion'] as const) {
           for (const low_carb of [false, true]) {
-            const inputs = con({ sexo, peso_kg: peso, altura_cm: 172, edad: 35, objetivo,
+            const inputs = con({
+              sexo,
+              peso_kg: peso,
+              altura_cm: 172,
+              edad: 35,
+              objetivo,
               peso_objetivo: objetivo === 'perder' ? peso - 10 : null,
               actividad_diaria: 'moderado',
-              entrenamiento: ent({ tipo: 'fuerza', dias_semana: 4, minutos_sesion: 60, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
-              preferencia_base: 'omnivoro', restricciones: [], low_carb })
+              entrenamiento: ent({
+                tipo: 'fuerza',
+                dias_semana: 4,
+                minutos_sesion: 60,
+                intensidad: 'media',
+                experiencia: 'intermedio',
+                momento: 'tarde',
+              }),
+              preferencia_base: 'omnivoro',
+              restricciones: [],
+              low_carb,
+            })
             const r = calcular(inputs)
             if (r.excluido) continue
             const L = r.limites_ajuste
@@ -643,7 +816,7 @@ describe('Paso 18 — ajustarMacros (decisión B)', () => {
               // S27c: los hidratos son múltiplo de 5 y nunca bajan de 30 g salvo por el suelo de grasa.
               expect(a.macros.hc_g % 5, etiqueta).toBe(0)
               // S27d: el suelo de grasa es inviolable.
-              const suelo = Math.max(L.suelo_grasa_abs_g, 0.20 * a.kcal / 9)
+              const suelo = Math.max(L.suelo_grasa_abs_g, (0.2 * a.kcal) / 9)
               expect(a.macros.grasa_g, etiqueta).toBeGreaterThanOrEqual(suelo)
               expect(a.macros.grasa_g % 5, etiqueta).toBe(0)
               // S27e: cierre dentro del 2 % y sin NaN.
@@ -652,14 +825,25 @@ describe('Paso 18 — ajustarMacros (decisión B)', () => {
                 expect(Number.isFinite(v), etiqueta).toBe(true)
               }
               // S27f: el reparto por comidas vuelve a sumar el total.
-              expect(a.comidas.reduce((x, c) => x + c.proteina_g, 0), etiqueta).toBe(a.macros.proteina_g)
-              expect(a.comidas.reduce((x, c) => x + c.grasa_g, 0), etiqueta).toBe(a.macros.grasa_g)
-              expect(a.comidas.reduce((x, c) => x + c.hc_g, 0), etiqueta).toBe(a.macros.hc_g)
+              expect(
+                a.comidas.reduce((x, c) => x + c.proteina_g, 0),
+                etiqueta,
+              ).toBe(a.macros.proteina_g)
+              expect(
+                a.comidas.reduce((x, c) => x + c.grasa_g, 0),
+                etiqueta,
+              ).toBe(a.macros.grasa_g)
+              expect(
+                a.comidas.reduce((x, c) => x + c.hc_g, 0),
+                etiqueta,
+              ).toBe(a.macros.hc_g)
               // S27g: los avisos del ajuste se corresponden con lo que se aplicó.
               const ajustado = a.kcal !== L.kcal_recomendada || a.macros.hc_g !== L.hc_recomendado_g
               expect(a.avisos.includes('INFO_AJUSTE_MANUAL'), etiqueta).toBe(ajustado)
               expect(a.ajuste !== undefined, etiqueta).toBe(ajustado)
-              expect(a.avisos.includes('WARN_HC_BAJO_MINIMO'), etiqueta).toBe(a.macros.hc_g < L.hc_min_motor_g)
+              expect(a.avisos.includes('WARN_HC_BAJO_MINIMO'), etiqueta).toBe(
+                a.macros.hc_g < L.hc_min_motor_g,
+              )
               if (a.avisos.includes('WARN_KCAL_AJUSTE_ALTA')) {
                 expect(a.avisos, etiqueta).not.toContain('WARN_DEFICIT_MINIMO')
               }
@@ -687,7 +871,14 @@ describe('paso 18 — el cierre de kcal nunca se sale del 2 %', () => {
     edad: 30,
     altura_cm: 165,
     peso_kg: 70,
-    entrenamiento: ent({ tipo: 'fuerza', dias_semana: 3, minutos_sesion: 60, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+    entrenamiento: ent({
+      tipo: 'fuerza',
+      dias_semana: 3,
+      minutos_sesion: 60,
+      intensidad: 'media',
+      experiencia: 'intermedio',
+      momento: 'tarde',
+    }),
     objetivo: 'perder',
     ritmo: 'moderado',
   })
@@ -737,7 +928,14 @@ describe('paso 18 — un ajuste vacío devuelve el plan recomendado, avisos incl
     peso_kg: 48,
     grasa: { metodo: 'conocido', valor: 52, fuente: 'fiable' },
     actividad_diaria: 'muy_alto',
-    entrenamiento: ent({ tipo: 'fuerza', dias_semana: 2, minutos_sesion: 13, intensidad: 'media', experiencia: 'novato', momento: 'tarde' }),
+    entrenamiento: ent({
+      tipo: 'fuerza',
+      dias_semana: 2,
+      minutos_sesion: 13,
+      intensidad: 'media',
+      experiencia: 'novato',
+      momento: 'tarde',
+    }),
     objetivo: 'perder',
     ritmo: 'suave',
   })
@@ -763,7 +961,14 @@ describe('paso 6.7bis — la regla solo suaviza planes que restan calorías', ()
     peso_kg: 54,
     grasa: { metodo: 'conocido', valor: 39, fuente: 'fiable' },
     actividad_diaria: 'alto',
-    entrenamiento: ent({ tipo: 'mixto', dias_semana: 6, minutos_sesion: 60, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+    entrenamiento: ent({
+      tipo: 'mixto',
+      dias_semana: 6,
+      minutos_sesion: 60,
+      intensidad: 'media',
+      experiencia: 'intermedio',
+      momento: 'tarde',
+    }),
     objetivo: 'ganar',
     ritmo: 'agresivo',
     peso_objetivo: 60,

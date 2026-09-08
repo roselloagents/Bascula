@@ -98,7 +98,11 @@ function textoAlternativas(e: Ejemplos): string {
 }
 
 /** El plan entero tal y como lo monta `App.tsx`: motor y, encima, generador de menús. */
-function plan(borrador: Borrador): { inputs: InputCalculo; resultado: Resultado; ejemplos: Ejemplos } {
+function plan(borrador: Borrador): {
+  inputs: InputCalculo
+  resultado: Resultado
+  ejemplos: Ejemplos
+} {
   const inputs = aInputs(borrador)
   const resultado = calcular(inputs)
   expect(resultado.excluido).toBeUndefined()
@@ -149,7 +153,8 @@ describe('decisión G: las dos listas del paso de alimentos llegan al menú', ()
   it('un favorito que pasa la consulta entra en el menú', () => {
     const { ejemplos: sin } = plan(borradorCompleto())
     const { ejemplos: con } = plan(borradorCompleto({ alimentos_favoritos: ['salmon'] }))
-    const enElMenu = (e: Ejemplos) => e.entreno.comidas.some((c) => c.alimentos.some((a) => a.id === 'salmon'))
+    const enElMenu = (e: Ejemplos) =>
+      e.entreno.comidas.some((c) => c.alimentos.some((a) => a.id === 'salmon'))
     expect(enElMenu(sin)).toBe(false)
     expect(enElMenu(con)).toBe(true)
   })
@@ -166,7 +171,9 @@ describe('decisión G: las dos listas del paso de alimentos llegan al menú', ()
     expect(ids).not.toContain('brocoli')
     expect(ids).not.toContain('coliflor')
     expect(ejemplos.compra?.alimentos_distintos ?? 0).toBeLessThanOrEqual(12)
-    expect(ejemplos.entreno.comidas.some((c) => c.alimentos.some((a) => a.id === 'salmon'))).toBe(true)
+    expect(ejemplos.entreno.comidas.some((c) => c.alimentos.some((a) => a.id === 'salmon'))).toBe(
+      true,
+    )
   })
 
   it('cuando la exclusión deja sin candidatos, el respaldo avisa en vez de romper el menú', () => {
@@ -206,7 +213,9 @@ describe('decisión G: las dos listas del paso de alimentos llegan al menú', ()
 
   it('sin marcar nada el menú es exactamente el de la v1.1', () => {
     const sinListas = plan(borradorCompleto()).ejemplos
-    const conListasVacias = plan(borradorCompleto({ alimentos_excluidos: [], alimentos_favoritos: [] })).ejemplos
+    const conListasVacias = plan(
+      borradorCompleto({ alimentos_excluidos: [], alimentos_favoritos: [] }),
+    ).ejemplos
     expect(idsVisibles(conListasVacias)).toEqual(idsVisibles(sinListas))
   })
 })
@@ -288,7 +297,9 @@ describe('decisión H: el plazo del cuestionario llega al ritmo del plan', () =>
 
   it('el plazo se descarta si el cuestionario no lo pudo ofrecer', () => {
     // Sin peso objetivo numérico no hay cuarta opción: lo que quede en el borrador no viaja.
-    const inputs = aInputs(borradorCompleto({ quierePesoObjetivo: false, usarPlazo: true, plazo_semanas: 12 }))
+    const inputs = aInputs(
+      borradorCompleto({ quierePesoObjetivo: false, usarPlazo: true, plazo_semanas: 12 }),
+    )
     expect(inputs.plazo_semanas).toBeNull()
   })
 })
@@ -392,7 +403,10 @@ describe('decisión I: los síntomas de la regla no tocan un número y sí la ta
 
   it('una vegana no ve carne ni mejillones entre los alimentos del ciclo', () => {
     const { inputs, resultado, ejemplos } = plan(
-      borradorCompleto({ preferencia_base: 'vegano', sintomas_regla: ['sangrado_abundante', 'dolor'] }),
+      borradorCompleto({
+        preferencia_base: 'vegano',
+        sintomas_regla: ['sangrado_abundante', 'dolor'],
+      }),
     )
     const perfil = perfilDeInputs(inputs, resultado.preferencia_efectiva)
     for (const a of ejemplos.alimentos_ciclo ?? []) {
@@ -402,7 +416,10 @@ describe('decisión I: los síntomas de la regla no tocan un número y sí la ta
 
   it('un alimento excluido tampoco entra por la puerta del ciclo', () => {
     const { ejemplos } = plan(
-      borradorCompleto({ sintomas_regla: ['dolor'], alimentos_excluidos: ['sardinas_lata', 'nueces'] }),
+      borradorCompleto({
+        sintomas_regla: ['dolor'],
+        alimentos_excluidos: ['sardinas_lata', 'nueces'],
+      }),
     )
     const ids = (ejemplos.alimentos_ciclo ?? []).map((a) => a.id)
     expect(ids).not.toContain('sardinas_lata')
@@ -491,9 +508,9 @@ describe('un borrador de la v1.1 sigue funcionando con la v1.2', () => {
     expect(idsVisibles(ejemplos).map((v) => v.id)).not.toContain('brocoli')
     // Ni el resumen de la pantalla ni el del PDF pueden imprimir un identificador técnico.
     expect(listaNombresCortos(restaurado.alimentos_excluidos)).toBe('Brócoli')
-    expect(resumenAlimentos(restaurado.alimentos_excluidos, restaurado.alimentos_favoritos)).not.toContain(
-      'no_existe',
-    )
+    expect(
+      resumenAlimentos(restaurado.alimentos_excluidos, restaurado.alimentos_favoritos),
+    ).not.toContain('no_existe')
   })
 })
 

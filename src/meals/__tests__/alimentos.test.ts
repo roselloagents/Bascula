@@ -12,7 +12,15 @@
 import { describe, expect, it } from 'vitest'
 import { ALIMENTOS, alimentoPorId } from '../../data/foods'
 import type { Alimento } from '../../data/foods'
-import type { Ejemplos, Inputs, NComidas, Preferencia, Restriccion, Resultado, SintomaRegla } from '../../engine/types'
+import type {
+  Ejemplos,
+  Inputs,
+  NComidas,
+  Preferencia,
+  Restriccion,
+  Resultado,
+  SintomaRegla,
+} from '../../engine/types'
 import { MAX_ALIMENTOS_SENCILLO } from '../bancoSencillo'
 import { MAX_ITEMS_OPCIONAL_CICLO, NOTA_OPCIONAL_CICLO, TITULO_OPCIONAL_CICLO } from '../compra'
 import { MAX_ALIMENTOS_CICLO, TABLA_CICLO } from '../ciclo'
@@ -75,9 +83,18 @@ function planDe(c: Caso, kcal: number, nComidas: NComidas) {
   }
 }
 
-function generar(c: Caso, kcal: number, nComidas: NComidas, extra: Partial<Inputs>, sencillo = false): Ejemplos {
+function generar(
+  c: Caso,
+  kcal: number,
+  nComidas: NComidas,
+  extra: Partial<Inputs>,
+  sencillo = false,
+): Ejemplos {
   const plan = planDe(c, kcal, nComidas)
-  return generarEjemplos({ ...inputsDe(plan), menu_sencillo: sencillo, ...extra }, resultadoDe(plan))
+  return generarEjemplos(
+    { ...inputsDe(plan), menu_sencillo: sencillo, ...extra },
+    resultadoDe(plan),
+  )
 }
 
 /** Todos los ids que aparecen en el menú del día que viaja en `Ejemplos`. */
@@ -90,7 +107,10 @@ function idsDelMenu(e: Ejemplos): string[] {
  * falsos positivos: se descartan los que son subcadena del nombre de alguno permitido ("arroz
  * blanco" dentro de "arroz blanco integral").
  */
-function nombresBuscables(prohibidos: readonly Alimento[], permitidos: readonly Alimento[]): string[] {
+function nombresBuscables(
+  prohibidos: readonly Alimento[],
+  permitidos: readonly Alimento[],
+): string[] {
   const nombresPermitidos = permitidos.map(nombreCorto)
   return prohibidos
     .map(nombreCorto)
@@ -107,7 +127,8 @@ describe('§3.2b — alimentos excluidos', () => {
           for (const n of COMIDAS) {
             const e = generar(c, kcal, n, { alimentos_excluidos: c.excluidos }, sencillo)
             const etiqueta = `${c.etiqueta} ${modo} ${kcal}/${n}`
-            for (const id of idsDelMenu(e)) expect(c.excluidos, `${etiqueta} · menú`).not.toContain(id)
+            for (const id of idsDelMenu(e))
+              expect(c.excluidos, `${etiqueta} · menú`).not.toContain(id)
             for (const item of e.compra?.items ?? []) {
               expect(c.excluidos, `${etiqueta} · compra`).not.toContain(item.alimento_id)
             }
@@ -125,7 +146,10 @@ describe('§3.2b — alimentos excluidos', () => {
         const prohibidos = c.excluidos.map((id) => alimentoPorId(id)!)
         const permitidos = ALIMENTOS.filter((a) => !c.excluidos.includes(a.id))
         const nombres = nombresBuscables(prohibidos, permitidos)
-        const texto = e.entreno.comidas.flatMap((x) => x.alternativas).join(' | ').toLowerCase()
+        const texto = e.entreno.comidas
+          .flatMap((x) => x.alternativas)
+          .join(' | ')
+          .toLowerCase()
         for (const n of nombres) expect(texto, `${c.etiqueta} ${modo}: "${n}"`).not.toContain(n)
       })
     }
@@ -172,7 +196,8 @@ describe('§3.2b — alimentos excluidos', () => {
       // Sin ninguna verdura que ofrecer, el modo sencillo se desactiva (§3.7.2, regla 4c).
       expect(e.modo_sencillo).toBe(false)
       for (const comida of e.entreno.comidas) {
-        const desviacion = Math.abs(comida.totales.kcal - comida.objetivo.kcal) / comida.objetivo.kcal
+        const desviacion =
+          Math.abs(comida.totales.kcal - comida.objetivo.kcal) / comida.objetivo.kcal
         expect(desviacion, comida.comida).toBeLessThanOrEqual(0.1)
       }
     }
@@ -205,7 +230,9 @@ describe('§3.2b — alimentos excluidos', () => {
     // A un vegano se le vacía el rol de proteína entero: antes que servirle pollo, se le sirve
     // un alimento vegano que él mismo había excluido.
     const c = CASOS[2]
-    const veganos = ALIMENTOS.filter((a) => a.tags.includes('vegano') && a.roles.includes('proteina'))
+    const veganos = ALIMENTOS.filter(
+      (a) => a.tags.includes('vegano') && a.roles.includes('proteina'),
+    )
     const e = generar(c, 2200, 3, { alimentos_excluidos: veganos.map((a) => a.id) })
     for (const id of idsDelMenu(e)) {
       expect(pasaPreferencia(alimentoPorId(id)!, 'vegano'), id).toBe(true)
@@ -258,10 +285,20 @@ describe('§3.2b — alimentos favoritos', () => {
           c,
           kcal,
           n,
-          { alimentos_favoritos: ['pechuga_pavo', 'garbanzos_cocidos', 'boniato_cocido', 'nueces', 'pera'] },
+          {
+            alimentos_favoritos: [
+              'pechuga_pavo',
+              'garbanzos_cocidos',
+              'boniato_cocido',
+              'nueces',
+              'pera',
+            ],
+          },
           true,
         )
-        expect(e.compra!.alimentos_distintos, `${kcal}/${n}`).toBeLessThanOrEqual(MAX_ALIMENTOS_SENCILLO)
+        expect(e.compra!.alimentos_distintos, `${kcal}/${n}`).toBeLessThanOrEqual(
+          MAX_ALIMENTOS_SENCILLO,
+        )
         // El primero de la lista es el que más aguanta: es el orden del usuario.
         expect(idsDelMenu(e), `${kcal}/${n}`).toContain('pechuga_pavo')
       }
@@ -275,7 +312,10 @@ describe('§3.2b — alimentos favoritos', () => {
           c,
           2200,
           4,
-          { alimentos_favoritos: [c.favorito, c.favoritoSencillo], alimentos_excluidos: c.excluidos },
+          {
+            alimentos_favoritos: [c.favorito, c.favoritoSencillo],
+            alimentos_excluidos: c.excluidos,
+          },
           sencillo,
         )
         for (const comida of e.entreno.comidas) {
@@ -289,7 +329,13 @@ describe('§3.2b — alimentos favoritos', () => {
   it('un favorito que no pasa la base no aparece: ser favorito no salta ningún filtro', () => {
     const c = CASOS[2] // vegano
     for (const sencillo of [false, true]) {
-      const e = generar(c, 2200, 4, { alimentos_favoritos: ['pechuga_pollo', 'queso_curado'] }, sencillo)
+      const e = generar(
+        c,
+        2200,
+        4,
+        { alimentos_favoritos: ['pechuga_pollo', 'queso_curado'] },
+        sencillo,
+      )
       for (const id of idsDelMenu(e)) {
         expect(pasaPreferencia(alimentoPorId(id)!, 'vegano'), id).toBe(true)
       }
@@ -348,7 +394,10 @@ describe('§3.2b — lo que no cambia', () => {
       for (const sencillo of [false, true]) {
         for (const kcal of KCAL) {
           const plan = planDe(c, kcal, 4)
-          const base = generarEjemplos({ ...inputsDe(plan), menu_sencillo: sencillo }, resultadoDe(plan))
+          const base = generarEjemplos(
+            { ...inputsDe(plan), menu_sencillo: sencillo },
+            resultadoDe(plan),
+          )
           const conCampos = generarEjemplos(
             {
               ...inputsDe(plan),
@@ -400,7 +449,8 @@ describe('§3.2b — lo que no cambia', () => {
         // `generarListaCompra` sobre un `Ejemplos` sin `compra` reconstruye el día B con el
         // mismo perfil (exclusiones incluidas): ningún camino puede meter un excluido.
         const suelta = generarListaCompra({ ...e, compra: undefined }, inputs)
-        for (const item of suelta.items) expect(c.excluidos, c.etiqueta).not.toContain(item.alimento_id)
+        for (const item of suelta.items)
+          expect(c.excluidos, c.etiqueta).not.toContain(item.alimento_id)
       }
     }
   })
@@ -424,14 +474,24 @@ describe('§3.0 — el tag `extra` no entra en ningún menú', () => {
   it('ni en el menú, ni en la compra, ni en las equivalencias, ni en las alternativas', () => {
     for (const preferencia of PREFERENCIAS) {
       for (const sencillo of [false, true]) {
-        const plan = { kcal: 2200, nComidas: 4 as NComidas, preferencia, objetivo: 'mantener' as const }
+        const plan = {
+          kcal: 2200,
+          nComidas: 4 as NComidas,
+          preferencia,
+          objetivo: 'mantener' as const,
+        }
         const e = generarEjemplos({ ...inputsDe(plan), menu_sencillo: sencillo }, resultadoDe(plan))
         for (const id of idsDelMenu(e)) expect(extras, preferencia).not.toContain(id)
-        for (const item of e.compra?.items ?? []) expect(extras, preferencia).not.toContain(item.alimento_id)
+        for (const item of e.compra?.items ?? [])
+          expect(extras, preferencia).not.toContain(item.alimento_id)
         for (const tabla of e.equivalencias.tablas) {
-          for (const fila of tabla.filas) expect(extras, `${preferencia} · ${tabla.titulo}`).not.toContain(fila.id)
+          for (const fila of tabla.filas)
+            expect(extras, `${preferencia} · ${tabla.titulo}`).not.toContain(fila.id)
         }
-        const texto = e.entreno.comidas.flatMap((c) => c.alternativas).join(' | ').toLowerCase()
+        const texto = e.entreno.comidas
+          .flatMap((c) => c.alternativas)
+          .join(' | ')
+          .toLowerCase()
         for (const id of extras) {
           expect(texto, `${preferencia} · ${id}`).not.toContain(nombreCorto(alimentoPorId(id)!))
         }
@@ -442,7 +502,8 @@ describe('§3.0 — el tag `extra` no entra en ningún menú', () => {
   it('tampoco en las tablas de equivalencias de las seis preferencias sueltas', () => {
     for (const preferencia of PREFERENCIAS) {
       for (const tabla of equivalencias(preferencia).tablas) {
-        for (const fila of tabla.filas) expect(extras, `${preferencia} · ${tabla.titulo}`).not.toContain(fila.id)
+        for (const fila of tabla.filas)
+          expect(extras, `${preferencia} · ${tabla.titulo}`).not.toContain(fila.id)
       }
     }
   })
@@ -498,7 +559,13 @@ describe('§3.8.1 — alimentos_ciclo', () => {
   })
 
   it(`nunca pasa de ${MAX_ALIMENTOS_CICLO}, sin repetir ids y con el por_que del primer síntoma`, () => {
-    const e = generarConCiclo(CASOS[0], ['dolor', 'antojos', 'cansancio', 'sangrado_abundante', 'hinchazon'])
+    const e = generarConCiclo(CASOS[0], [
+      'dolor',
+      'antojos',
+      'cansancio',
+      'sangrado_abundante',
+      'hinchazon',
+    ])
     const ids = e.alimentos_ciclo!.map((a) => a.id)
     expect(ids.length).toBeLessThanOrEqual(MAX_ALIMENTOS_CICLO)
     expect(new Set(ids).size).toBe(ids.length)
@@ -511,7 +578,10 @@ describe('§3.8.1 — alimentos_ciclo', () => {
     const plan = planDe(CASOS[0], 2200, 4)
     const inputs = inputsDe(plan)
     const sinCiclo = generarEjemplos(inputs, resultadoDe(plan))
-    const conCicloE = generarEjemplos(inputs, conCiclo(resultadoDe(plan), ['dolor', 'sangrado_abundante']))
+    const conCicloE = generarEjemplos(
+      inputs,
+      conCiclo(resultadoDe(plan), ['dolor', 'sangrado_abundante']),
+    )
     expect(conCicloE.entreno.comidas).toEqual(sinCiclo.entreno.comidas)
     expect(conCicloE.compra!.items).toEqual(sinCiclo.compra!.items)
     expect(conCicloE.compra!.alimentos_distintos).toBe(sinCiclo.compra!.alimentos_distintos)
@@ -538,7 +608,8 @@ describe('§3.8.2 — sección opcional de la compra', () => {
     expect(seccion.items.length).toBeGreaterThanOrEqual(1)
     expect(seccion.items.length).toBeLessThanOrEqual(MAX_ITEMS_OPCIONAL_CICLO)
     const delPlan = new Set(e.compra!.items.map((i) => i.alimento_id))
-    for (const item of seccion.items) expect(delPlan.has(item.alimento_id), item.alimento_id).toBe(false)
+    for (const item of seccion.items)
+      expect(delPlan.has(item.alimento_id), item.alimento_id).toBe(false)
   })
 
   it('la cantidad es fija y pequeña: dos raciones típicas', () => {
@@ -557,7 +628,7 @@ describe('§3.8.2 — sección opcional de la compra', () => {
     const e = generarEjemplos(inputs, conCiclo(resultadoDe(plan), ['sangrado_abundante', 'dolor']))
     expect(e.compra!.alimentos_distintos).toBe(e.compra!.items.length)
     expect(e.compra!.alimentos_distintos).toBeLessThanOrEqual(MAX_ALIMENTOS_SENCILLO)
-    expect((e.compra!.opcional_ciclo?.items.length ?? 0)).toBeGreaterThan(0)
+    expect(e.compra!.opcional_ciclo?.items.length ?? 0).toBeGreaterThan(0)
   })
 
   it('sin menú (renal) no hay ni alimentos del ciclo ni sección opcional', () => {

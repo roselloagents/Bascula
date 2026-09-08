@@ -7,7 +7,14 @@ import { Confirmacion } from '../ui/Confirmacion'
 import { Plegable } from '../ui/Controles'
 import { IconoAtras, IconoFlecha } from '../ui/Iconos'
 import { leerNumero } from '../utiles/formato'
-import { aInputs, anclarPlan, estadoPaso, pasosVisibles, type Borrador, type PasoId } from './borrador'
+import {
+  aInputs,
+  anclarPlan,
+  estadoPaso,
+  pasosVisibles,
+  type Borrador,
+  type PasoId,
+} from './borrador'
 import {
   PasoCondiciones,
   PasoEdad,
@@ -240,11 +247,7 @@ export function Wizard({
           </p>
         ) : null}
 
-        <div
-          className="barra-navegacion"
-          data-solo={indice === 0}
-          data-extra={salidaAlimentos}
-        >
+        <div className="barra-navegacion" data-solo={indice === 0} data-extra={salidaAlimentos}>
           {indice > 0 ? (
             <button type="button" className="btn btn-secundario" onClick={retroceder}>
               <IconoAtras />
@@ -260,7 +263,11 @@ export function Wizard({
             <IconoFlecha />
           </button>
           {salidaAlimentos ? (
-            <button type="button" className="btn btn-secundario btn-salida" onClick={seguirSinMarcar}>
+            <button
+              type="button"
+              className="btn btn-secundario btn-salida"
+              onClick={seguirSinMarcar}
+            >
               Seguir sin marcar nada
             </button>
           ) : null}

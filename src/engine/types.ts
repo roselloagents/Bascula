@@ -9,8 +9,10 @@
 export type Sexo = 'hombre' | 'mujer'
 export type MetodoGrasa = 'conocido' | 'medidas' | 'visual' | 'desconocido'
 export type FuenteGrasa = 'fiable' | 'estimado'
-export type VisualHombre = 'muy_definido' | 'definido' | 'medio' | 'sobrepeso_visible' | 'obesidad_visible'
-export type VisualMujer = 'muy_definida' | 'tonificada' | 'media' | 'sobrepeso_visible' | 'obesidad_visible'
+export type VisualHombre =
+  'muy_definido' | 'definido' | 'medio' | 'sobrepeso_visible' | 'obesidad_visible'
+export type VisualMujer =
+  'muy_definida' | 'tonificada' | 'media' | 'sobrepeso_visible' | 'obesidad_visible'
 export type CategoriaVisual = VisualHombre | VisualMujer
 export type ActividadDiaria = 'sedentario' | 'ligero' | 'moderado' | 'alto' | 'muy_alto'
 export type TipoEntrenamiento = 'ninguno' | 'fuerza' | 'cardio' | 'mixto'
@@ -20,7 +22,8 @@ export type Momento = 'manana' | 'mediodia' | 'tarde' | 'noche'
 export type Objetivo = 'perder' | 'mantener' | 'ganar' | 'recomposicion' | 'no_se'
 export type ObjetivoEfectivo = Exclude<Objetivo, 'no_se'>
 export type Ritmo = 'suave' | 'moderado' | 'agresivo'
-export type Preferencia = 'omnivoro' | 'vegetariano' | 'vegano' | 'sin_lactosa' | 'sin_gluten' | 'low_carb'
+export type Preferencia =
+  'omnivoro' | 'vegetariano' | 'vegano' | 'sin_lactosa' | 'sin_gluten' | 'low_carb'
 /** Base dietética excluyente del paso 13 del wizard (SPEC §1 fila 19). */
 export type PreferenciaBase = 'omnivoro' | 'vegetariano' | 'vegano'
 /** Restricciones combinables (varias a la vez) del paso 13 del wizard (SPEC §1 fila 20). */
@@ -153,7 +156,8 @@ export interface InputCalculo {
 export type Inputs = InputCalculo
 
 // ---------- Salida del motor (SPEC "Salida (Resultado)") ----------
-export type ImcCategoria = 'bajo_peso' | 'normal' | 'sobrepeso' | 'obesidad_I' | 'obesidad_II' | 'obesidad_III'
+export type ImcCategoria =
+  'bajo_peso' | 'normal' | 'sobrepeso' | 'obesidad_I' | 'obesidad_II' | 'obesidad_III'
 export type BmrEcuacion = 'mifflin' | 'katch_mcardle'
 export type FfmiCategoria = 'bajo' | 'medio' | 'bueno' | 'muy_desarrollado' | 'excepcional'
 export type BaseProteina = 'peso_corporal' | 'peso_ajustado'

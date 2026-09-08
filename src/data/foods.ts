@@ -5,7 +5,8 @@
 import datos from './foods.json'
 
 export type GrupoAlimento = 'proteina' | 'lacteo' | 'carbohidrato' | 'grasa' | 'verdura' | 'fruta'
-export type RolAlimento = 'proteina' | 'carbohidrato' | 'grasa' | 'verdura' | 'fruta' | 'complemento'
+export type RolAlimento =
+  'proteina' | 'carbohidrato' | 'grasa' | 'verdura' | 'fruta' | 'complemento'
 export type EstadoAlimento = 'crudo' | 'cocido' | 'seco' | 'listo'
 export type TagAlimento =
   | 'vegetariano'
@@ -87,6 +88,8 @@ export function alimentoPorId(id: string): Alimento | undefined {
 }
 
 /** `true` si el alimento es contable por unidades (huevo, lata, rebanada, pieza de fruta). */
-export function esContable(a: Alimento): a is Alimento & { unidad_g: number; unidad_nombre: string } {
+export function esContable(
+  a: Alimento,
+): a is Alimento & { unidad_g: number; unidad_nombre: string } {
   return typeof a.unidad_g === 'number' && a.unidad_g > 0 && typeof a.unidad_nombre === 'string'
 }

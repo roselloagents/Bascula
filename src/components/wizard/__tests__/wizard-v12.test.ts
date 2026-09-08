@@ -82,7 +82,9 @@ describe('orden de los pasos (v1.2)', () => {
   })
 
   it('el ritmo no se pregunta en recomposición, aunque sí el peso objetivo', () => {
-    const pasos = pasosVisibles(completo({ objetivo: 'recomposicion', recomposicion_prioridad: 'perder' }))
+    const pasos = pasosVisibles(
+      completo({ objetivo: 'recomposicion', recomposicion_prioridad: 'perder' }),
+    )
     expect(pasos).toContain('pesoObjetivo')
     expect(pasos).not.toContain('ritmo')
   })
@@ -98,16 +100,18 @@ describe('orden de los pasos (v1.2)', () => {
 describe('plazo del paso de ritmo', () => {
   it('la cuarta opción solo aparece con un peso objetivo numérico', () => {
     expect(pinta(PasoRitmo, completo())).toContain('Tengo una fecha en mente')
-    expect(pinta(PasoRitmo, completo({ quierePesoObjetivo: false, peso_objetivo: '' }))).not.toContain(
-      'Tengo una fecha en mente',
-    )
+    expect(
+      pinta(PasoRitmo, completo({ quierePesoObjetivo: false, peso_objetivo: '' })),
+    ).not.toContain('Tengo una fecha en mente')
   })
 
   it('con la fecha marcada y sin plazo el paso no está completo, y dice qué falta', () => {
     const b = completo({ usarPlazo: true })
     expect(estadoPaso(b, 'ritmo').completo).toBe(false)
     expect(estadoPaso(b, 'ritmo').falta).toBe('el plazo')
-    expect(estadoPaso(completo({ usarPlazo: true, plazo_semanas: 12 }), 'ritmo').completo).toBe(true)
+    expect(estadoPaso(completo({ usarPlazo: true, plazo_semanas: 12 }), 'ritmo').completo).toBe(
+      true,
+    )
   })
 
   it('la previsualización es una resta, no un plan: 5 kg en 12 semanas son 417 g por semana', () => {
@@ -137,12 +141,18 @@ describe('plazo del paso de ritmo', () => {
 
 describe('síntomas de la regla', () => {
   it('la subpregunta solo se despliega con regla regular o irregular', () => {
-    expect(pinta(PasoRegla, completo({ menstruacion: 'regular' }))).toContain('¿Qué notas esos días?')
-    expect(pinta(PasoRegla, completo({ menstruacion: 'irregular' }))).toContain('Sangrado abundante')
+    expect(pinta(PasoRegla, completo({ menstruacion: 'regular' }))).toContain(
+      '¿Qué notas esos días?',
+    )
+    expect(pinta(PasoRegla, completo({ menstruacion: 'irregular' }))).toContain(
+      'Sangrado abundante',
+    )
     expect(pinta(PasoRegla, completo({ menstruacion: 'ausente' }))).not.toContain(
       '¿Qué notas esos días?',
     )
-    expect(pinta(PasoRegla, completo({ menstruacion: null }))).not.toContain('¿Qué notas esos días?')
+    expect(pinta(PasoRegla, completo({ menstruacion: null }))).not.toContain(
+      '¿Qué notas esos días?',
+    )
   })
 
   it('viajan en el orden canónico y solo con la regla presente', () => {
@@ -229,15 +239,18 @@ describe('paso de alimentos: buscador y grupos plegables (v1.2.1)', () => {
     favoritos?: string[]
   }): string {
     return renderToStaticMarkup(
-      createElement(GruposPlegables as never, {
-        grupos: TODOS,
-        busqueda: props.busqueda ?? '',
-        abiertos: props.abiertos ?? [],
-        excluidos: props.excluidos ?? [],
-        favoritos: props.favoritos ?? [],
-        alternarGrupo: () => {},
-        alternarChip: () => {},
-      } as never),
+      createElement(
+        GruposPlegables as never,
+        {
+          grupos: TODOS,
+          busqueda: props.busqueda ?? '',
+          abiertos: props.abiertos ?? [],
+          excluidos: props.excluidos ?? [],
+          favoritos: props.favoritos ?? [],
+          alternarGrupo: () => {},
+          alternarChip: () => {},
+        } as never,
+      ),
     )
   }
 

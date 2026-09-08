@@ -53,4 +53,3 @@ export function textoComprar(item: ItemCompra): string {
 export function textoDura(item: ItemCompra): string {
   return item.dura_dias === 1 ? 'te dura 1 día' : `te dura ${entero(item.dura_dias)} días`
 }
-

@@ -23,7 +23,9 @@ const servidor = await createServer({
 
 try {
   const { elementoPlan } = await servidor.ssrLoadModule('/src/pdf/index.ts')
-  const { MUESTRA_COMPLETA, MUESTRA_MINIMA } = await servidor.ssrLoadModule('/src/pdf/__fixtures__/muestra.ts')
+  const { MUESTRA_COMPLETA, MUESTRA_MINIMA } = await servidor.ssrLoadModule(
+    '/src/pdf/__fixtures__/muestra.ts',
+  )
   const { renderToFile } = await import('@react-pdf/renderer')
 
   mkdirSync(salida, { recursive: true })

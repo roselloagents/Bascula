@@ -46,8 +46,8 @@ export function calcularAgua(e: EntradaAgua, emitir: EmitirAviso): ResultadoAgua
   const suelo_agua = hombre ? AGUA_SUELO_HOMBRE : AGUA_SUELO_MUJER
   let agua_base = Math.max(e.pesoKg * k, suelo_agua)
   agua_base = Math.min(agua_base, hombre ? AGUA_TECHO_BASE_HOMBRE : AGUA_TECHO_BASE_MUJER)
-  const min_dia = e.perfil === 'sedentario' ? 0 : e.minutos_sesion * e.dias / 7
-  const aj_ejercicio = Math.min(AGUA_TOPE_EJERCICIO, min_dia / 60 * AGUA_ML_POR_HORA_EJERCICIO)
+  const min_dia = e.perfil === 'sedentario' ? 0 : (e.minutos_sesion * e.dias) / 7
+  const aj_ejercicio = Math.min(AGUA_TOPE_EJERCICIO, (min_dia / 60) * AGUA_ML_POR_HORA_EJERCICIO)
   const aj_clima = e.clima_caluroso ? AGUA_CLIMA_CALUROSO : 0
   const ml = round50(clamp(agua_base + aj_ejercicio + aj_clima, suelo_agua, AGUA_TECHO_DURO))
   const vasos = Math.round(ml / AGUA_VASO_ML) // orientativo: vasos · 250 ≠ ml

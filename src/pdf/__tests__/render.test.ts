@@ -21,7 +21,9 @@ const SALIDA =
 
 describe('exportador PDF', () => {
   it('escribe el PDF de la muestra completa', async () => {
-    await expect(renderToFile(elementoPlan(MUESTRA_COMPLETA), `${SALIDA}/plan-muestra.pdf`)).resolves.toBeDefined()
+    await expect(
+      renderToFile(elementoPlan(MUESTRA_COMPLETA), `${SALIDA}/plan-muestra.pdf`),
+    ).resolves.toBeDefined()
   }, 60_000)
 
   it('escribe el PDF de la muestra sin cronograma, con 2 comidas y sin entreno', async () => {
@@ -92,7 +94,9 @@ describe('exportador PDF', () => {
   }, 60_000)
 
   it('escribe el PDF con tarjeta de ciclo y proyección plana', async () => {
-    await expect(renderToFile(elementoPlan(MUESTRA_CICLO), `${SALIDA}/plan-muestra-ciclo.pdf`)).resolves.toBeDefined()
+    await expect(
+      renderToFile(elementoPlan(MUESTRA_CICLO), `${SALIDA}/plan-muestra-ciclo.pdf`),
+    ).resolves.toBeDefined()
   }, 60_000)
 
   it('todas las muestras caben en el máximo de 10 páginas de §4.0', async () => {
@@ -189,7 +193,13 @@ describe('exportador PDF', () => {
       resultado: {
         ...MUESTRA_CICLO_SINTOMAS.resultado,
         ciclo: {
-          sintomas: ['dolor', 'hinchazon', 'antojos', 'cansancio', 'sangrado_abundante'] as SintomaRegla[],
+          sintomas: [
+            'dolor',
+            'hinchazon',
+            'antojos',
+            'cansancio',
+            'sangrado_abundante',
+          ] as SintomaRegla[],
           consejos: [
             ...consejos,
             { ...consejos[0], clave: 'hinchazon' as const, titulo: 'Hinchazón: es agua, no grasa' },
@@ -262,7 +272,9 @@ describe('exportador PDF', () => {
       },
       ejemplos: {
         ...MUESTRA_CICLO_SINTOMAS.ejemplos,
-        alimentos_ciclo: [{ id: 'x', nombre: 'Espinacas', por_que: undefined as unknown as string }],
+        alimentos_ciclo: [
+          { id: 'x', nombre: 'Espinacas', por_que: undefined as unknown as string },
+        ],
         compra: {
           ...compra!,
           opcional_ciclo: {
@@ -295,7 +307,10 @@ describe('exportador PDF', () => {
       renderToFile(elementoPlan(MUESTRA_RECOMPOSICION), `${SALIDA}/plan-muestra-recomposicion.pdf`),
     ).resolves.toBeDefined()
     await expect(
-      renderToFile(elementoPlan(MUESTRA_CICLO_SINTOMAS), `${SALIDA}/plan-muestra-ciclo-sintomas.pdf`),
+      renderToFile(
+        elementoPlan(MUESTRA_CICLO_SINTOMAS),
+        `${SALIDA}/plan-muestra-ciclo-sintomas.pdf`,
+      ),
     ).resolves.toBeDefined()
     await expect(
       renderToFile(elementoPlan(MUESTRA_ALIMENTOS), `${SALIDA}/plan-muestra-alimentos.pdf`),
@@ -304,6 +319,8 @@ describe('exportador PDF', () => {
 
   it('propone un nombre de fichero con la fecha del plan', () => {
     expect(nombreFicheroPdf(MUESTRA_COMPLETA)).toBe('bascula-plan-2026-09-07.pdf')
-    expect(nombreFicheroPdf({ ...MUESTRA_COMPLETA, fecha: 'no-es-una-fecha' })).toBe('bascula-plan-sin-fecha.pdf')
+    expect(nombreFicheroPdf({ ...MUESTRA_COMPLETA, fecha: 'no-es-una-fecha' })).toBe(
+      'bascula-plan-sin-fecha.pdf',
+    )
   })
 })

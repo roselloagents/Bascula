@@ -121,8 +121,18 @@ export function perfilDePreferencia(preferencia: Preferencia): PerfilDietetico {
   const base: PreferenciaBase =
     preferencia === 'vegano' || preferencia === 'vegetariano' ? preferencia : 'omnivoro'
   const restricciones: Restriccion[] =
-    preferencia === 'sin_lactosa' ? ['sin_lactosa'] : preferencia === 'sin_gluten' ? ['sin_gluten'] : []
-  return { banco: preferencia, base, restricciones, low_carb: preferencia === 'low_carb', ...SIN_LISTAS }
+    preferencia === 'sin_lactosa'
+      ? ['sin_lactosa']
+      : preferencia === 'sin_gluten'
+        ? ['sin_gluten']
+        : []
+  return {
+    banco: preferencia,
+    base,
+    restricciones,
+    low_carb: preferencia === 'low_carb',
+    ...SIN_LISTAS,
+  }
 }
 
 /**
@@ -216,7 +226,10 @@ export function idConSinLactosa(id: string): string {
 }
 
 /** Aplica `idConSinLactosa` a una lista de ids si el perfil lo pide; si no, la devuelve tal cual. */
-export function sustituirSinLactosa(ids: readonly string[], perfil: PerfilDietetico): readonly string[] {
+export function sustituirSinLactosa(
+  ids: readonly string[],
+  perfil: PerfilDietetico,
+): readonly string[] {
   if (!perfil.restricciones.includes('sin_lactosa')) return ids
   return ids.map(idConSinLactosa)
 }

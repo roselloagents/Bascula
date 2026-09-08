@@ -63,18 +63,30 @@ function proyeccionCurva(
   const puntos: PuntoProyeccion[] = []
   for (let s = 0; s <= S; s++) {
     // Una semana a mantenimiento por cada 8 de dieta (MATADOR): 9 semanas de calendario por ciclo.
-    const descansos = diet_breaks > 0 ? Math.min(diet_breaks, Math.floor(s / DIET_BREAK_CICLO_SEMANAS)) : 0
+    const descansos =
+      diet_breaks > 0 ? Math.min(diet_breaks, Math.floor(s / DIET_BREAK_CICLO_SEMANAS)) : 0
     const s_ef = Math.max(0, s - descansos)
     // Misma adaptación creciente del cronograma, acotada por `factor_adapt` para que la curva
     // central nunca se salga de su propia banda.
-    const f = 1 + ADAPTACION_PENDIENTE * Math.min(s_ef / ADAPTACION_SEMANAS_REFERENCIA, ADAPTACION_TOPE)
+    const f =
+      1 + ADAPTACION_PENDIENTE * Math.min(s_ef / ADAPTACION_SEMANAS_REFERENCIA, ADAPTACION_TOPE)
     const rapido = Math.min(ritmo_kg_sem * s_ef, delta_kg)
-    const lento = Math.min(ritmo_kg_sem * s_ef / factor_adapt, delta_kg)
-    const esp = Math.min(ritmo_kg_sem * s_ef / Math.min(f, factor_adapt), delta_kg)
+    const lento = Math.min((ritmo_kg_sem * s_ef) / factor_adapt, delta_kg)
+    const esp = Math.min((ritmo_kg_sem * s_ef) / Math.min(f, factor_adapt), delta_kg)
     puntos.push(
       gana
-        ? { semana: s, peso_min: round1(PC + lento), peso_esp: round1(PC + esp), peso_max: round1(PC + rapido) }
-        : { semana: s, peso_min: round1(PC - rapido), peso_esp: round1(PC - esp), peso_max: round1(PC - lento) },
+        ? {
+            semana: s,
+            peso_min: round1(PC + lento),
+            peso_esp: round1(PC + esp),
+            peso_max: round1(PC + rapido),
+          }
+        : {
+            semana: s,
+            peso_min: round1(PC - rapido),
+            peso_esp: round1(PC - esp),
+            peso_max: round1(PC - lento),
+          },
     )
   }
   return puntos
@@ -114,7 +126,12 @@ function proyeccionPlana(PC: number): PuntoProyeccion[] {
   const puntos: PuntoProyeccion[] = []
   for (let s = 0; s <= SEM_PROYECCION_PLANA; s++) {
     const banda = s === 0 ? 0 : BANDA_PLANA_KG
-    puntos.push({ semana: s, peso_min: round1(PC - banda), peso_esp: round1(PC), peso_max: round1(PC + banda) })
+    puntos.push({
+      semana: s,
+      peso_min: round1(PC - banda),
+      peso_esp: round1(PC),
+      peso_max: round1(PC + banda),
+    })
   }
   return puntos
 }
@@ -124,7 +141,11 @@ export function calcularPaso14(e: EntradaCronograma, emitir: EmitirAviso): Salid
   let cronograma: ResultadoCronograma | null = null
   let proyeccion: PuntoProyeccion[] | null = null
 
-  if (e.objetivo_efectivo === 'mantener' || e.objetivo_efectivo === 'recomposicion' || e.peso_obj_ef === null) {
+  if (
+    e.objetivo_efectivo === 'mantener' ||
+    e.objetivo_efectivo === 'recomposicion' ||
+    e.peso_obj_ef === null
+  ) {
     emitir('INFO_SIN_CRONOGRAMA')
     // v1.2: recomposición con déficit real y con una meta por debajo del peso actual. El cronograma
     // sigue siendo `null` (no se promete fecha); lo único que cambia es la curva.
@@ -134,7 +155,7 @@ export function calcularPaso14(e: EntradaCronograma, emitir: EmitirAviso): Salid
       e.tdee - e.kcal >= RECOMP_DEFICIT_MIN &&
       e.pesoKg - e.peso_obj_ef >= RECOMP_META_MARGEN_KG
     ) {
-      const ritmo_kg_sem = (e.tdee - e.kcal) * 7 / KCAL_POR_KG_GRASA
+      const ritmo_kg_sem = ((e.tdee - e.kcal) * 7) / KCAL_POR_KG_GRASA
       if (ritmo_kg_sem >= CRONOGRAMA_RITMO_MIN) {
         proyeccion = proyeccionRecomp(e.pesoKg, e.pesoKg - e.peso_obj_ef, ritmo_kg_sem)
         emitir('INFO_PROYECCION_RECOMP')
@@ -150,19 +171,23 @@ export function calcularPaso14(e: EntradaCronograma, emitir: EmitirAviso): Salid
     } else if (delta_kcal < CRONOGRAMA_DELTA_KCAL_MIN) {
       emitir('INFO_CRONOGRAMA_NO_ESTIMABLE')
     } else {
-      const ritmo_kg_sem = delta_kcal * 7 / KCAL_POR_KG_GRASA
+      const ritmo_kg_sem = (delta_kcal * 7) / KCAL_POR_KG_GRASA
       if (ritmo_kg_sem < CRONOGRAMA_RITMO_MIN) {
         emitir('INFO_CRONOGRAMA_NO_ESTIMABLE')
       } else {
-        const ritmo_pct_sem = ritmo_kg_sem / e.pesoKg * 100
+        const ritmo_pct_sem = (ritmo_kg_sem / e.pesoKg) * 100
         const sem_lineal = delta_kg / ritmo_kg_sem
         // ×1,25 a los 6 meses · ×1,75 al año o más (Hall: la regla lineal sobreestima a 12 meses).
         const factor_adapt =
-          1 + ADAPTACION_PENDIENTE * Math.min(sem_lineal / ADAPTACION_SEMANAS_REFERENCIA, ADAPTACION_TOPE)
+          1 +
+          ADAPTACION_PENDIENTE *
+            Math.min(sem_lineal / ADAPTACION_SEMANAS_REFERENCIA, ADAPTACION_TOPE)
         const sem_min = Math.ceil(sem_lineal)
         const sem_max = Math.ceil(sem_lineal * factor_adapt)
         const diet_breaks =
-          perder && sem_lineal > DIET_BREAK_UMBRAL_SEMANAS ? Math.floor(sem_lineal / DIET_BREAK_CADA) : 0
+          perder && sem_lineal > DIET_BREAK_UMBRAL_SEMANAS
+            ? Math.floor(sem_lineal / DIET_BREAK_CADA)
+            : 0
         let semanas: [number, number] = [sem_min + diet_breaks, sem_max + diet_breaks]
 
         const horizonte_max =
@@ -177,7 +202,7 @@ export function calcularPaso14(e: EntradaCronograma, emitir: EmitirAviso): Salid
           const precision_fecha = semanas[1] > PRECISION_MES_UMBRAL_SEMANAS ? 'mes' : 'dia'
           const tramo_12sem: [number, number] | null =
             semanas[1] > PRECISION_MES_UMBRAL_SEMANAS
-              ? [round05(ritmo_kg_sem * 12 / factor_adapt), round05(ritmo_kg_sem * 12)]
+              ? [round05((ritmo_kg_sem * 12) / factor_adapt), round05(ritmo_kg_sem * 12)]
               : null
           if (semanas[1] > CRONOGRAMA_LARGO_SEMANAS) emitir('WARN_CRONOGRAMA_LARGO')
 

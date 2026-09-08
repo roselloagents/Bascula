@@ -112,7 +112,9 @@ interface Contexto {
 /** Número en formato español: coma decimal y sin decimales cuando es entero. */
 function num(x: number, decimales = 1): string {
   const redondeado = Number(x.toFixed(decimales))
-  return Number.isInteger(redondeado) ? String(redondeado) : redondeado.toFixed(decimales).replace('.', ',')
+  return Number.isInteger(redondeado)
+    ? String(redondeado)
+    : redondeado.toFixed(decimales).replace('.', ',')
 }
 
 /**
@@ -155,8 +157,7 @@ const conCalendario = (ctx: Contexto, fragmento: string): string =>
  * Entero con separador de miles español (1875 → «1.875»). No se usa `toLocaleString`: el locale
  * `es-ES` no agrupa los números de cuatro cifras y la §4 pide el punto «si pasa de 999».
  */
-const miles = (x: number): string =>
-  String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+const miles = (x: number): string => String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 
 /**
  * Meta contra la que hablan los dos avisos del plazo: la del PLAN (`peso_objetivo.efectivo`), que
@@ -174,7 +175,7 @@ function metaDelPlazo(ctx: Contexto): number {
  */
 function ritmoRequeridoG(ctx: Contexto): string {
   const plazo = ctx.inputs.plazo_semanas ?? 1
-  return miles(Math.abs(metaDelPlazo(ctx) - ctx.inputs.peso_kg) / plazo * 1000)
+  return miles((Math.abs(metaDelPlazo(ctx) - ctx.inputs.peso_kg) / plazo) * 1000)
 }
 
 interface Plantilla {
@@ -597,7 +598,9 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
     texto: (ctx) => {
       const m = ctx.resultado.macros
       const minimo =
-        m.base_proteina === 'peso_ajustado' ? `${num(round5(1.2 * m.base_kg), 0)} g al día` : '1,2 g/kg'
+        m.base_proteina === 'peso_ajustado'
+          ? `${num(round5(1.2 * m.base_kg), 0)} g al día`
+          : '1,2 g/kg'
       return `A partir de los 60 años el cuerpo necesita algo más de proteína y entrenamiento de fuerza para frenar la pérdida de músculo. Hemos ajustado tu proteína al alza (mínimo ${minimo}) y te recomendamos 30–40 g por comida.`
     },
   },
@@ -668,7 +671,8 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
     texto: (ctx) => {
       const obj = ctx.resultado.objetivo_efectivo
       const con_deficit = obj === 'perder' || obj === 'recomposicion'
-      const suavizado = ctx.inputs.ritmo === 'agresivo' && ctx.resultado.ritmo_efectivo === 'moderado'
+      const suavizado =
+        ctx.inputs.ritmo === 'agresivo' && ctx.resultado.ritmo_efectivo === 'moderado'
       return `Nos has dicho que tu regla es irregular o que no la tienes, y a la vez ${
         con_deficit
           ? 'tu plan lleva déficit, poca grasa corporal o un ritmo rápido'
@@ -691,7 +695,9 @@ export const MENSAJES: Record<CodigoAviso, Plantilla> = {
     texto: (ctx) => {
       const suave = ctx.resultado.ritmo_efectivo === 'suave'
       return `Tu fecha son ${ctx.inputs.plazo_semanas} semanas y la meta de tu plan son ${num(metaDelPlazo(ctx))} kg: eso es un ritmo de unos ${ritmoRequeridoG(ctx)} g por semana. Hemos puesto el ritmo ${ctx.resultado.ritmo_efectivo}, el más suave de los nuestros que llega a esa fecha.${
-        suave ? '' : ' Si la fecha no es tan importante, un ritmo más suave se sostiene mejor y cuesta menos músculo.'
+        suave
+          ? ''
+          : ' Si la fecha no es tan importante, un ritmo más suave se sostiene mejor y cuesta menos músculo.'
       }`
     },
   },
@@ -828,7 +834,11 @@ export const SUPRESIONES: ReadonlyArray<readonly [CodigoAviso, readonly CodigoAv
   ['INFO_OBJETIVO_RESUELTO_POR_PESO', ['INFO_OBJETIVO_IGNORADO']],
   ['INFO_AGUA_NO_PRESCRITA', ['WARN_AGUA_ALTA', 'INFO_AGUA_MAYORES']],
   ...CRONOGRAMA_CORTE.map(
-    (c) => [c, ['INFO_ADAPTACION', 'WARN_CRONOGRAMA_LARGO']] as readonly [CodigoAviso, readonly CodigoAviso[]],
+    (c) =>
+      [c, ['INFO_ADAPTACION', 'WARN_CRONOGRAMA_LARGO']] as readonly [
+        CodigoAviso,
+        readonly CodigoAviso[],
+      ],
   ),
   // v1.2: las dos formas de la proyección sin cronograma son excluyentes (la plana afirma "esperamos
   // que tu peso se mantenga", que es justo lo que la de recomposición contradice), y de los dos
@@ -883,7 +893,8 @@ export function textoError(codigo: string, inputs?: Inputs): AvisoTexto {
       codigo,
       severidad: 'error',
       titulo: 'No podemos calcular tu plan',
-      texto: 'No podemos calcular tu plan con los datos que nos has dado. Revisa el formulario e inténtalo de nuevo.',
+      texto:
+        'No podemos calcular tu plan con los datos que nos has dado. Revisa el formulario e inténtalo de nuevo.',
     }
   }
   let texto = typeof plantilla.texto === 'string' ? plantilla.texto : ''

@@ -24,7 +24,13 @@ const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra:
     menus: [
       {
         comida: 'Desayuno',
-        alimentos: ['platano 120', 'queso_fresco_batido_0 250', 'clara_huevo 132', 'pan_integral 30', 'almendras 35'],
+        alimentos: [
+          'platano 120',
+          'queso_fresco_batido_0 250',
+          'clara_huevo 132',
+          'pan_integral 30',
+          'almendras 35',
+        ],
         kcal: 566,
       },
       {
@@ -71,7 +77,13 @@ const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra:
     menus: [
       {
         comida: 'Desayuno',
-        alimentos: ['naranja 180', 'queso_cottage 250', 'clara_huevo 132', 'pan_integral 30', 'semillas_lino 30'],
+        alimentos: [
+          'naranja 180',
+          'queso_cottage 250',
+          'clara_huevo 132',
+          'pan_integral 30',
+          'semillas_lino 30',
+        ],
         kcal: 633,
       },
       {
@@ -81,7 +93,13 @@ const ESPERADOS: Record<string, { menus: MenuEsperado[]; kcalDia: number; fibra:
       },
       {
         comida: 'Cena',
-        alimentos: ['champinones 130', 'merluza 250', 'clara_huevo 66', 'arroz_blanco_cocido 160', 'aove 25'],
+        alimentos: [
+          'champinones 130',
+          'merluza 250',
+          'clara_huevo 66',
+          'arroz_blanco_cocido 160',
+          'aove 25',
+        ],
         kcal: 681,
       },
     ],
@@ -105,13 +123,18 @@ describe('§3.6 — los tres menús completos calculados', () => {
         expect(comida.alimentos.map((a) => `${a.id} ${a.gramos}`)).toEqual(e.alimentos)
         expect(comida.totales.kcal).toBe(e.kcal)
         // Regla dura de §3.3: ninguna comida de los vectores se sale del ±10 % de kcal.
-        const desviacion = Math.abs(comida.totales.kcal - comida.objetivo.kcal) / comida.objetivo.kcal
-        expect(desviacion, `${e.comida}: ${comida.totales.kcal} vs ${comida.objetivo.kcal}`).toBeLessThanOrEqual(0.1)
+        const desviacion =
+          Math.abs(comida.totales.kcal - comida.objetivo.kcal) / comida.objetivo.kcal
+        expect(
+          desviacion,
+          `${e.comida}: ${comida.totales.kcal} vs ${comida.objetivo.kcal}`,
+        ).toBeLessThanOrEqual(0.1)
       })
 
       expect(ejemplos.entreno.totales.kcal).toBe(esperado.kcalDia)
       const fibra = ejemplos.entreno.comidas.reduce(
-        (t, c) => t + c.alimentos.reduce((s, a) => s + (alimentoPorId(a.id)!.fibra * a.gramos) / 100, 0),
+        (t, c) =>
+          t + c.alimentos.reduce((s, a) => s + (alimentoPorId(a.id)!.fibra * a.gramos) / 100, 0),
         0,
       )
       expect(fibra).toBeCloseTo(esperado.fibra, 2)

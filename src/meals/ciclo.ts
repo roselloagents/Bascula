@@ -26,7 +26,9 @@ export const ORDEN_SINTOMAS: readonly SintomaRegla[] = [
 export const MAX_ALIMENTOS_CICLO = 4
 
 /** Tabla normativa de §3.8.1: ids candidatos por síntoma, en orden, con su copy literal. */
-export const TABLA_CICLO: Readonly<Record<SintomaRegla, { ids: readonly string[]; por_que: string }>> = {
+export const TABLA_CICLO: Readonly<
+  Record<SintomaRegla, { ids: readonly string[]; por_que: string }>
+> = {
   dolor: {
     ids: ['sardinas_lata', 'nueces', 'semillas_lino', 'cacao_puro'],
     por_que: 'omega-3 y magnesio, que ayudan con el dolor',
@@ -73,7 +75,10 @@ export interface AlimentoCicloConSintoma extends AlimentoCiclo {
  * deduplica por `id`, y un id que sirva para dos síntomas se publica una vez, con el `por_que` del
  * primero en orden canónico.
  */
-export function alimentosCiclo(resultado: Resultado, perfil: PerfilDietetico): AlimentoCicloConSintoma[] {
+export function alimentosCiclo(
+  resultado: Resultado,
+  perfil: PerfilDietetico,
+): AlimentoCicloConSintoma[] {
   const sintomas = sintomasDe(resultado)
   // Un id que sirve para dos síntomas pertenece al PRIMERO en orden canónico: así el `por_que`
   // que se publica es siempre el suyo, como pide §3.8.1, y ninguna ronda se lo quita.
@@ -136,6 +141,7 @@ export function porRondasDeSintoma(
   const porSintoma = ORDEN_SINTOMAS.map((s) => alimentos.filter((a) => a.sintoma === s))
   const rondas = Math.max(0, ...porSintoma.map((g) => g.length))
   const salida: AlimentoCicloConSintoma[] = []
-  for (let i = 0; i < rondas; i++) for (const grupo of porSintoma) if (grupo[i]) salida.push(grupo[i])
+  for (let i = 0; i < rondas; i++)
+    for (const grupo of porSintoma) if (grupo[i]) salida.push(grupo[i])
   return salida
 }

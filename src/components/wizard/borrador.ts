@@ -221,7 +221,9 @@ export function guardarBorrador(borrador: Borrador): void {
 function normalizarPreferencias(datos: Record<string, unknown>): Partial<Borrador> {
   if (typeof datos.preferencia_base === 'string') {
     const elegida = datos.preferencia_base as PreferenciaBase
-    const guardadas = Array.isArray(datos.restricciones) ? (datos.restricciones as Restriccion[]) : []
+    const guardadas = Array.isArray(datos.restricciones)
+      ? (datos.restricciones as Restriccion[])
+      : []
     return {
       preferencia_base: BASES.includes(elegida) ? elegida : 'omnivoro',
       restricciones: ORDEN_RESTRICCIONES.filter((r) => guardadas.includes(r)),
@@ -288,8 +290,14 @@ const SOMA_Q23 = ['poca', 'moderada', 'mucha'] as const
 const SOMA_Q4 = ['delgado', 'atletico', 'robusto'] as const
 
 /** El valor guardado si pertenece al dominio; si no, el inicial. */
-function opcion<T extends string>(valor: unknown, dominio: readonly T[], inicial: T | null): T | null {
-  return typeof valor === 'string' && (dominio as readonly string[]).includes(valor) ? (valor as T) : inicial
+function opcion<T extends string>(
+  valor: unknown,
+  dominio: readonly T[],
+  inicial: T | null,
+): T | null {
+  return typeof valor === 'string' && (dominio as readonly string[]).includes(valor)
+    ? (valor as T)
+    : inicial
 }
 
 /** Los campos numéricos del cuestionario viajan como texto: un número de verdad rompe el render. */
@@ -393,7 +401,11 @@ export function cargarBorrador(): Borrador {
         cadera_cm: texto(g.cadera_cm, base.grasa.cadera_cm),
         categoria: opcion(g.categoria, VISUALES, base.grasa.categoria),
       },
-      somatotipoElegido: opcion(datos.somatotipoElegido, SOMATOTIPO_ELEGIDO, base.somatotipoElegido),
+      somatotipoElegido: opcion(
+        datos.somatotipoElegido,
+        SOMATOTIPO_ELEGIDO,
+        base.somatotipoElegido,
+      ),
       somatotipo: somatotipoValido(datos.somatotipo),
       actividad_diaria: opcion(datos.actividad_diaria, ACTIVIDADES, base.actividad_diaria),
       entrena: booleanoOpcional(datos.entrena),
@@ -536,7 +548,15 @@ export function pasosVisibles(borrador: Borrador): PasoId[] {
   const pasos: PasoId[] = ['sexo', 'edad']
   // La regla va justo detrás de embarazo/lactancia y solo se pregunta a mujeres (§1 paso 3b).
   if (borrador.sexo === 'mujer') pasos.push('embarazo', 'regla')
-  pasos.push('medidas', 'condiciones', 'grasa', 'somatotipo', 'actividad', 'entrenamiento', 'objetivo')
+  pasos.push(
+    'medidas',
+    'condiciones',
+    'grasa',
+    'somatotipo',
+    'actividad',
+    'entrenamiento',
+    'objetivo',
+  )
   // Orden de la v1.2: primero la meta y después el ritmo, porque la cuarta opción del ritmo
   // (la fecha) no existe sin una meta a la que llegar.
   if (pidePesoObjetivo(borrador)) pasos.push('pesoObjetivo')
@@ -600,10 +620,12 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
       const altura = enRango(b.altura_cm, 130, 230)
       const peso = enRango(b.peso_kg, 35, 300)
       if (altura === 'fuera') {
-        errores.altura_cm = 'Revisa tu altura: parece fuera de un rango que podamos calcular con seguridad.'
+        errores.altura_cm =
+          'Revisa tu altura: parece fuera de un rango que podamos calcular con seguridad.'
       }
       if (peso === 'fuera') {
-        errores.peso_kg = 'Revisa tu peso: parece fuera de un rango que podamos calcular con seguridad.'
+        errores.peso_kg =
+          'Revisa tu peso: parece fuera de un rango que podamos calcular con seguridad.'
       }
       return { completo: altura === 'ok' && peso === 'ok', errores }
     }
@@ -622,7 +644,11 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
         const faltan: string[] = []
         if (pct === 'vacio') faltan.push('tu porcentaje de grasa')
         if (b.grasa.fuente === null) faltan.push('cómo lo mediste')
-        return { completo: pct === 'ok' && b.grasa.fuente !== null, errores, falta: listaFalta(faltan) }
+        return {
+          completo: pct === 'ok' && b.grasa.fuente !== null,
+          errores,
+          falta: listaFalta(faltan),
+        }
       }
       if (b.grasa.metodo === 'medidas') {
         const cuello = enRango(b.grasa.cuello_cm, 25, 60)
@@ -687,7 +713,8 @@ export function estadoPaso(borrador: Borrador, paso: PasoId): EstadoPaso {
       if (b.quierePesoObjetivo === false) return { completo: true, errores }
       const objetivo = enRango(b.peso_objetivo, 30, 300)
       if (objetivo === 'fuera') {
-        errores.peso_objetivo = 'Revisa el dato: solo podemos trabajar con un peso objetivo entre 30 y 300 kg.'
+        errores.peso_objetivo =
+          'Revisa el dato: solo podemos trabajar con un peso objetivo entre 30 y 300 kg.'
       }
       return { completo: objetivo === 'ok', errores }
     }
@@ -807,7 +834,8 @@ export function aInputs(b: Borrador): InputCalculo {
     sintomas_regla: sintomas.length > 0 ? sintomas : null,
     // v1.2 (decisión H): el plazo solo viaja si la pantalla lo ha podido ofrecer, es decir, con
     // el paso de ritmo visible y una meta numérica de verdad.
-    plazo_semanas: pasos.includes('ritmo') && b.usarPlazo && pesoObjetivo !== null ? b.plazo_semanas : null,
+    plazo_semanas:
+      pasos.includes('ritmo') && b.usarPlazo && pesoObjetivo !== null ? b.plazo_semanas : null,
     // v1.2 (decisión G): el motor las ignora por completo; las lee `src/meals`. Ningún id puede
     // estar en las dos listas.
     alimentos_excluidos: b.alimentos_excluidos,

@@ -18,7 +18,18 @@ const DOMINIOS = {
   objetivo: ['perder', 'mantener', 'ganar', 'recomposicion', 'no_se'],
   ritmo: ['suave', 'moderado', 'agresivo'],
   preferencia: ['omnivoro', 'vegetariano', 'vegano', 'sin_lactosa', 'sin_gluten', 'low_carb'],
-  condicion: ['diabetes', 'renal', 'hepatica', 'tca', 'cardiaca', 'hipertension', 'tiroides', 'bariatrica', 'glp1', 'otra'],
+  condicion: [
+    'diabetes',
+    'renal',
+    'hepatica',
+    'tca',
+    'cardiaca',
+    'hipertension',
+    'tiroides',
+    'bariatrica',
+    'glp1',
+    'otra',
+  ],
   cribado_tca: ['positivo', 'evitado', 'negativo'],
   // v1.1: solo se validan si están presentes y no son `null` (§1.1).
   recomposicion_prioridad: ['perder', 'equilibrado', 'ganar'],
@@ -88,7 +99,11 @@ export function validarInputs(inputs: Inputs): string[] {
   if (!enDominio(DOMINIOS.sexo, inputs.sexo)) e.push('sexo')
   if (!enDominio(DOMINIOS.metodo, grasa.metodo)) e.push('grasa.metodo')
   // `grasa.fuente` se valida siempre que venga informada: la §1 la enumera sin condicionarla al método.
-  if (grasa.fuente !== undefined && grasa.fuente !== null && !enDominio(DOMINIOS.fuente, grasa.fuente)) {
+  if (
+    grasa.fuente !== undefined &&
+    grasa.fuente !== null &&
+    !enDominio(DOMINIOS.fuente, grasa.fuente)
+  ) {
     e.push('grasa.fuente')
   }
   if (!enDominio(DOMINIOS.actividad_diaria, inputs.actividad_diaria)) e.push('actividad_diaria')
@@ -98,17 +113,28 @@ export function validarInputs(inputs: Inputs): string[] {
   if (!enDominio(DOMINIOS.experiencia, ent.experiencia)) e.push('entrenamiento.experiencia')
   if (ent.tipo !== 'ninguno') {
     if (!enDominio(DOMINIOS.intensidad, ent.intensidad)) e.push('entrenamiento.intensidad')
-    if (ent.momento !== null && ent.momento !== undefined && !enDominio(DOMINIOS.momento, ent.momento)) {
+    if (
+      ent.momento !== null &&
+      ent.momento !== undefined &&
+      !enDominio(DOMINIOS.momento, ent.momento)
+    ) {
       e.push('entrenamiento.momento')
     }
   }
   if (!enDominio(DOMINIOS.objetivo, inputs.objetivo)) e.push('objetivo')
   if (!enDominio(DOMINIOS.ritmo, inputs.ritmo)) e.push('ritmo')
   if (!enDominio(DOMINIOS.preferencia, inputs.preferencia)) e.push('preferencia')
-  if (!Array.isArray(inputs.condiciones) || inputs.condiciones.some((c) => !enDominio(DOMINIOS.condicion, c))) {
+  if (
+    !Array.isArray(inputs.condiciones) ||
+    inputs.condiciones.some((c) => !enDominio(DOMINIOS.condicion, c))
+  ) {
     e.push('condiciones')
   }
-  if (inputs.cribado_tca !== null && inputs.cribado_tca !== undefined && !enDominio(DOMINIOS.cribado_tca, inputs.cribado_tca)) {
+  if (
+    inputs.cribado_tca !== null &&
+    inputs.cribado_tca !== undefined &&
+    !enDominio(DOMINIOS.cribado_tca, inputs.cribado_tca)
+  ) {
     e.push('cribado_tca')
   }
   if (![2, 3, 4, 5, 6].includes(inputs.n_comidas)) e.push('n_comidas')
@@ -119,7 +145,11 @@ export function validarInputs(inputs: Inputs): string[] {
   const opcional = (valor: unknown, dominio: readonly string[], campo: string): void => {
     if (valor !== undefined && valor !== null && !enDominio(dominio, valor)) e.push(campo)
   }
-  opcional(inputs.recomposicion_prioridad, DOMINIOS.recomposicion_prioridad, 'recomposicion_prioridad')
+  opcional(
+    inputs.recomposicion_prioridad,
+    DOMINIOS.recomposicion_prioridad,
+    'recomposicion_prioridad',
+  )
   opcional(inputs.menstruacion, DOMINIOS.menstruacion, 'menstruacion')
   opcional(inputs.preferencia_base, DOMINIOS.preferencia_base, 'preferencia_base')
   if (
@@ -130,7 +160,11 @@ export function validarInputs(inputs: Inputs): string[] {
   ) {
     e.push('restricciones')
   }
-  if (inputs.low_carb !== undefined && inputs.low_carb !== null && typeof inputs.low_carb !== 'boolean') {
+  if (
+    inputs.low_carb !== undefined &&
+    inputs.low_carb !== null &&
+    typeof inputs.low_carb !== 'boolean'
+  ) {
     e.push('low_carb')
   }
 
@@ -165,7 +199,8 @@ export function validarInputs(inputs: Inputs): string[] {
   // --- enteros y formato de fecha
   if (!Number.isInteger(inputs.edad)) e.push('edad')
   if (!Number.isInteger(ent.dias_semana)) e.push('entrenamiento.dias_semana')
-  if (ent.tipo !== 'ninguno' && !Number.isInteger(ent.minutos_sesion)) e.push('entrenamiento.minutos_sesion')
+  if (ent.tipo !== 'ninguno' && !Number.isInteger(ent.minutos_sesion))
+    e.push('entrenamiento.minutos_sesion')
   if (
     typeof inputs.fecha_inicio !== 'string' ||
     !/^\d{4}-\d{2}-\d{2}$/.test(inputs.fecha_inicio) ||
@@ -187,9 +222,14 @@ export function validarInputs(inputs: Inputs): string[] {
   }
   if (grasa.metodo === 'visual') {
     const tabla: Record<string, number> = inputs.sexo === 'hombre' ? VISUAL_HOMBRE : VISUAL_MUJER
-    if (typeof grasa.categoria !== 'string' || !(grasa.categoria in tabla)) e.push('grasa.categoria')
+    if (typeof grasa.categoria !== 'string' || !(grasa.categoria in tabla))
+      e.push('grasa.categoria')
   }
-  if (inputs.peso_objetivo !== null && inputs.peso_objetivo !== undefined && !enRango(inputs.peso_objetivo, 30, 300)) {
+  if (
+    inputs.peso_objetivo !== null &&
+    inputs.peso_objetivo !== undefined &&
+    !enRango(inputs.peso_objetivo, 30, 300)
+  ) {
     e.push('peso_objetivo')
   }
   if (ent.tipo !== 'ninguno' && !enRango(ent.minutos_sesion, 10, 240)) {

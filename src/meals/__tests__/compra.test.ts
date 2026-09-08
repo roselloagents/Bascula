@@ -3,11 +3,24 @@
 import { describe, expect, it } from 'vitest'
 import { ORDEN_SECCIONES, formatoCompra } from '../../data/mercadona'
 import type { Ejemplos, ItemCompra, NComidas, Preferencia } from '../../engine/types'
-import { CONSEJO_FRESCO_DOS_VECES, DIAS_A, DIAS_B, NOTAS_COMPRA, listaCompraDeDias } from '../compra'
+import {
+  CONSEJO_FRESCO_DOS_VECES,
+  DIAS_A,
+  DIAS_B,
+  NOTAS_COMPRA,
+  listaCompraDeDias,
+} from '../compra'
 import { generarEjemplos, generarListaCompra } from '../index'
 import { inputsDe, resultadoDe } from './fixtures'
 
-const PREFERENCIAS: Preferencia[] = ['omnivoro', 'vegetariano', 'vegano', 'sin_lactosa', 'sin_gluten', 'low_carb']
+const PREFERENCIAS: Preferencia[] = [
+  'omnivoro',
+  'vegetariano',
+  'vegano',
+  'sin_lactosa',
+  'sin_gluten',
+  'low_carb',
+]
 const KCAL = [1400, 1700, 2000, 2400, 2800, 3200]
 const COMIDAS: NComidas[] = [2, 3, 4, 5, 6]
 
@@ -18,7 +31,13 @@ function plan(kcal: number, nComidas: NComidas, preferencia: Preferencia, sencil
 }
 
 function comprobarItem(item: ItemCompra, contexto: string): void {
-  for (const n of [item.gramos_dia, item.gramos_semana, item.envase_g, item.envases, item.dura_dias]) {
+  for (const n of [
+    item.gramos_dia,
+    item.gramos_semana,
+    item.envase_g,
+    item.envases,
+    item.dura_dias,
+  ]) {
     expect(Number.isFinite(n), `${contexto} ${item.alimento_id}`).toBe(true)
     expect(Number.isNaN(n)).toBe(false)
   }
@@ -82,7 +101,8 @@ describe('lista de la compra: forma y fórmulas (§3.7.3)', () => {
           const b = ORDEN_SECCIONES.indexOf(items[i].seccion)
           expect(a).toBeGreaterThanOrEqual(0)
           expect(a).toBeLessThanOrEqual(b)
-          if (a === b) expect(items[i - 1].nombre.localeCompare(items[i].nombre, 'es')).toBeLessThanOrEqual(0)
+          if (a === b)
+            expect(items[i - 1].nombre.localeCompare(items[i].nombre, 'es')).toBeLessThanOrEqual(0)
         }
       }
     }
@@ -198,7 +218,12 @@ describe('generarListaCompra (§3.7.3, API)', () => {
 
   it('sin menú (condición renal o hepática) no hay lista de la compra', () => {
     for (const condicion of ['renal', 'hepatica'] as const) {
-      const o = { kcal: 2200, nComidas: 4 as NComidas, preferencia: 'omnivoro' as const, objetivo: 'mantener' as const }
+      const o = {
+        kcal: 2200,
+        nComidas: 4 as NComidas,
+        preferencia: 'omnivoro' as const,
+        objetivo: 'mantener' as const,
+      }
       const inputs = { ...inputsDe({ ...o, condiciones: [condicion] }), menu_sencillo: true }
       const ejemplos = generarEjemplos(inputs, resultadoDe(o))
       expect(ejemplos.compra).toBeUndefined()
@@ -213,7 +238,10 @@ describe('generarListaCompra (§3.7.3, API)', () => {
 
 describe('lista de la compra: consejos de conservación', () => {
   it('los frescos que darían para más días de los que aguantan se compran en dos veces', () => {
-    const lista = listaCompraDeDias([{ id: 'pechuga_pollo', nombre: 'Pechuga de pollo', gramos: 200 }], null)
+    const lista = listaCompraDeDias(
+      [{ id: 'pechuga_pollo', nombre: 'Pechuga de pollo', gramos: 200 }],
+      null,
+    )
     const pollo = lista.items[0]
     expect(pollo.conservacion).toBe('fresco')
     // 1.400 g a la semana → 2 bandejas de 1 kg → 10 días brutos, pero el pollo aguanta 3.
@@ -225,7 +253,10 @@ describe('lista de la compra: consejos de conservación', () => {
   it('con un solo envase no se manda partir la compra: se conserva el consejo del catálogo', () => {
     // Una docena de huevos no se puede comprar "en dos veces", y su ficha ya dice que aguanta
     // tres semanas en la nevera: el consejo fijo del fresco no debe tapar al del catálogo.
-    const lista = listaCompraDeDias([{ id: 'huevo_entero', nombre: 'Huevo entero', gramos: 55 }], null)
+    const lista = listaCompraDeDias(
+      [{ id: 'huevo_entero', nombre: 'Huevo entero', gramos: 55 }],
+      null,
+    )
     const huevo = lista.items[0]
     expect(huevo.conservacion).toBe('fresco')
     expect(huevo.envases).toBe(1)

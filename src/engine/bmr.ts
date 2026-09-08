@@ -16,10 +16,15 @@ export function katchMcArdle(mlg: number): number {
   return 370 + 21.6 * mlg
 }
 
-export function harrisBenedict(pesoKg: number, alturaCm: number, edad: number, hombre: boolean): number {
+export function harrisBenedict(
+  pesoKg: number,
+  alturaCm: number,
+  edad: number,
+  hombre: boolean,
+): number {
   return hombre
     ? 88.362 + 13.397 * pesoKg + 4.799 * alturaCm - 5.677 * edad
-    : 447.593 + 9.247 * pesoKg + 3.098 * alturaCm - 4.330 * edad
+    : 447.593 + 9.247 * pesoKg + 3.098 * alturaCm - 4.33 * edad
 }
 
 export interface EntradaBmr {

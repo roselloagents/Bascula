@@ -38,7 +38,11 @@ export const MAX_CANDIDATOS_SENCILLO = 16
 const prot = (ids: string[]): FoodQuery => ({ rol: 'proteina', ids_preferidos: ids })
 const carb = (ids: string[]): FoodQuery => ({ rol: 'carbohidrato', ids_preferidos: ids })
 const grasa = (ids: string[]): FoodQuery => ({ rol: 'grasa', ids_preferidos: ids })
-const verd = (ids: string[]): FoodQuery => ({ rol: 'verdura', grupo: 'verdura', ids_preferidos: ids })
+const verd = (ids: string[]): FoodQuery => ({
+  rol: 'verdura',
+  grupo: 'verdura',
+  ids_preferidos: ids,
+})
 const frut = (ids: string[]): FoodQuery => ({ rol: 'fruta', grupo: 'fruta', ids_preferidos: ids })
 
 interface Receta {
@@ -116,19 +120,89 @@ const OMN_SEN: readonly string[] = [
 ]
 
 const OMN_A: Plantilla[] = [
-  plantilla({ id: 'SEN-OMN-DES-A', rol_comida: 'desayuno', p: ['huevo_entero'], p2: ['pechuga_pavo'], c: ['avena_copos', 'pan_integral'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-OMN-PRI-A1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-OMN-PRI-A2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-OMN-LIG-A1', rol_comida: 'ligera', p: ['pechuga_pavo', 'huevo_entero'], c: ['pan_integral'] }),
-  plantilla({ id: 'SEN-OMN-LIG-A2', rol_comida: 'ligera', p: ['huevo_entero', 'pechuga_pavo'], g: ['almendras'], f: ['platano'] }),
+  plantilla({
+    id: 'SEN-OMN-DES-A',
+    rol_comida: 'desayuno',
+    p: ['huevo_entero'],
+    p2: ['pechuga_pavo'],
+    c: ['avena_copos', 'pan_integral'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
+  plantilla({
+    id: 'SEN-OMN-PRI-A1',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['arroz_blanco_cocido', 'patata_cocida'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-OMN-PRI-A2',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['patata_cocida', 'arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-OMN-LIG-A1',
+    rol_comida: 'ligera',
+    p: ['pechuga_pavo', 'huevo_entero'],
+    c: ['pan_integral'],
+  }),
+  plantilla({
+    id: 'SEN-OMN-LIG-A2',
+    rol_comida: 'ligera',
+    p: ['huevo_entero', 'pechuga_pavo'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
 ]
 
 const OMN_B: Plantilla[] = [
-  plantilla({ id: 'SEN-OMN-DES-B', rol_comida: 'desayuno', p: ['pechuga_pavo'], p2: ['huevo_entero'], c: ['pan_integral', 'avena_copos'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-OMN-PRI-B1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-OMN-PRI-B2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-OMN-LIG-B1', rol_comida: 'ligera', p: ['huevo_entero', 'pechuga_pavo'], c: ['pan_integral'] }),
-  plantilla({ id: 'SEN-OMN-LIG-B2', rol_comida: 'ligera', p: ['pechuga_pavo', 'huevo_entero'], g: ['almendras'], f: ['platano'] }),
+  plantilla({
+    id: 'SEN-OMN-DES-B',
+    rol_comida: 'desayuno',
+    p: ['pechuga_pavo'],
+    p2: ['huevo_entero'],
+    c: ['pan_integral', 'avena_copos'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
+  plantilla({
+    id: 'SEN-OMN-PRI-B1',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['patata_cocida', 'arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-OMN-PRI-B2',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['arroz_blanco_cocido', 'patata_cocida'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-OMN-LIG-B1',
+    rol_comida: 'ligera',
+    p: ['huevo_entero', 'pechuga_pavo'],
+    c: ['pan_integral'],
+  }),
+  plantilla({
+    id: 'SEN-OMN-LIG-B2',
+    rol_comida: 'ligera',
+    p: ['pechuga_pavo', 'huevo_entero'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
 ]
 
 // ---------- Vegetariano ----------
@@ -155,19 +229,93 @@ const VEG_SEN: readonly string[] = [
 ]
 
 const VEG_A: Plantilla[] = [
-  plantilla({ id: 'SEN-VEG-DES-A', rol_comida: 'desayuno', p: ['yogur_griego_0'], p2: ['queso_fresco_batido_0'], c: ['avena_copos', 'pan_integral'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-VEG-PRI-A1', rol_comida: 'principal', p: ['lentejas_cocidas'], p2: ['huevo_entero'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-VEG-PRI-A2', rol_comida: 'principal', p: ['huevo_entero'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-VEG-LIG-A1', rol_comida: 'ligera', p: ['yogur_griego_0'], p2: ['queso_fresco_batido_0'], c: ['pan_integral'] }),
-  plantilla({ id: 'SEN-VEG-LIG-A2', rol_comida: 'ligera', p: ['yogur_griego_0'], p2: ['queso_fresco_batido_0'], g: ['almendras'], f: ['platano'] }),
+  plantilla({
+    id: 'SEN-VEG-DES-A',
+    rol_comida: 'desayuno',
+    p: ['yogur_griego_0'],
+    p2: ['queso_fresco_batido_0'],
+    c: ['avena_copos', 'pan_integral'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
+  plantilla({
+    id: 'SEN-VEG-PRI-A1',
+    rol_comida: 'principal',
+    p: ['lentejas_cocidas'],
+    p2: ['huevo_entero'],
+    c: ['arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-VEG-PRI-A2',
+    rol_comida: 'principal',
+    p: ['huevo_entero'],
+    p2: ['lentejas_cocidas'],
+    c: ['arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-VEG-LIG-A1',
+    rol_comida: 'ligera',
+    p: ['yogur_griego_0'],
+    p2: ['queso_fresco_batido_0'],
+    c: ['pan_integral'],
+  }),
+  plantilla({
+    id: 'SEN-VEG-LIG-A2',
+    rol_comida: 'ligera',
+    p: ['yogur_griego_0'],
+    p2: ['queso_fresco_batido_0'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
 ]
 
 const VEG_B: Plantilla[] = [
-  plantilla({ id: 'SEN-VEG-DES-B', rol_comida: 'desayuno', p: ['queso_fresco_batido_0'], p2: ['huevo_entero'], c: ['pan_integral', 'avena_copos'], g: ['almendras'], f: ['manzana'] }),
-  plantilla({ id: 'SEN-VEG-PRI-B1', rol_comida: 'principal', p: ['huevo_entero'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-VEG-PRI-B2', rol_comida: 'principal', p: ['lentejas_cocidas'], p2: ['huevo_entero'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-VEG-LIG-B1', rol_comida: 'ligera', p: ['queso_fresco_batido_0'], p2: ['yogur_griego_0'], c: ['pan_integral'] }),
-  plantilla({ id: 'SEN-VEG-LIG-B2', rol_comida: 'ligera', p: ['queso_fresco_batido_0'], p2: ['yogur_griego_0'], g: ['almendras'], f: ['manzana'] }),
+  plantilla({
+    id: 'SEN-VEG-DES-B',
+    rol_comida: 'desayuno',
+    p: ['queso_fresco_batido_0'],
+    p2: ['huevo_entero'],
+    c: ['pan_integral', 'avena_copos'],
+    g: ['almendras'],
+    f: ['manzana'],
+  }),
+  plantilla({
+    id: 'SEN-VEG-PRI-B1',
+    rol_comida: 'principal',
+    p: ['huevo_entero'],
+    p2: ['lentejas_cocidas'],
+    c: ['arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-VEG-PRI-B2',
+    rol_comida: 'principal',
+    p: ['lentejas_cocidas'],
+    p2: ['huevo_entero'],
+    c: ['arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-VEG-LIG-B1',
+    rol_comida: 'ligera',
+    p: ['queso_fresco_batido_0'],
+    p2: ['yogur_griego_0'],
+    c: ['pan_integral'],
+  }),
+  plantilla({
+    id: 'SEN-VEG-LIG-B2',
+    rol_comida: 'ligera',
+    p: ['queso_fresco_batido_0'],
+    p2: ['yogur_griego_0'],
+    g: ['almendras'],
+    f: ['manzana'],
+  }),
 ]
 
 // ---------- Vegano ----------
@@ -195,19 +343,89 @@ const VGN_SEN: readonly string[] = [
 ]
 
 const VGN_A: Plantilla[] = [
-  plantilla({ id: 'SEN-VGN-DES-A', rol_comida: 'desayuno', p: ['tofu_firme'], p2: ['yogur_soja_proteico'], c: ['avena_copos', 'pan_integral'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-VGN-PRI-A1', rol_comida: 'principal', p: ['tofu_firme'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-VGN-PRI-A2', rol_comida: 'principal', p: ['lentejas_cocidas'], p2: ['tofu_firme'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-VGN-LIG-A1', rol_comida: 'ligera', p: ['yogur_soja_proteico'], c: ['pan_integral'] }),
-  plantilla({ id: 'SEN-VGN-LIG-A2', rol_comida: 'ligera', p: ['yogur_soja_proteico'], g: ['almendras'], f: ['platano'] }),
+  plantilla({
+    id: 'SEN-VGN-DES-A',
+    rol_comida: 'desayuno',
+    p: ['tofu_firme'],
+    p2: ['yogur_soja_proteico'],
+    c: ['avena_copos', 'pan_integral'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
+  plantilla({
+    id: 'SEN-VGN-PRI-A1',
+    rol_comida: 'principal',
+    p: ['tofu_firme'],
+    p2: ['lentejas_cocidas'],
+    c: ['arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-VGN-PRI-A2',
+    rol_comida: 'principal',
+    p: ['lentejas_cocidas'],
+    p2: ['tofu_firme'],
+    c: ['arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-VGN-LIG-A1',
+    rol_comida: 'ligera',
+    p: ['yogur_soja_proteico'],
+    c: ['pan_integral'],
+  }),
+  plantilla({
+    id: 'SEN-VGN-LIG-A2',
+    rol_comida: 'ligera',
+    p: ['yogur_soja_proteico'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
 ]
 
 const VGN_B: Plantilla[] = [
-  plantilla({ id: 'SEN-VGN-DES-B', rol_comida: 'desayuno', p: ['soja_texturizada_hidratada'], p2: ['yogur_soja_proteico'], c: ['pan_integral', 'avena_copos'], g: ['almendras'], f: ['manzana'] }),
-  plantilla({ id: 'SEN-VGN-PRI-B1', rol_comida: 'principal', p: ['soja_texturizada_hidratada'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-VGN-PRI-B2', rol_comida: 'principal', p: ['lentejas_cocidas'], p2: ['soja_texturizada_hidratada'], c: ['arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-VGN-LIG-B1', rol_comida: 'ligera', p: ['yogur_soja_proteico'], c: ['pan_integral'] }),
-  plantilla({ id: 'SEN-VGN-LIG-B2', rol_comida: 'ligera', p: ['yogur_soja_proteico'], g: ['almendras'], f: ['manzana'] }),
+  plantilla({
+    id: 'SEN-VGN-DES-B',
+    rol_comida: 'desayuno',
+    p: ['soja_texturizada_hidratada'],
+    p2: ['yogur_soja_proteico'],
+    c: ['pan_integral', 'avena_copos'],
+    g: ['almendras'],
+    f: ['manzana'],
+  }),
+  plantilla({
+    id: 'SEN-VGN-PRI-B1',
+    rol_comida: 'principal',
+    p: ['soja_texturizada_hidratada'],
+    p2: ['lentejas_cocidas'],
+    c: ['arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-VGN-PRI-B2',
+    rol_comida: 'principal',
+    p: ['lentejas_cocidas'],
+    p2: ['soja_texturizada_hidratada'],
+    c: ['arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-VGN-LIG-B1',
+    rol_comida: 'ligera',
+    p: ['yogur_soja_proteico'],
+    c: ['pan_integral'],
+  }),
+  plantilla({
+    id: 'SEN-VGN-LIG-B2',
+    rol_comida: 'ligera',
+    p: ['yogur_soja_proteico'],
+    g: ['almendras'],
+    f: ['manzana'],
+  }),
 ]
 
 // ---------- Sin lactosa ----------
@@ -233,19 +451,89 @@ const SLA_SEN: readonly string[] = [
 ]
 
 const SLA_A: Plantilla[] = [
-  plantilla({ id: 'SEN-SLA-DES-A', rol_comida: 'desayuno', p: ['queso_fresco_batido_0_sl'], p2: ['huevo_entero'], c: ['avena_copos', 'pan_integral'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-SLA-PRI-A1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SLA-PRI-A2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SLA-LIG-A1', rol_comida: 'ligera', p: ['queso_fresco_batido_0_sl', 'huevo_entero'], c: ['pan_integral'] }),
-  plantilla({ id: 'SEN-SLA-LIG-A2', rol_comida: 'ligera', p: ['queso_fresco_batido_0_sl', 'huevo_entero'], g: ['almendras'], f: ['platano'] }),
+  plantilla({
+    id: 'SEN-SLA-DES-A',
+    rol_comida: 'desayuno',
+    p: ['queso_fresco_batido_0_sl'],
+    p2: ['huevo_entero'],
+    c: ['avena_copos', 'pan_integral'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
+  plantilla({
+    id: 'SEN-SLA-PRI-A1',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['arroz_blanco_cocido', 'patata_cocida'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-SLA-PRI-A2',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['patata_cocida', 'arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-SLA-LIG-A1',
+    rol_comida: 'ligera',
+    p: ['queso_fresco_batido_0_sl', 'huevo_entero'],
+    c: ['pan_integral'],
+  }),
+  plantilla({
+    id: 'SEN-SLA-LIG-A2',
+    rol_comida: 'ligera',
+    p: ['queso_fresco_batido_0_sl', 'huevo_entero'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
 ]
 
 const SLA_B: Plantilla[] = [
-  plantilla({ id: 'SEN-SLA-DES-B', rol_comida: 'desayuno', p: ['huevo_entero'], p2: ['queso_fresco_batido_0_sl'], c: ['pan_integral', 'avena_copos'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-SLA-PRI-B1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SLA-PRI-B2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SLA-LIG-B1', rol_comida: 'ligera', p: ['huevo_entero', 'queso_fresco_batido_0_sl'], c: ['pan_integral'] }),
-  plantilla({ id: 'SEN-SLA-LIG-B2', rol_comida: 'ligera', p: ['queso_fresco_batido_0_sl', 'huevo_entero'], g: ['almendras'], f: ['platano'] }),
+  plantilla({
+    id: 'SEN-SLA-DES-B',
+    rol_comida: 'desayuno',
+    p: ['huevo_entero'],
+    p2: ['queso_fresco_batido_0_sl'],
+    c: ['pan_integral', 'avena_copos'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
+  plantilla({
+    id: 'SEN-SLA-PRI-B1',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['patata_cocida', 'arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-SLA-PRI-B2',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['arroz_blanco_cocido', 'patata_cocida'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-SLA-LIG-B1',
+    rol_comida: 'ligera',
+    p: ['huevo_entero', 'queso_fresco_batido_0_sl'],
+    c: ['pan_integral'],
+  }),
+  plantilla({
+    id: 'SEN-SLA-LIG-B2',
+    rol_comida: 'ligera',
+    p: ['queso_fresco_batido_0_sl', 'huevo_entero'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
 ]
 
 // ---------- Sin gluten ----------
@@ -271,19 +559,89 @@ const SGL_SEN: readonly string[] = [
 ]
 
 const SGL_A: Plantilla[] = [
-  plantilla({ id: 'SEN-SGL-DES-A', rol_comida: 'desayuno', p: ['yogur_griego_0'], p2: ['huevo_entero'], c: ['tortitas_arroz'], g: ['almendras'], f: ['platano'] }),
-  plantilla({ id: 'SEN-SGL-PRI-A1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SGL-PRI-A2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SGL-LIG-A1', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], c: ['tortitas_arroz'] }),
-  plantilla({ id: 'SEN-SGL-LIG-A2', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], g: ['almendras'], f: ['platano'] }),
+  plantilla({
+    id: 'SEN-SGL-DES-A',
+    rol_comida: 'desayuno',
+    p: ['yogur_griego_0'],
+    p2: ['huevo_entero'],
+    c: ['tortitas_arroz'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
+  plantilla({
+    id: 'SEN-SGL-PRI-A1',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['arroz_blanco_cocido', 'patata_cocida'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-SGL-PRI-A2',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['patata_cocida', 'arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-SGL-LIG-A1',
+    rol_comida: 'ligera',
+    p: ['yogur_griego_0', 'huevo_entero'],
+    c: ['tortitas_arroz'],
+  }),
+  plantilla({
+    id: 'SEN-SGL-LIG-A2',
+    rol_comida: 'ligera',
+    p: ['yogur_griego_0', 'huevo_entero'],
+    g: ['almendras'],
+    f: ['platano'],
+  }),
 ]
 
 const SGL_B: Plantilla[] = [
-  plantilla({ id: 'SEN-SGL-DES-B', rol_comida: 'desayuno', p: ['huevo_entero'], p2: ['yogur_griego_0'], c: ['tortitas_arroz'], g: ['almendras'], f: ['manzana'] }),
-  plantilla({ id: 'SEN-SGL-PRI-B1', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['patata_cocida', 'arroz_blanco_cocido'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SGL-PRI-B2', rol_comida: 'principal', p: ['pechuga_pollo'], p2: ['lentejas_cocidas'], c: ['arroz_blanco_cocido', 'patata_cocida'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-SGL-LIG-B1', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], c: ['tortitas_arroz'] }),
-  plantilla({ id: 'SEN-SGL-LIG-B2', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], g: ['almendras'], f: ['manzana'] }),
+  plantilla({
+    id: 'SEN-SGL-DES-B',
+    rol_comida: 'desayuno',
+    p: ['huevo_entero'],
+    p2: ['yogur_griego_0'],
+    c: ['tortitas_arroz'],
+    g: ['almendras'],
+    f: ['manzana'],
+  }),
+  plantilla({
+    id: 'SEN-SGL-PRI-B1',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['patata_cocida', 'arroz_blanco_cocido'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-SGL-PRI-B2',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo'],
+    p2: ['lentejas_cocidas'],
+    c: ['arroz_blanco_cocido', 'patata_cocida'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-SGL-LIG-B1',
+    rol_comida: 'ligera',
+    p: ['yogur_griego_0', 'huevo_entero'],
+    c: ['tortitas_arroz'],
+  }),
+  plantilla({
+    id: 'SEN-SGL-LIG-B2',
+    rol_comida: 'ligera',
+    p: ['yogur_griego_0', 'huevo_entero'],
+    g: ['almendras'],
+    f: ['manzana'],
+  }),
 ]
 
 // ---------- Low-carb ----------
@@ -311,19 +669,89 @@ const LCB_SEN: readonly string[] = [
 ]
 
 const LCB_A: Plantilla[] = [
-  plantilla({ id: 'SEN-LCB-DES-A', rol_comida: 'desayuno', p: ['huevo_entero'], p2: ['yogur_griego_0'], c: ['pan_proteico'], g: ['aguacate'], f: ['fresas'] }),
-  plantilla({ id: 'SEN-LCB-PRI-A1', rol_comida: 'principal', p: ['pechuga_pollo', 'atun_natural'], p2: ['huevo_entero'], c: ['arroz_coliflor', 'pan_proteico'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-LCB-PRI-A2', rol_comida: 'principal', p: ['atun_natural', 'pechuga_pollo'], p2: ['huevo_entero'], c: ['pan_proteico', 'arroz_coliflor'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-LCB-LIG-A1', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], g: ['almendras'] }),
-  plantilla({ id: 'SEN-LCB-LIG-A2', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], g: ['aguacate'], f: ['fresas'] }),
+  plantilla({
+    id: 'SEN-LCB-DES-A',
+    rol_comida: 'desayuno',
+    p: ['huevo_entero'],
+    p2: ['yogur_griego_0'],
+    c: ['pan_proteico'],
+    g: ['aguacate'],
+    f: ['fresas'],
+  }),
+  plantilla({
+    id: 'SEN-LCB-PRI-A1',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo', 'atun_natural'],
+    p2: ['huevo_entero'],
+    c: ['arroz_coliflor', 'pan_proteico'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-LCB-PRI-A2',
+    rol_comida: 'principal',
+    p: ['atun_natural', 'pechuga_pollo'],
+    p2: ['huevo_entero'],
+    c: ['pan_proteico', 'arroz_coliflor'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-LCB-LIG-A1',
+    rol_comida: 'ligera',
+    p: ['yogur_griego_0', 'huevo_entero'],
+    g: ['almendras'],
+  }),
+  plantilla({
+    id: 'SEN-LCB-LIG-A2',
+    rol_comida: 'ligera',
+    p: ['yogur_griego_0', 'huevo_entero'],
+    g: ['aguacate'],
+    f: ['fresas'],
+  }),
 ]
 
 const LCB_B: Plantilla[] = [
-  plantilla({ id: 'SEN-LCB-DES-B', rol_comida: 'desayuno', p: ['yogur_griego_0'], p2: ['huevo_entero'], c: ['pan_proteico'], g: ['almendras'], f: ['fresas'] }),
-  plantilla({ id: 'SEN-LCB-PRI-B1', rol_comida: 'principal', p: ['atun_natural', 'pechuga_pollo'], p2: ['huevo_entero'], c: ['pan_proteico', 'arroz_coliflor'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-LCB-PRI-B2', rol_comida: 'principal', p: ['pechuga_pollo', 'atun_natural'], p2: ['huevo_entero'], c: ['arroz_coliflor', 'pan_proteico'], g: ['aove'], v: ['brocoli'] }),
-  plantilla({ id: 'SEN-LCB-LIG-B1', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], g: ['aguacate'] }),
-  plantilla({ id: 'SEN-LCB-LIG-B2', rol_comida: 'ligera', p: ['yogur_griego_0', 'huevo_entero'], g: ['almendras'], f: ['fresas'] }),
+  plantilla({
+    id: 'SEN-LCB-DES-B',
+    rol_comida: 'desayuno',
+    p: ['yogur_griego_0'],
+    p2: ['huevo_entero'],
+    c: ['pan_proteico'],
+    g: ['almendras'],
+    f: ['fresas'],
+  }),
+  plantilla({
+    id: 'SEN-LCB-PRI-B1',
+    rol_comida: 'principal',
+    p: ['atun_natural', 'pechuga_pollo'],
+    p2: ['huevo_entero'],
+    c: ['pan_proteico', 'arroz_coliflor'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-LCB-PRI-B2',
+    rol_comida: 'principal',
+    p: ['pechuga_pollo', 'atun_natural'],
+    p2: ['huevo_entero'],
+    c: ['arroz_coliflor', 'pan_proteico'],
+    g: ['aove'],
+    v: ['brocoli'],
+  }),
+  plantilla({
+    id: 'SEN-LCB-LIG-B1',
+    rol_comida: 'ligera',
+    p: ['yogur_griego_0', 'huevo_entero'],
+    g: ['aguacate'],
+  }),
+  plantilla({
+    id: 'SEN-LCB-LIG-B2',
+    rol_comida: 'ligera',
+    p: ['yogur_griego_0', 'huevo_entero'],
+    g: ['almendras'],
+    f: ['fresas'],
+  }),
 ]
 
 const HC_ALTERNO_SENCILLO: FoodQuery = {

@@ -73,7 +73,9 @@ describe('bloque de proyección', () => {
   it('la gráfica es una imagen con resumen accesible', () => {
     const html = marcado()
     expect(html).toContain('role="img"')
-    expect(html).toMatch(/aria-label="Proyección de peso: de 84 kg en la semana 0 a entre 77,5 y 79,6 kg en la semana 12/)
+    expect(html).toMatch(
+      /aria-label="Proyección de peso: de 84 kg en la semana 0 a entre 77,5 y 79,6 kg en la semana 12/,
+    )
   })
 
   it('la tabla equivalente lleva los mismos números que la curva, semana a semana', () => {

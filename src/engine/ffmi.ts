@@ -25,6 +25,7 @@ export function calcularFfmi(sexo: Sexo, mlg: number, h: number, banda: BandaGra
   const ref = hombre ? FFMI_REF_ALTURA_HOMBRE : FFMI_REF_ALTURA_MUJER
   const normalizado = valor + FFMI_CONSTANTE_KOURI * (ref - h)
   // Con mucha grasa el FFMI no informa de musculatura: se muestra el número, no la categoría.
-  const categoria = banda === 'alto' || banda === 'muy_alto' ? null : categoriaFfmi(normalizado, hombre)
+  const categoria =
+    banda === 'alto' || banda === 'muy_alto' ? null : categoriaFfmi(normalizado, hombre)
   return { valor, normalizado, categoria }
 }

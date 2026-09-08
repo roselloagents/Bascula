@@ -72,7 +72,9 @@
   height: 7px;
   border-radius: 2px;
   background: var(--linea-fuerte);
-  transition: height 260ms var(--salida), background-color 260ms var(--salida);
+  transition:
+    height 260ms var(--salida),
+    background-color 260ms var(--salida);
 }
 
 .progreso-regla span[data-hecho='true'] {
@@ -239,8 +241,11 @@
 }
 
 .trio-siluetas li {
-  transition: border-color 180ms var(--salida), background-color 180ms var(--salida),
-    transform 180ms var(--salida), opacity 180ms var(--salida);
+  transition:
+    border-color 180ms var(--salida),
+    background-color 180ms var(--salida),
+    transform 180ms var(--salida),
+    opacity 180ms var(--salida);
 }
 
 /* Con una silueta resaltada, las otras dos se apagan: el contraste es lo que hace que el

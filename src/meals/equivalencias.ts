@@ -15,7 +15,11 @@ const round5 = (x: number): number => 5 * Math.round(x / 5)
 /** Cantidad de referencia de cada tabla: 20 g de proteína, 30 g de hidrato, 10 g de grasa. */
 const REFERENCIA = { proteina: 20, carbohidrato: 30, grasa: 10 } as const
 
-function fila(a: Alimento, macro: 'proteina' | 'carbohidratos' | 'grasa', objetivo: number): TablaEquivalencia['filas'][number] | null {
+function fila(
+  a: Alimento,
+  macro: 'proteina' | 'carbohidratos' | 'grasa',
+  objetivo: number,
+): TablaEquivalencia['filas'][number] | null {
   const por100 = a[macro]
   if (por100 <= 0) return null
   const gramos = round5((objetivo * 100) / por100)

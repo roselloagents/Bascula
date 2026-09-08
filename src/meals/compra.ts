@@ -124,12 +124,16 @@ export function itemDeCompra(id: string, nombre: string, gramosSemana: number): 
   const conservacion_dias = fila?.conservacion_dias ?? 7
 
   const envases = Math.max(1, Math.ceil(gramos_semana / envase_g))
-  const duraBruto = gramos_dia > 0 ? Math.floor((envases * envase_g) / gramos_dia) : conservacion_dias
+  const duraBruto =
+    gramos_dia > 0 ? Math.floor((envases * envase_g) / gramos_dia) : conservacion_dias
   const dura_dias = Math.max(1, Math.min(duraBruto, conservacion_dias))
   // Partir la compra en dos solo tiene sentido si de verdad se compra más de un envase: con un
   // único paquete el consejo era materialmente imposible y tapaba el consejo del catálogo.
   const consejo =
-    conservacion === 'fresco' && duraBruto > conservacion_dias && envases >= 2 && gramos_semana > envase_g
+    conservacion === 'fresco' &&
+    duraBruto > conservacion_dias &&
+    envases >= 2 &&
+    gramos_semana > envase_g
       ? CONSEJO_FRESCO_DOS_VECES
       : fila?.consejo
 

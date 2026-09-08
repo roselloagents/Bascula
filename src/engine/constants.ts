@@ -27,15 +27,15 @@ export const SUELO_KCAL_MUJER = 1200
 export const EA_MIN = 30
 export const EA_MIN_MUY_ALTO = 25
 export const CAP_DEFICIT = 0.25
-export const CAP_DEFICIT_MUY_ALTO = 0.30
-export const CAP_DEFICIT_65 = 0.20
+export const CAP_DEFICIT_MUY_ALTO = 0.3
+export const CAP_DEFICIT_65 = 0.2
 export const SUPERAVIT_MIN = 150
 export const SUPERAVIT_MAX = 500
 export const SUPERAVIT_SIN_FUERZA = 0.05
 /** Techos de proteína: g/kg de peso corporal y % de kcal. */
 export const PROT_TECHO_GKG_PC = 2.5
 export const PROT_PCT_CAP = 0.35
-export const PROT_PCT_CAP_VEGETAL = 0.30
+export const PROT_PCT_CAP_VEGETAL = 0.3
 export const PROT_KCAL_VEGETAL_UMBRAL = 1800
 export const PROT_TECHO_GKG = 2.4
 export const PROT_TECHO_GKG_AJUSTADO = 2.0
@@ -45,16 +45,16 @@ export const PROT_LINEA_ROJA = 0.8
 export const PROT_CAP_RENAL = 1.0
 export const PROT_MIN_BARIATRICA_GLP1 = 1.5
 export const PROT_FACTOR_VEGANO = 1.15
-export const PROT_FACTOR_VEGETARIANO = 1.10
+export const PROT_FACTOR_VEGETARIANO = 1.1
 export const GRASA_SUELO_GKG_HOMBRE = 0.7
 export const GRASA_SUELO_GKG_MUJER = 0.8
-export const GRASA_SUELO_PCT_KCAL = 0.20
-export const GRASA_TECHO_PCT_KCAL = 0.40
-export const GRASA_TECHO_PCT_KCAL_LOWCARB = 0.50
+export const GRASA_SUELO_PCT_KCAL = 0.2
+export const GRASA_TECHO_PCT_KCAL = 0.4
+export const GRASA_TECHO_PCT_KCAL_LOWCARB = 0.5
 export const HC_MIN = 130
 export const HC_MIN_LOWCARB = 75
 /** Desplazamiento del somatotipo: 10 % de las kcal no proteicas. */
-export const SOMATOTIPO_DESPLAZAMIENTO = 0.10
+export const SOMATOTIPO_DESPLAZAMIENTO = 0.1
 export const FIBRA_POR_1000_KCAL = 14
 export const FIBRA_MAX = 40
 export const FIBRA_REFERENCIA = 25
@@ -76,9 +76,9 @@ export const IMC_OBJETIVO_MIN_65 = 22
 /** Peso objetivo máximo en la rama `ganar`. */
 export const IMC_OBJETIVO_MAX_GANAR = 27.5
 export const HITO_UMBRAL = 0.15
-export const HITO_FACTOR = 0.90
+export const HITO_FACTOR = 0.9
 export const OBJETIVO_LEJANO_UMBRAL = 0.25
-export const GANANCIA_LEJANA_UMBRAL = 0.10
+export const GANANCIA_LEJANA_UMBRAL = 0.1
 export const HORIZONTE_MAX_SEMANAS = 104
 export const HORIZONTE_MAX_SEMANAS_GANAR = 20
 
@@ -98,8 +98,8 @@ export const HC_MIN_AJUSTE_UI = 30
 /** Salto del control de calorías del panel de ajuste. */
 export const KCAL_PASO_AJUSTE = 50
 /** Franja de calorías del ajuste fuera de `perder`: ±20 % del plan recomendado. */
-export const AJUSTE_KCAL_FACTOR_MIN = 0.80
-export const AJUSTE_KCAL_FACTOR_MAX = 1.20
+export const AJUSTE_KCAL_FACTOR_MIN = 0.8
+export const AJUSTE_KCAL_FACTOR_MAX = 1.2
 /** Déficit por debajo del cual el plan ajustado deja de ser una pérdida (`WARN_KCAL_AJUSTE_ALTA`). */
 export const AJUSTE_DEFICIT_MIN = 100
 // ---------- §3.1 v1.2 — plazo, recomposición con déficit y ciclo ----------
@@ -123,8 +123,16 @@ export const PREFERENCIAS_BASE = ['omnivoro', 'vegetariano', 'vegano'] as const
 
 // ---------- §3.2 Somatotipo ----------
 export const SOMA_Q1: Record<'fina' | 'media' | 'ancha', number> = { fina: -1, media: 0, ancha: 1 }
-export const SOMA_Q2: Record<'poca' | 'moderada' | 'mucha', number> = { poca: -1, moderada: 0, mucha: 1 }
-export const SOMA_Q4: Record<'delgado' | 'atletico' | 'robusto', number> = { delgado: -1, atletico: 0, robusto: 1 }
+export const SOMA_Q2: Record<'poca' | 'moderada' | 'mucha', number> = {
+  poca: -1,
+  moderada: 0,
+  mucha: 1,
+}
+export const SOMA_Q4: Record<'delgado' | 'atletico' | 'robusto', number> = {
+  delgado: -1,
+  atletico: 0,
+  robusto: 1,
+}
 
 // ---------- §3.3 Estimación visual (punto medio de la categoría ACE) ----------
 export const VISUAL_HOMBRE: Record<VisualHombre, number> = {
@@ -144,11 +152,11 @@ export const VISUAL_MUJER: Record<VisualMujer, number> = {
 
 // ---------- §3.4 PAL base (solo vida diaria, sin ejercicio) ----------
 export const PAL_BASE: Record<ActividadDiaria, number> = {
-  sedentario: 1.40,
-  ligero: 1.50,
-  moderado: 1.60,
+  sedentario: 1.4,
+  ligero: 1.5,
+  moderado: 1.6,
   alto: 1.75,
-  muy_alto: 1.90,
+  muy_alto: 1.9,
 }
 
 // ---------- §3.5 MET por tipo e intensidad (se usa MET − 1) ----------
@@ -162,22 +170,22 @@ export const MET: Record<TipoEntrenamiento, Record<Intensidad, number>> = {
 // ---------- §3.7 Ritmo de pérdida (% del peso corporal por semana) ----------
 // Las bandas `bajo` y `muy_bajo` nunca llegan aquí: el paso 6 convierte `perder` en `recomposicion`.
 export const RITMO_PERDIDA: Record<'muy_alto' | 'alto' | 'medio', Record<Ritmo, number>> = {
-  muy_alto: { suave: 0.50, moderado: 0.75, agresivo: 1.00 },
-  alto: { suave: 0.40, moderado: 0.60, agresivo: 0.80 },
-  medio: { suave: 0.30, moderado: 0.40, agresivo: 0.50 },
+  muy_alto: { suave: 0.5, moderado: 0.75, agresivo: 1.0 },
+  alto: { suave: 0.4, moderado: 0.6, agresivo: 0.8 },
+  medio: { suave: 0.3, moderado: 0.4, agresivo: 0.5 },
 }
 
 // ---------- §3.8 Superávit (% del TDEE) por experiencia y ritmo ----------
 export const SUPERAVIT: Record<Experiencia, Record<Ritmo, number>> = {
-  novato: { suave: 0.10, moderado: 0.15, agresivo: 0.20 },
-  intermedio: { suave: 0.05, moderado: 0.10, agresivo: 0.125 },
-  avanzado: { suave: 0.05, moderado: 0.075, agresivo: 0.10 },
+  novato: { suave: 0.1, moderado: 0.15, agresivo: 0.2 },
+  intermedio: { suave: 0.05, moderado: 0.1, agresivo: 0.125 },
+  avanzado: { suave: 0.05, moderado: 0.075, agresivo: 0.1 },
 }
 
 // ---------- §3.9 Recomposición (déficit leve sobre TDEE) por banda de grasa ----------
 export const RECOMPOSICION: Record<BandaGrasa, number> = {
-  muy_alto: 0.10,
-  alto: 0.10,
+  muy_alto: 0.1,
+  alto: 0.1,
   medio: 0.075,
   bajo: 0.05,
   muy_bajo: 0.0,
@@ -220,7 +228,10 @@ export const REPARTO: Record<NComidas, PlantillaReparto> = {
   2: { nombres: ['Comida', 'Cena'], pct: [45, 55] },
   3: { nombres: ['Desayuno', 'Comida', 'Cena'], pct: [30, 35, 35] },
   4: { nombres: ['Desayuno', 'Comida', 'Merienda', 'Cena'], pct: [25, 30, 15, 30] },
-  5: { nombres: ['Desayuno', 'Media mañana', 'Comida', 'Merienda', 'Cena'], pct: [20, 10, 30, 10, 30] },
+  5: {
+    nombres: ['Desayuno', 'Media mañana', 'Comida', 'Merienda', 'Cena'],
+    pct: [20, 10, 30, 10, 30],
+  },
   6: {
     nombres: ['Desayuno', 'Media mañana', 'Comida', 'Merienda', 'Cena', 'Recena'],
     pct: [15, 10, 25, 10, 25, 15],
@@ -242,8 +253,8 @@ export const PERI_PUNTOS_HC = 5
 // ---------- §3.12 FFMI normalizado: cortes por sexo ----------
 export const FFMI_CORTES_HOMBRE = [18, 20, 22, 25] as const
 export const FFMI_CORTES_MUJER = [15, 17, 19, 22] as const
-export const FFMI_REF_ALTURA_HOMBRE = 1.80
-export const FFMI_REF_ALTURA_MUJER = 1.70
+export const FFMI_REF_ALTURA_HOMBRE = 1.8
+export const FFMI_REF_ALTURA_MUJER = 1.7
 export const FFMI_CONSTANTE_KOURI = 6.3
 
 // ---------- Paso 2: bandas de grasa ----------
@@ -266,9 +277,19 @@ export const GRASA_OBJETIVO_MUJER_65: readonly [number, number, number] = [26, 2
 export const GRASA_MIN_OBJETIVO_HOMBRE = 12
 export const GRASA_MIN_OBJETIVO_MUJER = 20
 /** Puntos de %grasa del ensanche `w` según la fiabilidad de la estimación. */
-export const ENSANCHE_POR_FIABILIDAD: Record<'alta' | 'media' | 'baja', number> = { alta: 2, media: 4, baja: 5 }
+export const ENSANCHE_POR_FIABILIDAD: Record<'alta' | 'media' | 'baja', number> = {
+  alta: 2,
+  media: 4,
+  baja: 5,
+}
 /** ± mostrado en pantalla según la prioridad de método del paso 2. */
-export const MARGEN_POR_METODO = { conocido_fiable: 2, conocido_estimado: 4, medidas: 4, visual: 5, cunbae: 5 }
+export const MARGEN_POR_METODO = {
+  conocido_fiable: 2,
+  conocido_estimado: 4,
+  medidas: 4,
+  visual: 5,
+  cunbae: 5,
+}
 
 // ---------- Paso 14: adaptación metabólica y diet breaks ----------
 export const ADAPTACION_PENDIENTE = 0.25

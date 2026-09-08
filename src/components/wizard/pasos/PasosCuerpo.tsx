@@ -2,11 +2,7 @@
 
 import type { CategoriaVisual, MetodoGrasa, Sexo, Somatotipo } from '../../../engine/types'
 import { CampoNumero, Grupo, Opcion, OpcionAccion } from '../../ui/Controles'
-import {
-  IlustracionMedidas,
-  SiluetaGrasa,
-  TrioSomatotipos,
-} from '../../graficos/Siluetas'
+import { IlustracionMedidas, SiluetaGrasa, TrioSomatotipos } from '../../graficos/Siluetas'
 import { NOMBRE_SOMATOTIPO, RASGOS_CORTOS } from '../../utiles/copy'
 import { somatotipoProvisional } from '../../utiles/somatotipo'
 import { estaMarcado } from '../borrador'
@@ -36,19 +32,52 @@ const METODOS: { valor: MetodoGrasa; titulo: string; detalle: string }[] = [
 ]
 
 const VISUAL_HOMBRE: { valor: CategoriaVisual; titulo: string; detalle: string }[] = [
-  { valor: 'muy_definido', titulo: 'Muy definido', detalle: 'Abdominales muy marcados, venas visibles en brazos o abdomen' },
-  { valor: 'definido', titulo: 'Definido', detalle: 'Abdominales visibles pero poco marcados, silueta atlética' },
+  {
+    valor: 'muy_definido',
+    titulo: 'Muy definido',
+    detalle: 'Abdominales muy marcados, venas visibles en brazos o abdomen',
+  },
+  {
+    valor: 'definido',
+    titulo: 'Definido',
+    detalle: 'Abdominales visibles pero poco marcados, silueta atlética',
+  },
   { valor: 'medio', titulo: 'Medio', detalle: 'Abdomen liso sin marcar, silueta normal' },
-  { valor: 'sobrepeso_visible', titulo: 'Con sobrepeso visible', detalle: 'Acumulación abdominal visible, cintura por encima de la cadera' },
-  { valor: 'obesidad_visible', titulo: 'Con obesidad visible', detalle: 'Acumulación de grasa evidente en abdomen, pecho y cara' },
+  {
+    valor: 'sobrepeso_visible',
+    titulo: 'Con sobrepeso visible',
+    detalle: 'Acumulación abdominal visible, cintura por encima de la cadera',
+  },
+  {
+    valor: 'obesidad_visible',
+    titulo: 'Con obesidad visible',
+    detalle: 'Acumulación de grasa evidente en abdomen, pecho y cara',
+  },
 ]
 
 const VISUAL_MUJER: { valor: CategoriaVisual; titulo: string; detalle: string }[] = [
-  { valor: 'muy_definida', titulo: 'Muy definida', detalle: 'Definición muscular visible (no es el objetivo por defecto de la mayoría de mujeres, y no pasa nada si no es tu caso)' },
-  { valor: 'tonificada', titulo: 'Tonificada', detalle: 'Silueta tonificada con algo de definición' },
+  {
+    valor: 'muy_definida',
+    titulo: 'Muy definida',
+    detalle:
+      'Definición muscular visible (no es el objetivo por defecto de la mayoría de mujeres, y no pasa nada si no es tu caso)',
+  },
+  {
+    valor: 'tonificada',
+    titulo: 'Tonificada',
+    detalle: 'Silueta tonificada con algo de definición',
+  },
   { valor: 'media', titulo: 'Media', detalle: 'Curvas normales sin marcación muscular' },
-  { valor: 'sobrepeso_visible', titulo: 'Con sobrepeso visible', detalle: 'Acumulación de grasa visible en cadera, muslos y abdomen' },
-  { valor: 'obesidad_visible', titulo: 'Con obesidad visible', detalle: 'Acumulación evidente y generalizada' },
+  {
+    valor: 'sobrepeso_visible',
+    titulo: 'Con sobrepeso visible',
+    detalle: 'Acumulación de grasa visible en cadera, muslos y abdomen',
+  },
+  {
+    valor: 'obesidad_visible',
+    titulo: 'Con obesidad visible',
+    detalle: 'Acumulación evidente y generalizada',
+  },
 ]
 
 function visualesDe(sexo: Sexo) {
@@ -116,9 +145,9 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
           ) : null}
           {b.grasa.fuente === 'estimado' ? (
             <p className="nota nota-recuadro">
-              Vale, lo usaremos igualmente, pero como estimación: las básculas domésticas pueden tener
-              errores de varios puntos. Usaremos la fórmula estándar (Mifflin-St Jeor), que es más
-              fiable cuando el porcentaje de grasa no es un dato de precisión clínica.
+              Vale, lo usaremos igualmente, pero como estimación: las básculas domésticas pueden
+              tener errores de varios puntos. Usaremos la fórmula estándar (Mifflin-St Jeor), que es
+              más fiable cuando el porcentaje de grasa no es un dato de precisión clínica.
             </p>
           ) : null}
         </div>
@@ -182,22 +211,22 @@ export function PasoGrasa({ b, set, errores, marcados }: PropsPaso) {
           </Grupo>
           {visualElegida ? (
             <p className="nota nota-recuadro">
-              Has elegido «{visualElegida.titulo}»: lo traduciremos a un rango de grasa corporal, no a
-              una cifra exacta.
+              Has elegido «{visualElegida.titulo}»: lo traduciremos a un rango de grasa corporal, no
+              a una cifra exacta.
             </p>
           ) : null}
           <p className="nota">
-            Es normal dudar entre dos opciones: elige la que se parezca más. El margen de error de este
-            método es de unos ±5 puntos, y te lo indicaremos siempre como rango.
+            Es normal dudar entre dos opciones: elige la que se parezca más. El margen de error de
+            este método es de unos ±5 puntos, y te lo indicaremos siempre como rango.
           </p>
         </div>
       ) : null}
 
       {metodo === 'desconocido' ? (
         <p className="nota nota-recuadro">
-          Vale, estimaremos tu grasa corporal solo con tu altura, peso, edad y sexo (fórmula CUN-BAE).
-          Es la opción menos precisa, pero suficiente para empezar; siempre podrás afinarla más
-          adelante.
+          Vale, estimaremos tu grasa corporal solo con tu altura, peso, edad y sexo (fórmula
+          CUN-BAE). Es la opción menos precisa, pero suficiente para empezar; siempre podrás
+          afinarla más adelante.
         </p>
       ) : null}
     </Pantalla>
@@ -269,9 +298,7 @@ function LeyendaSomatotipo({ tipo, completo }: { tipo: Somatotipo | null; comple
           <li key={rasgo}>{rasgo}</li>
         ))}
       </ul>
-      {!completo ? (
-        <p className="nota">Puede cambiar con las respuestas que te quedan.</p>
-      ) : null}
+      {!completo ? <p className="nota">Puede cambiar con las respuestas que te quedan.</p> : null}
     </div>
   )
 }
@@ -341,8 +368,8 @@ export function PasoSomatotipo({ b, set }: PropsPaso) {
       </div>
       {completo ? (
         <p className="nota nota-recuadro">
-          Listo. Lo usaremos solo como un ajuste ligero entre hidratos y grasa; en tus resultados verás
-          cuál hemos aplicado y por qué.
+          Listo. Lo usaremos solo como un ajuste ligero entre hidratos y grasa; en tus resultados
+          verás cuál hemos aplicado y por qué.
         </p>
       ) : null}
       <button

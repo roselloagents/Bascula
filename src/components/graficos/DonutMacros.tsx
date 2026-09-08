@@ -43,7 +43,14 @@ export function DonutMacros({ pct, kcal }: DonutProps) {
     <div className="donut">
       <svg viewBox="0 0 140 140" role="img" aria-label={descripcion}>
         <g transform="rotate(-90 70 70)">
-          <circle cx="70" cy="70" r={RADIO} fill="none" stroke="var(--hueso-hundido)" strokeWidth={GROSOR} />
+          <circle
+            cx="70"
+            cy="70"
+            r={RADIO}
+            fill="none"
+            stroke="var(--hueso-hundido)"
+            strokeWidth={GROSOR}
+          />
           {arcos.map((arco) => (
             <circle
               key={arco.clave}

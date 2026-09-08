@@ -51,7 +51,14 @@ const CASO_17: Inputs = con({
   peso_kg: 68,
   grasa: { metodo: 'medidas', cuello_cm: 33, cintura_cm: 82, cadera_cm: 102 },
   actividad_diaria: 'ligero',
-  entrenamiento: ent({ tipo: 'fuerza', dias_semana: 3, minutos_sesion: 45, intensidad: 'media', experiencia: 'novato', momento: 'tarde' }),
+  entrenamiento: ent({
+    tipo: 'fuerza',
+    dias_semana: 3,
+    minutos_sesion: 45,
+    intensidad: 'media',
+    experiencia: 'novato',
+    momento: 'tarde',
+  }),
   objetivo: 'recomposicion',
   recomposicion_prioridad: 'perder',
   ritmo: 'moderado',
@@ -65,7 +72,13 @@ const CASO_17: Inputs = con({
 })
 
 // Caso 18 de la §5: hombre 38 años, 15 kg en 8 semanas (ningún ritmo llega).
-const CASO_18: Inputs = con({ objetivo: 'perder', ritmo: 'suave', peso_objetivo: 80, plazo_semanas: 8, preferencia_base: 'omnivoro' })
+const CASO_18: Inputs = con({
+  objetivo: 'perder',
+  ritmo: 'suave',
+  peso_objetivo: 80,
+  plazo_semanas: 8,
+  preferencia_base: 'omnivoro',
+})
 
 // Caso 19 de la §5: mujer 34 años, 6 kg en 24 semanas (llega hasta el ritmo más suave).
 const CASO_19: Inputs = con({
@@ -74,7 +87,14 @@ const CASO_19: Inputs = con({
   altura_cm: 168,
   peso_kg: 78,
   actividad_diaria: 'ligero',
-  entrenamiento: ent({ tipo: 'fuerza', dias_semana: 3, minutos_sesion: 50, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+  entrenamiento: ent({
+    tipo: 'fuerza',
+    dias_semana: 3,
+    minutos_sesion: 50,
+    intensidad: 'media',
+    experiencia: 'intermedio',
+    momento: 'tarde',
+  }),
   objetivo: 'perder',
   ritmo: 'agresivo',
   peso_objetivo: 72,
@@ -142,7 +162,9 @@ describe('Paso 6.7ter — el plazo elige el ritmo discreto (decisión H)', () =>
 
   it('sin plazo el motor se comporta como la v1.1 (mismo Resultado bit a bit)', () => {
     const sin = calcular(con({ objetivo: 'perder', ritmo: 'moderado', peso_objetivo: 80 }))
-    const nulo = calcular(con({ objetivo: 'perder', ritmo: 'moderado', peso_objetivo: 80, plazo_semanas: null }))
+    const nulo = calcular(
+      con({ objetivo: 'perder', ritmo: 'moderado', peso_objetivo: 80, plazo_semanas: null }),
+    )
     expect(nulo).toEqual(sin)
     expect(sin.ritmo_efectivo).toBe('moderado')
     expect(sin.avisos).not.toContain('INFO_RITMO_POR_PLAZO')
@@ -150,7 +172,9 @@ describe('Paso 6.7ter — el plazo elige el ritmo discreto (decisión H)', () =>
   })
 
   it('sin peso objetivo el plazo se ignora sin error', () => {
-    const r = calcular(con({ objetivo: 'perder', ritmo: 'moderado', peso_objetivo: null, plazo_semanas: 8 }))
+    const r = calcular(
+      con({ objetivo: 'perder', ritmo: 'moderado', peso_objetivo: null, plazo_semanas: 8 }),
+    )
     expect(r.excluido).toBeUndefined()
     expect(r.ritmo_efectivo).toBe('moderado')
     expect(r.avisos).not.toContain('INFO_RITMO_POR_PLAZO')
@@ -159,11 +183,23 @@ describe('Paso 6.7ter — el plazo elige el ritmo discreto (decisión H)', () =>
 
   it('en `ganar` el plazo traduce el superávit de la tabla 3.8 a kg por semana', () => {
     const base = con({
-      sexo: 'hombre', edad: 30, altura_cm: 180, peso_kg: 70,
+      sexo: 'hombre',
+      edad: 30,
+      altura_cm: 180,
+      peso_kg: 70,
       grasa: { metodo: 'conocido', valor: 12, fuente: 'fiable' },
       actividad_diaria: 'moderado',
-      entrenamiento: ent({ tipo: 'fuerza', dias_semana: 4, minutos_sesion: 60, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
-      objetivo: 'ganar', ritmo: 'agresivo', peso_objetivo: 74,
+      entrenamiento: ent({
+        tipo: 'fuerza',
+        dias_semana: 4,
+        minutos_sesion: 60,
+        intensidad: 'media',
+        experiencia: 'intermedio',
+        momento: 'tarde',
+      }),
+      objetivo: 'ganar',
+      ritmo: 'agresivo',
+      peso_objetivo: 74,
     })
     // 4 kg en 40 semanas = 0,10 kg/sem: el superávit `suave` (150-500 kcal) ya lo cubre de sobra.
     const holgado = calcular({ ...base, plazo_semanas: 40 })
@@ -192,7 +228,14 @@ describe('Paso 17 — el plazo no sobrevive a los suavizados ni al calendario', 
     peso_kg: 70,
     grasa: { metodo: 'conocido', valor: 27, fuente: 'fiable' },
     actividad_diaria: 'moderado',
-    entrenamiento: ent({ tipo: 'fuerza', dias_semana: 4, minutos_sesion: 60, intensidad: 'media', experiencia: 'intermedio', momento: 'tarde' }),
+    entrenamiento: ent({
+      tipo: 'fuerza',
+      dias_semana: 4,
+      minutos_sesion: 60,
+      intensidad: 'media',
+      experiencia: 'intermedio',
+      momento: 'tarde',
+    }),
     objetivo: 'perder',
     ritmo: 'suave',
     peso_objetivo: 65,
@@ -233,7 +276,9 @@ describe('Paso 17 — el plazo no sobrevive a los suavizados ni al calendario', 
       for (const pobj of [70, 76, 84, 90]) {
         const r = calcular(con({ objetivo: 'perder', peso_objetivo: pobj, plazo_semanas: plazo }))
         if (r.avisos.includes('INFO_RITMO_POR_PLAZO') && r.cronograma) {
-          expect(r.cronograma.semanas[0], `plazo ${plazo} / meta ${pobj}`).toBeLessThanOrEqual(plazo)
+          expect(r.cronograma.semanas[0], `plazo ${plazo} / meta ${pobj}`).toBeLessThanOrEqual(
+            plazo,
+          )
         }
       }
     }
@@ -252,7 +297,9 @@ describe('Paso 17 — el plazo no sobrevive a los suavizados ni al calendario', 
   })
 
   it("con 'tca' ninguno de los dos avisos del plazo se emite", () => {
-    const r = calcular(con({ objetivo: 'perder', peso_objetivo: 80, plazo_semanas: 8, condiciones: ['tca'] }))
+    const r = calcular(
+      con({ objetivo: 'perder', peso_objetivo: 80, plazo_semanas: 8, condiciones: ['tca'] }),
+    )
     expect(r.avisos).not.toContain('INFO_RITMO_POR_PLAZO')
     expect(r.avisos).not.toContain('WARN_PLAZO_IRREAL')
     expect(r.ritmo_efectivo).toBe('suave')
@@ -360,7 +407,12 @@ describe('Pasos 13 y 14 — recomposición con déficit real (decisión H)', () 
     for (const peso of [58, 68, 82, 110]) {
       for (const prio of ['perder', 'equilibrado', 'ganar'] as const) {
         for (const pobj of [null, peso - 8, peso - 0.2, peso + 5]) {
-          const r = calcular({ ...CASO_17, peso_kg: peso, recomposicion_prioridad: prio, peso_objetivo: pobj })
+          const r = calcular({
+            ...CASO_17,
+            peso_kg: peso,
+            recomposicion_prioridad: prio,
+            peso_objetivo: pobj,
+          })
           if (r.excluido) continue
           casos++
           expect(r.cronograma, 'en recomposición nunca hay cronograma').toBeNull()
@@ -403,7 +455,10 @@ describe('Paso 18 — el ajuste manual rehace la curva de recomposición', () =>
   it('con un ajuste vacío se restituye el plan recomendado, curva incluida', () => {
     const r = calcular(CASO_17)
     const vuelta = ajustarMacros(r, {})
-    expect({ ...vuelta, avisos: [...vuelta.avisos].sort() }).toEqual({ ...r, avisos: [...r.avisos].sort() })
+    expect({ ...vuelta, avisos: [...vuelta.avisos].sort() }).toEqual({
+      ...r,
+      avisos: [...r.avisos].sort(),
+    })
   })
 })
 
@@ -411,12 +466,24 @@ describe('Paso 18 — el ajuste manual rehace la curva de recomposición', () =>
 
 describe('Paso 19 — consejos por síntomas de la regla (decisión I)', () => {
   const mujer = (o: Partial<Inputs> = {}): Inputs =>
-    con({ sexo: 'mujer', edad: 34, altura_cm: 165, peso_kg: 64, objetivo: 'mantener', menstruacion: 'regular', ...o })
+    con({
+      sexo: 'mujer',
+      edad: 34,
+      altura_cm: 165,
+      peso_kg: 64,
+      objetivo: 'mantener',
+      menstruacion: 'regular',
+      ...o,
+    })
 
   it('caso 17: orden canónico, no el de entrada, y un consejo por síntoma', () => {
     const r = calcular(CASO_17)
     expect(r.ciclo?.sintomas).toEqual(['hinchazon', 'cansancio', 'sangrado_abundante'])
-    expect(r.ciclo?.consejos.map((c) => c.clave)).toEqual(['hinchazon', 'cansancio', 'sangrado_abundante'])
+    expect(r.ciclo?.consejos.map((c) => c.clave)).toEqual([
+      'hinchazon',
+      'cansancio',
+      'sangrado_abundante',
+    ])
     const consejos = r.ciclo?.consejos ?? []
     // `cansancio` SIN el fragmento de low-carb (`low_carb = false`).
     expect(consejos[1].texto).not.toContain('bajo en hidratos')
@@ -425,7 +492,12 @@ describe('Paso 19 — consejos por síntomas de la regla (decisión I)', () => {
     expect(consejos.map((c) => c.alimentos)).toEqual([
       ['Plátano', 'Patata cocida', 'Espinacas', 'Calabacín'],
       ['Avena', 'Patata cocida', 'Lentejas o garbanzos', 'Fruta'],
-      ['Lentejas o garbanzos', 'Carne roja magra (ternera)', 'Mejillones o berberechos al natural', 'Espinacas'],
+      [
+        'Lentejas o garbanzos',
+        'Carne roja magra (ternera)',
+        'Mejillones o berberechos al natural',
+        'Espinacas',
+      ],
     ])
     for (const c of consejos) {
       expect(c.titulo.length).toBeGreaterThan(3)
@@ -435,7 +507,13 @@ describe('Paso 19 — consejos por síntomas de la regla (decisión I)', () => {
   })
 
   it('cada síntoma por separado produce su consejo', () => {
-    const claves: SintomaRegla[] = ['dolor', 'hinchazon', 'antojos', 'cansancio', 'sangrado_abundante']
+    const claves: SintomaRegla[] = [
+      'dolor',
+      'hinchazon',
+      'antojos',
+      'cansancio',
+      'sangrado_abundante',
+    ]
     for (const clave of claves) {
       const r = calcular(mujer({ sintomas_regla: [clave] }))
       expect(r.ciclo?.sintomas, clave).toEqual([clave])
@@ -447,12 +525,23 @@ describe('Paso 19 — consejos por síntomas de la regla (decisión I)', () => {
   })
 
   it('el fragmento de low-carb solo aparece con `low_carb` efectivo', () => {
-    const sin = calcular(mujer({ sintomas_regla: ['cansancio'], preferencia_base: 'omnivoro', low_carb: false }))
+    const sin = calcular(
+      mujer({ sintomas_regla: ['cansancio'], preferencia_base: 'omnivoro', low_carb: false }),
+    )
     expect(sin.ciclo?.consejos[0].texto).not.toContain('bajo en hidratos')
-    const conLc = calcular(mujer({ sintomas_regla: ['cansancio'], preferencia_base: 'omnivoro', low_carb: true }))
+    const conLc = calcular(
+      mujer({ sintomas_regla: ['cansancio'], preferencia_base: 'omnivoro', low_carb: true }),
+    )
     expect(conLc.ciclo?.consejos[0].texto).toContain('bajo en hidratos')
     // La diabetes anula el interruptor en el paso 6.8, y el consejo tiene que seguirlo.
-    const diabetes = calcular(mujer({ sintomas_regla: ['cansancio'], preferencia_base: 'omnivoro', low_carb: true, condiciones: ['diabetes'] }))
+    const diabetes = calcular(
+      mujer({
+        sintomas_regla: ['cansancio'],
+        preferencia_base: 'omnivoro',
+        low_carb: true,
+        condiciones: ['diabetes'],
+      }),
+    )
     expect(diabetes.low_carb).toBe(false)
     expect(diabetes.ciclo?.consejos[0].texto).not.toContain('bajo en hidratos')
   })
@@ -466,12 +555,14 @@ describe('Paso 19 — consejos por síntomas de la regla (decisión I)', () => {
   })
 
   it('a una vegana no se le recomienda carne roja ni pescado en su propio plan', () => {
-    const r = calcular(mujer({
-      sintomas_regla: ['dolor', 'antojos', 'sangrado_abundante'],
-      preferencia_base: 'vegano',
-      restricciones: [],
-      low_carb: false,
-    }))
+    const r = calcular(
+      mujer({
+        sintomas_regla: ['dolor', 'antojos', 'sangrado_abundante'],
+        preferencia_base: 'vegano',
+        restricciones: [],
+        low_carb: false,
+      }),
+    )
     const todos = (r.ciclo?.consejos ?? []).flatMap((c) => c.alimentos).join(' · ')
     expect(todos).not.toMatch(/Carne roja|Pescado azul|Mejillones|Yogur griego/)
     expect(todos).toContain('Yogur de soja alto en proteína')
@@ -480,9 +571,27 @@ describe('Paso 19 — consejos por síntomas de la regla (decisión I)', () => {
   })
 
   it('las dos únicas sustituciones por restricción: avena y yogur griego', () => {
-    const sinGluten = calcular(mujer({ sintomas_regla: ['cansancio'], preferencia_base: 'omnivoro', restricciones: ['sin_gluten'], low_carb: false }))
-    expect(sinGluten.ciclo?.consejos[0].alimentos).toEqual(['Patata cocida', 'Lentejas o garbanzos', 'Fruta'])
-    const sinLactosa = calcular(mujer({ sintomas_regla: ['antojos'], preferencia_base: 'omnivoro', restricciones: ['sin_lactosa'], low_carb: false }))
+    const sinGluten = calcular(
+      mujer({
+        sintomas_regla: ['cansancio'],
+        preferencia_base: 'omnivoro',
+        restricciones: ['sin_gluten'],
+        low_carb: false,
+      }),
+    )
+    expect(sinGluten.ciclo?.consejos[0].alimentos).toEqual([
+      'Patata cocida',
+      'Lentejas o garbanzos',
+      'Fruta',
+    ])
+    const sinLactosa = calcular(
+      mujer({
+        sintomas_regla: ['antojos'],
+        preferencia_base: 'omnivoro',
+        restricciones: ['sin_lactosa'],
+        low_carb: false,
+      }),
+    )
     expect(sinLactosa.ciclo?.consejos[0].alimentos[0]).toBe('Yogur griego 0% sin lactosa')
   })
 
@@ -491,10 +600,16 @@ describe('Paso 19 — consejos por síntomas de la regla (decisión I)', () => {
     expect(calcular(mujer({ sintomas_regla: null })).ciclo).toBeUndefined()
     expect(calcular(mujer({})).ciclo).toBeUndefined()
     // Sin regla (o con `ausente`/`no_dice`) no hay INFO_CICLO y no hay tarjeta.
-    expect(calcular(mujer({ menstruacion: 'ausente', sintomas_regla: ['dolor'] })).ciclo).toBeUndefined()
-    expect(calcular(mujer({ menstruacion: 'no_dice', sintomas_regla: ['dolor'] })).ciclo).toBeUndefined()
+    expect(
+      calcular(mujer({ menstruacion: 'ausente', sintomas_regla: ['dolor'] })).ciclo,
+    ).toBeUndefined()
+    expect(
+      calcular(mujer({ menstruacion: 'no_dice', sintomas_regla: ['dolor'] })).ciclo,
+    ).toBeUndefined()
     // En hombres el paso 0 ignora `menstruacion`, así que tampoco hay ciclo.
-    expect(calcular(con({ menstruacion: 'regular', sintomas_regla: ['dolor'] })).ciclo).toBeUndefined()
+    expect(
+      calcular(con({ menstruacion: 'regular', sintomas_regla: ['dolor'] })).ciclo,
+    ).toBeUndefined()
     // Duplicados y orden de entrada: se deduplica y se ordena.
     const r = calcular(mujer({ sintomas_regla: ['antojos', 'dolor', 'antojos'] }))
     expect(r.ciclo?.sintomas).toEqual(['dolor', 'antojos'])
@@ -502,7 +617,9 @@ describe('Paso 19 — consejos por síntomas de la regla (decisión I)', () => {
 
   it('los síntomas no cambian ni un número del plan (S33)', () => {
     const sin = calcular(mujer({ objetivo: 'perder', peso_objetivo: 58 }))
-    const conSintomas = calcular(mujer({ objetivo: 'perder', peso_objetivo: 58, sintomas_regla: ['dolor', 'antojos'] }))
+    const conSintomas = calcular(
+      mujer({ objetivo: 'perder', peso_objetivo: 58, sintomas_regla: ['dolor', 'antojos'] }),
+    )
     expect({ ...conSintomas, ciclo: undefined }).toEqual({ ...sin, ciclo: undefined })
     expect(conSintomas.ciclo).toBeDefined()
   })
@@ -529,12 +646,26 @@ describe('§1 — los campos de alimentos y `menu_sencillo` no llegan al motor (
   })
 
   it('validación de los cuatro campos nuevos: ausente o null es siempre válido', () => {
-    expect(calcular({ ...CASO_17, plazo_semanas: null, sintomas_regla: null, alimentos_excluidos: null, alimentos_favoritos: null }).excluido).toBeUndefined()
+    expect(
+      calcular({
+        ...CASO_17,
+        plazo_semanas: null,
+        sintomas_regla: null,
+        alimentos_excluidos: null,
+        alimentos_favoritos: null,
+      }).excluido,
+    ).toBeUndefined()
     expect(calcular({ ...CASO_17, plazo_semanas: 3 }).errores).toEqual(['plazo_semanas'])
     expect(calcular({ ...CASO_17, plazo_semanas: 53 }).errores).toEqual(['plazo_semanas'])
     expect(calcular({ ...CASO_17, plazo_semanas: 8.5 }).errores).toEqual(['plazo_semanas'])
-    expect(calcular({ ...CASO_17, sintomas_regla: ['migrana' as SintomaRegla] }).errores).toEqual(['sintomas_regla'])
-    expect(calcular({ ...CASO_17, alimentos_excluidos: [1 as unknown as string] }).errores).toEqual(['alimentos_excluidos'])
-    expect(calcular({ ...CASO_17, alimentos_favoritos: 'pollo' as unknown as string[] }).errores).toEqual(['alimentos_favoritos'])
+    expect(calcular({ ...CASO_17, sintomas_regla: ['migrana' as SintomaRegla] }).errores).toEqual([
+      'sintomas_regla',
+    ])
+    expect(calcular({ ...CASO_17, alimentos_excluidos: [1 as unknown as string] }).errores).toEqual(
+      ['alimentos_excluidos'],
+    )
+    expect(
+      calcular({ ...CASO_17, alimentos_favoritos: 'pollo' as unknown as string[] }).errores,
+    ).toEqual(['alimentos_favoritos'])
   })
 })

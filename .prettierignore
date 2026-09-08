@@ -1,0 +1,11 @@
+# Artefactos y dependencias
+node_modules
+dist
+coverage
+package-lock.json
+
+# Datos y documentación: se mantienen a mano, con su propio formato
+src/data/*.json
+docs
+public
+*.md

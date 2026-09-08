@@ -31,10 +31,16 @@ const TOLERANCIA_ALTERNATIVA = 0.15
  * 2-3 sustituciones equivalentes en texto. La equivalencia se calcula sobre el macro que
  * define el papel del alimento en la comida (proteína, hidrato o grasa).
  */
-export function alternativasComida(porciones: readonly Porcion[], candidatos: readonly Alimento[]): string[] {
+export function alternativasComida(
+  porciones: readonly Porcion[],
+  candidatos: readonly Alimento[],
+): string[] {
   const textos: string[] = []
   const usados = new Set(porciones.map((p) => p.alimento.id))
-  const roles: { rol: Porcion['rol']; macro: keyof Pick<Alimento, 'proteina' | 'carbohidratos' | 'grasa'> }[] = [
+  const roles: {
+    rol: Porcion['rol']
+    macro: keyof Pick<Alimento, 'proteina' | 'carbohidratos' | 'grasa'>
+  }[] = [
     { rol: 'proteina', macro: 'proteina' },
     { rol: 'carbohidrato', macro: 'carbohidratos' },
     { rol: 'grasa', macro: 'grasa' },
@@ -89,14 +95,21 @@ export function alternativasComida(porciones: readonly Porcion[], candidatos: re
       }
       if (!sustituto) continue
       usados.add(sustituto.id)
-      textos.push(`Cambia ${p.gramos} g de ${nombreCorto(p.alimento)} por ${gramos} g de ${nombreCorto(sustituto)}.`)
+      textos.push(
+        `Cambia ${p.gramos} g de ${nombreCorto(p.alimento)} por ${gramos} g de ${nombreCorto(sustituto)}.`,
+      )
     }
   }
   return textos.slice(0, 3)
 }
 
 /** Nota cuando la proteína de la comida se sale del umbral terminal del ±15 % (§3.3). */
-export function notaProteinaLejos(comida: string, real: number, objetivo: number, alimento: string): string {
+export function notaProteinaLejos(
+  comida: string,
+  real: number,
+  objetivo: number,
+  alimento: string,
+): string {
   return `${comida}: la proteína del ejemplo se queda en ${numero(real)} g frente a los ${numero(objetivo)} g del objetivo; sube o baja la ración de ${alimento} para acercarte.`
 }
 
@@ -120,7 +133,12 @@ export function avisoProteinaVegetal(nComidas: number, proteinaDia: number): str
  * macros. El algoritmo cierra sobre kcal y proteína, así que estos dos macros pueden desviarse;
  * con `diabetes` el hidrato es justo el que no puede desviarse en silencio.
  */
-export function notaMacroDia(macro: 'hidratos' | 'grasa', real: number, objetivo: number, diabetes: boolean): string {
+export function notaMacroDia(
+  macro: 'hidratos' | 'grasa',
+  real: number,
+  objetivo: number,
+  diabetes: boolean,
+): string {
   const direccion = real > objetivo ? 'por encima' : 'por debajo'
   const cola = diabetes
     ? ' Con diabetes esa diferencia importa: ajusta las raciones de hidratos del ejemplo a tu objetivo antes de usarlo, y consúltalo con tu equipo médico.'
@@ -178,41 +196,75 @@ export function notaDosPlatos(comida: string, kcal: number, platos: number): str
 }
 
 /** 3-5 consejos prácticos de adherencia según objetivo y preferencia. */
-export function consejos(objetivo: ObjetivoEfectivo, preferencia: Preferencia, nComidas: number): string[] {
+export function consejos(
+  objetivo: ObjetivoEfectivo,
+  preferencia: Preferencia,
+  nComidas: number,
+): string[] {
   const lista: string[] = [
     'Pesa los alimentos en crudo durante la primera semana: en poco tiempo te bastará con el ojo y la medida casera.',
   ]
 
   if (objetivo === 'perder') {
-    lista.push('Empieza las comidas principales por la verdura: llena el plato y ayuda a llegar saciado al resto.')
-    lista.push('No compenses una comida pasada con saltarte la siguiente; el total de la semana pesa más que un día suelto.')
+    lista.push(
+      'Empieza las comidas principales por la verdura: llena el plato y ayuda a llegar saciado al resto.',
+    )
+    lista.push(
+      'No compenses una comida pasada con saltarte la siguiente; el total de la semana pesa más que un día suelto.',
+    )
   } else if (objetivo === 'ganar') {
-    lista.push('Si te cuesta comer tanto volumen, sube el aceite y los frutos secos antes que el tamaño de los platos.')
-    lista.push('Reparte la proteína entre todas las tomas: es más útil que concentrarla en la cena.')
+    lista.push(
+      'Si te cuesta comer tanto volumen, sube el aceite y los frutos secos antes que el tamaño de los platos.',
+    )
+    lista.push(
+      'Reparte la proteína entre todas las tomas: es más útil que concentrarla en la cena.',
+    )
   } else if (objetivo === 'recomposicion') {
-    lista.push('Coloca la comida más grande alrededor del entrenamiento: es cuando mejor aprovechas los hidratos.')
-    lista.push('Mide el progreso con la cinta métrica y las fotos, no solo con la báscula: el peso puede quedarse quieto.')
+    lista.push(
+      'Coloca la comida más grande alrededor del entrenamiento: es cuando mejor aprovechas los hidratos.',
+    )
+    lista.push(
+      'Mide el progreso con la cinta métrica y las fotos, no solo con la báscula: el peso puede quedarse quieto.',
+    )
   } else {
-    lista.push('Mantén una estructura fija de comidas: la regularidad es lo que sostiene el resultado a largo plazo.')
-    lista.push('Repite dos o tres desayunos y comidas de referencia: menos decisiones diarias, más adherencia.')
+    lista.push(
+      'Mantén una estructura fija de comidas: la regularidad es lo que sostiene el resultado a largo plazo.',
+    )
+    lista.push(
+      'Repite dos o tres desayunos y comidas de referencia: menos decisiones diarias, más adherencia.',
+    )
   }
 
   if (preferencia === 'vegano') {
-    lista.push('Combina legumbre, soja y cereal a lo largo del día y revisa con tu médico la vitamina B12.')
+    lista.push(
+      'Combina legumbre, soja y cereal a lo largo del día y revisa con tu médico la vitamina B12.',
+    )
   } else if (preferencia === 'vegetariano') {
-    lista.push('Apóyate en huevo, lácteos proteicos y legumbre: son las fuentes que más rinden por ración.')
+    lista.push(
+      'Apóyate en huevo, lácteos proteicos y legumbre: son las fuentes que más rinden por ración.',
+    )
   } else if (preferencia === 'sin_gluten') {
-    lista.push('Arroz, patata, boniato, quinoa y tortitas de arroz cubren de sobra los hidratos sin gluten.')
+    lista.push(
+      'Arroz, patata, boniato, quinoa y tortitas de arroz cubren de sobra los hidratos sin gluten.',
+    )
   } else if (preferencia === 'sin_lactosa') {
-    lista.push('Los lácteos sin lactosa y los quesos curados aportan la misma proteína que sus versiones normales.')
+    lista.push(
+      'Los lácteos sin lactosa y los quesos curados aportan la misma proteína que sus versiones normales.',
+    )
   } else if (preferencia === 'low_carb') {
-    lista.push('Con pocos hidratos, la verdura y el aceite son los que dan volumen y saciedad al plato.')
+    lista.push(
+      'Con pocos hidratos, la verdura y el aceite son los que dan volumen y saciedad al plato.',
+    )
   } else {
-    lista.push('Cocina de una vez la proteína y el cereal de dos comidas: es lo que más tiempo ahorra entre semana.')
+    lista.push(
+      'Cocina de una vez la proteína y el cereal de dos comidas: es lo que más tiempo ahorra entre semana.',
+    )
   }
 
   if (nComidas >= 5) {
-    lista.push('Con tantas tomas, deja preparados los snacks el día anterior: es donde se rompen casi todos los planes.')
+    lista.push(
+      'Con tantas tomas, deja preparados los snacks el día anterior: es donde se rompen casi todos los planes.',
+    )
   }
 
   return lista.slice(0, 5)

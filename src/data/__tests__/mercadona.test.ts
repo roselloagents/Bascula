@@ -20,7 +20,9 @@ describe('mercadona.json — cobertura de foods.json', () => {
 
   it('no tiene ids desconocidos ni duplicados', () => {
     const idsBase = new Set(ALIMENTOS.map((a) => a.id))
-    const desconocidos = MERCADONA.filter((f) => !idsBase.has(f.alimento_id)).map((f) => f.alimento_id)
+    const desconocidos = MERCADONA.filter((f) => !idsBase.has(f.alimento_id)).map(
+      (f) => f.alimento_id,
+    )
     expect(desconocidos).toEqual([])
     expect(new Set(MERCADONA.map((f) => f.alimento_id)).size).toBe(MERCADONA.length)
   })
@@ -117,7 +119,9 @@ describe('mercadona.json — reglas de presentación (§3.7)', () => {
   })
 
   it('los congelados duran más que los frescos', () => {
-    const maxFresco = Math.max(...MERCADONA.filter((f) => f.conservacion === 'fresco').map((f) => f.conservacion_dias))
+    const maxFresco = Math.max(
+      ...MERCADONA.filter((f) => f.conservacion === 'fresco').map((f) => f.conservacion_dias),
+    )
     const minCongelado = Math.min(
       ...MERCADONA.filter((f) => f.conservacion === 'congelado').map((f) => f.conservacion_dias),
     )

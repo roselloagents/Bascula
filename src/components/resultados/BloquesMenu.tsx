@@ -88,8 +88,12 @@ export function BloqueMenus({
         </p>
       ) : null}
 
-      {inputs.condiciones.includes('diabetes') ? <p className="nota nota-recuadro">{NOTA_DIABETES}</p> : null}
-      {inputs.condiciones.includes('cardiaca') ? <p className="nota nota-recuadro">{NOTA_CARDIACA}</p> : null}
+      {inputs.condiciones.includes('diabetes') ? (
+        <p className="nota nota-recuadro">{NOTA_DIABETES}</p>
+      ) : null}
+      {inputs.condiciones.includes('cardiaca') ? (
+        <p className="nota nota-recuadro">{NOTA_CARDIACA}</p>
+      ) : null}
 
       <ol className="lista-menu">
         {jornada.comidas.map((comida) => (

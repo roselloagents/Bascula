@@ -120,7 +120,9 @@ export function BloqueCompra({ ejemplos }: { ejemplos: Ejemplos }) {
                       <th scope="row">
                         <span className="compra-producto">{item.producto}</span>
                         <span className="compra-alimento">{item.nombre}</span>
-                        {item.consejo ? <span className="compra-consejo">{item.consejo}</span> : null}
+                        {item.consejo ? (
+                          <span className="compra-consejo">{item.consejo}</span>
+                        ) : null}
                       </th>
                       <td data-etiqueta="Cantidad">
                         <span className="cifra compra-dato">{textoCantidadCiclo(item)}</span>

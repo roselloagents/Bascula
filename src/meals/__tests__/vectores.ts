@@ -7,7 +7,15 @@ import type { Inputs, InputEntrenamiento } from '../../engine/types'
 
 const BASE: Pick<
   Inputs,
-  'clima_caluroso' | 'embarazo_lactancia' | 'condiciones' | 'fecha_inicio' | 'peso_objetivo' | 'somatotipo' | 'ritmo' | 'preferencia' | 'cribado_tca'
+  | 'clima_caluroso'
+  | 'embarazo_lactancia'
+  | 'condiciones'
+  | 'fecha_inicio'
+  | 'peso_objetivo'
+  | 'somatotipo'
+  | 'ritmo'
+  | 'preferencia'
+  | 'cribado_tca'
 > = {
   clima_caluroso: false,
   embarazo_lactancia: false,

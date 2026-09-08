@@ -15,7 +15,14 @@ import { pasaPreferencia } from '../filtros'
 import { generarEjemplos, plantillasRespaldo } from '../index'
 import { inputsDe, resultadoDe } from './fixtures'
 
-const PREFERENCIAS: Preferencia[] = ['omnivoro', 'vegetariano', 'vegano', 'sin_lactosa', 'sin_gluten', 'low_carb']
+const PREFERENCIAS: Preferencia[] = [
+  'omnivoro',
+  'vegetariano',
+  'vegano',
+  'sin_lactosa',
+  'sin_gluten',
+  'low_carb',
+]
 const KCAL = [1400, 1700, 2000, 2400, 2800, 3200]
 const COMIDAS: NComidas[] = [2, 3, 4, 5, 6]
 
@@ -74,7 +81,9 @@ describe('menú sencillo: tope de variedad y marcas', () => {
         for (const n of COMIDAS) {
           const e = menuSencillo(kcal, n, p)
           expect(e.compra, `${p} ${kcal} ${n}`).toBeDefined()
-          expect(e.compra!.alimentos_distintos, `${p} ${kcal} ${n}`).toBeLessThanOrEqual(MAX_ALIMENTOS_SENCILLO)
+          expect(e.compra!.alimentos_distintos, `${p} ${kcal} ${n}`).toBeLessThanOrEqual(
+            MAX_ALIMENTOS_SENCILLO,
+          )
           expect(e.compra!.items.length).toBe(e.compra!.alimentos_distintos)
         }
       }
@@ -82,16 +91,30 @@ describe('menú sencillo: tope de variedad y marcas', () => {
   })
 
   it('marca `modo_sencillo` y lo apaga en el menú normal', () => {
-    const o = { kcal: 2200, nComidas: 4 as NComidas, preferencia: 'omnivoro' as const, objetivo: 'mantener' as const }
-    expect(generarEjemplos({ ...inputsDe(o), menu_sencillo: true }, resultadoDe(o)).modo_sencillo).toBe(true)
+    const o = {
+      kcal: 2200,
+      nComidas: 4 as NComidas,
+      preferencia: 'omnivoro' as const,
+      objetivo: 'mantener' as const,
+    }
+    expect(
+      generarEjemplos({ ...inputsDe(o), menu_sencillo: true }, resultadoDe(o)).modo_sencillo,
+    ).toBe(true)
     expect(generarEjemplos(inputsDe(o), resultadoDe(o)).modo_sencillo).toBe(false)
   })
 
   it('usa menos alimentos que el menú normal para el mismo plan', () => {
-    const o = { kcal: 2400, nComidas: 5 as NComidas, preferencia: 'omnivoro' as const, objetivo: 'mantener' as const }
+    const o = {
+      kcal: 2400,
+      nComidas: 5 as NComidas,
+      preferencia: 'omnivoro' as const,
+      objetivo: 'mantener' as const,
+    }
     const normal = generarEjemplos(inputsDe(o), resultadoDe(o))
     const sencillo = generarEjemplos({ ...inputsDe(o), menu_sencillo: true }, resultadoDe(o))
-    const distintosNormal = new Set(normal.entreno.comidas.flatMap((c) => c.alimentos.map((a) => a.id))).size
+    const distintosNormal = new Set(
+      normal.entreno.comidas.flatMap((c) => c.alimentos.map((a) => a.id)),
+    ).size
     expect(sencillo.compra!.alimentos_distintos).toBeLessThan(distintosNormal + 2)
     expect(distintosNormal).toBeGreaterThan(MAX_ALIMENTOS_SENCILLO - 3)
   })
@@ -105,7 +128,12 @@ describe('menú sencillo: tope de variedad y marcas', () => {
   })
 
   it('ignora `variante`: el modo sencillo no rota plantillas', () => {
-    const o = { kcal: 2000, nComidas: 4 as NComidas, preferencia: 'omnivoro' as const, objetivo: 'mantener' as const }
+    const o = {
+      kcal: 2000,
+      nComidas: 4 as NComidas,
+      preferencia: 'omnivoro' as const,
+      objetivo: 'mantener' as const,
+    }
     const i = { ...inputsDe(o), menu_sencillo: true }
     expect(JSON.stringify(generarEjemplos(i, resultadoDe(o), 3))).toBe(
       JSON.stringify(generarEjemplos(i, resultadoDe(o), 0)),
@@ -123,7 +151,9 @@ describe('menú sencillo: nada fuera de la lista corta (§3.7.2, regla 3)', () =
         for (const n of COMIDAS) {
           const e = menuSencillo(kcal, n, p)
           for (const item of e.compra!.items) {
-            expect(permitidos.has(item.alimento_id), `${p} ${kcal} ${n}: ${item.alimento_id}`).toBe(true)
+            expect(permitidos.has(item.alimento_id), `${p} ${kcal} ${n}: ${item.alimento_id}`).toBe(
+              true,
+            )
           }
           for (const c of e.entreno.comidas) {
             for (const a of c.alimentos) {
@@ -194,7 +224,8 @@ describe('menú sencillo: preferencia dietética (§3.7.2, regla 4)', () => {
 
   it('la base tiene ficha de todos los candidatos sencillos', () => {
     const ids = new Set(ALIMENTOS.map((a) => a.id))
-    for (const p of PREFERENCIAS) for (const id of BANCOS_SENCILLOS[p].candidatos) expect(ids.has(id), id).toBe(true)
+    for (const p of PREFERENCIAS)
+      for (const id of BANCOS_SENCILLOS[p].candidatos) expect(ids.has(id), id).toBe(true)
   })
 })
 

@@ -41,7 +41,7 @@ export function cunbae(imc: number, edad: number, hombre: boolean): number {
 
 /** Deurenberg (1991). */
 export function deurenberg(imc: number, edad: number, hombre: boolean): number {
-  return 1.20 * imc + 0.23 * edad - 10.8 * (hombre ? 1 : 0) - 5.4
+  return 1.2 * imc + 0.23 * edad - 10.8 * (hombre ? 1 : 0) - 5.4
 }
 
 /** Banda de grasa (paso 2), usada en los pasos 6, 7, 8 y 17. */
@@ -83,9 +83,12 @@ export function calcularGrasa(inputs: Inputs, imc: number, emitir: EmitirAviso):
       if (x < 15) valido = false
       else D = 1.0324 - 0.19077 * Math.log10(x) + 0.15456 * Math.log10(inputs.altura_cm)
     } else {
-      const x = (inputs.grasa.cintura_cm as number) + (inputs.grasa.cadera_cm as number) - (inputs.grasa.cuello_cm as number)
+      const x =
+        (inputs.grasa.cintura_cm as number) +
+        (inputs.grasa.cadera_cm as number) -
+        (inputs.grasa.cuello_cm as number)
       if (x < 60) valido = false
-      else D = 1.29579 - 0.35004 * Math.log10(x) + 0.22100 * Math.log10(inputs.altura_cm)
+      else D = 1.29579 - 0.35004 * Math.log10(x) + 0.221 * Math.log10(inputs.altura_cm)
     }
     if (valido) {
       navy = 495 / D - 450

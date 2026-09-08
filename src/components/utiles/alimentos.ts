@@ -11,13 +11,7 @@ import { pasaBase, pasaRestricciones } from '../../meals/filtros'
 
 /** Los siete grupos de la pantalla, en el orden exacto de §1 paso 14. */
 export type ClaveGrupoChips =
-  | 'carne_pescado'
-  | 'huevos_lacteos'
-  | 'legumbres'
-  | 'cereales'
-  | 'frutas'
-  | 'verduras'
-  | 'grasas'
+  'carne_pescado' | 'huevos_lacteos' | 'legumbres' | 'cereales' | 'frutas' | 'verduras' | 'grasas'
 
 export const GRUPOS_CHIPS: { clave: ClaveGrupoChips; nombre: string }[] = [
   { clave: 'carne_pescado', nombre: 'Carne y pescado' },
@@ -41,7 +35,9 @@ const HUEVOS = ['huevo_entero', 'clara_huevo']
 export function grupoDeChip(a: Alimento): ClaveGrupoChips | null {
   if (a.grupo === 'lacteo' || HUEVOS.includes(a.id)) return 'huevos_lacteos'
   if (a.grupo === 'proteina') {
-    return a.tags.includes('vegano') || a.roles.includes('carbohidrato') ? 'legumbres' : 'carne_pescado'
+    return a.tags.includes('vegano') || a.roles.includes('carbohidrato')
+      ? 'legumbres'
+      : 'carne_pescado'
   }
   if (a.grupo === 'carbohidrato') return 'cereales'
   if (a.grupo === 'fruta') return 'frutas'
@@ -124,7 +120,10 @@ export function nombresCortosOrdenados(ids: readonly string[]): string[] {
 }
 
 /** "3 que no te gustan · 4 favoritos" (§1 paso 14). Cadena vacía si no hay nada marcado. */
-export function resumenMarcados(excluidos: readonly string[], favoritos: readonly string[]): string {
+export function resumenMarcados(
+  excluidos: readonly string[],
+  favoritos: readonly string[],
+): string {
   const partes: string[] = []
   if (excluidos.length > 0) {
     partes.push(`${excluidos.length} que no te ${excluidos.length === 1 ? 'gusta' : 'gustan'}`)

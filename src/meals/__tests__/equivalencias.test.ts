@@ -6,7 +6,14 @@ import { equivalencias } from '../equivalencias'
 import { limiteRacion } from '../escalado'
 import { pasaPreferencia } from '../filtros'
 
-const PREFERENCIAS: Preferencia[] = ['omnivoro', 'vegetariano', 'vegano', 'sin_lactosa', 'sin_gluten', 'low_carb']
+const PREFERENCIAS: Preferencia[] = [
+  'omnivoro',
+  'vegetariano',
+  'vegano',
+  'sin_lactosa',
+  'sin_gluten',
+  'low_carb',
+]
 
 describe('tablas de equivalencias', () => {
   for (const preferencia of PREFERENCIAS) {
@@ -20,8 +27,13 @@ describe('tablas de equivalencias', () => {
           expect(a, fila.id).toBeDefined()
           expect(pasaPreferencia(a!, preferencia), `${preferencia} · ${fila.id}`).toBe(true)
           const { min, max } = limiteRacion(a!)
-          expect(fila.gramos, `${preferencia} · ${fila.id}: ${fila.gramos} g`).toBeGreaterThanOrEqual(min)
-          expect(fila.gramos, `${preferencia} · ${fila.id}: ${fila.gramos} g`).toBeLessThanOrEqual(max)
+          expect(
+            fila.gramos,
+            `${preferencia} · ${fila.id}: ${fila.gramos} g`,
+          ).toBeGreaterThanOrEqual(min)
+          expect(fila.gramos, `${preferencia} · ${fila.id}: ${fila.gramos} g`).toBeLessThanOrEqual(
+            max,
+          )
           expect(fila.medida.length).toBeGreaterThan(0)
         }
       }
@@ -39,7 +51,8 @@ describe('tablas de equivalencias', () => {
 
   it('cada ración equivale a la referencia de su tabla (±25 %)', () => {
     const [proteina, hidratos, grasa] = equivalencias('omnivoro').tablas
-    const cerca = (real: number, objetivo: number): boolean => Math.abs(real - objetivo) / objetivo <= 0.25
+    const cerca = (real: number, objetivo: number): boolean =>
+      Math.abs(real - objetivo) / objetivo <= 0.25
     for (const f of proteina.filas) {
       const a = alimentoPorId(f.id)!
       expect(cerca((a.proteina * f.gramos) / 100, 20), `${f.id}`).toBe(true)

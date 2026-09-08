@@ -224,7 +224,8 @@ export function CampoNumero({
           value={valor}
           aria-invalid={Boolean(errorVisible) || marcado}
           aria-describedby={
-            [errorVisible ? idError : null, describedPor ?? null].filter(Boolean).join(' ') || undefined
+            [errorVisible ? idError : null, describedPor ?? null].filter(Boolean).join(' ') ||
+            undefined
           }
           autoFocus={autoFoco}
           onBlur={() => setTocado(true)}

@@ -44,12 +44,19 @@ describe('tarjetas de opción — nombre accesible', () => {
       }),
     )
     expect(atributoDelInput(html, 'type')).toBe('radio')
-    expect(nombreAccesible(html)).toBe('Puedo medirme con cinta métrica Tengo una cinta métrica a mano.')
+    expect(nombreAccesible(html)).toBe(
+      'Puedo medirme con cinta métrica Tengo una cinta métrica a mano.',
+    )
   })
 
   it('un radio sin detalle se llama como su título', () => {
     const html = renderToStaticMarkup(
-      createElement(Opcion, { nombre: 'sexo', titulo: 'Mujer', seleccionada: true, onElegir: () => {} }),
+      createElement(Opcion, {
+        nombre: 'sexo',
+        titulo: 'Mujer',
+        seleccionada: true,
+        onElegir: () => {},
+      }),
     )
     expect(nombreAccesible(html)).toBe('Mujer')
   })
@@ -78,12 +85,19 @@ describe('tarjetas de opción — nombre accesible', () => {
       }),
     )
     expect(atributoDelInput(html, 'role')).toBe('switch')
-    expect(nombreAccesible(html)).toBe('¿Quieres comidas sencillas? Como mucho doce alimentos en toda la semana.')
+    expect(nombreAccesible(html)).toBe(
+      '¿Quieres comidas sencillas? Como mucho doce alimentos en toda la semana.',
+    )
   })
 
   it('ninguna tarjeta se queda sin nombre accesible', () => {
     const html = renderToStaticMarkup(
-      createElement(Opcion, { nombre: 'objetivo', titulo: 'Perder grasa', seleccionada: false, onElegir: () => {} }),
+      createElement(Opcion, {
+        nombre: 'objetivo',
+        titulo: 'Perder grasa',
+        seleccionada: false,
+        onElegir: () => {},
+      }),
     )
     const nombre = nombreAccesible(html)
     expect(nombre.length).toBeGreaterThan(0)

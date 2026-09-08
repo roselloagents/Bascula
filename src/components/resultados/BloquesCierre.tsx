@@ -55,11 +55,13 @@ export function BloquePeso({ inputs, resultado, avisos }: PropsCierre) {
       {conCifra && po.efectivo !== null ? (
         <>
           <p className="cifra peso-cifra">{numCorto(po.efectivo, 1)} kg</p>
-          <p className="peso-etiqueta">{metaDelUsuario ? 'tu objetivo' : 'el peso que te proponemos'}</p>
+          <p className="peso-etiqueta">
+            {metaDelUsuario ? 'tu objetivo' : 'el peso que te proponemos'}
+          </p>
           {!metaDelUsuario ? (
             <p className="nota">
-              Te proponemos este peso según tu altura y tu porcentaje de grasa actual; puedes cambiarlo
-              cuando quieras.
+              Te proponemos este peso según tu altura y tu porcentaje de grasa actual; puedes
+              cambiarlo cuando quieras.
             </p>
           ) : null}
           {!po.mostrar_central ? (
@@ -78,8 +80,8 @@ export function BloquePeso({ inputs, resultado, avisos }: PropsCierre) {
             Entre {numCorto(po.rango[0], 1)} y {numCorto(po.rango[1], 1)} kg
           </p>
           <p className="nota">
-            Tu masa magra es una estimación con varios kilos de margen, así que te damos una franja y
-            no un número.
+            Tu masa magra es una estimación con varios kilos de margen, así que te damos una franja
+            y no un número.
           </p>
           <p className="nota">{NOTA_PESO_OBJETIVO}</p>
         </>
@@ -165,10 +167,7 @@ export function BloqueAvisos({ avisos }: { avisos: AvisoTexto[] }) {
         </div>
       ) : null}
       {infos.length > 0 ? (
-        <Plegable
-          titulo={`Notas informativas (${infos.length})`}
-          abiertoInicial
-        >
+        <Plegable titulo={`Notas informativas (${infos.length})`} abiertoInicial>
           {infos.map((aviso) => (
             <CajaAviso key={aviso.codigo} aviso={aviso} />
           ))}
@@ -213,19 +212,23 @@ export function BloqueMetodologia({ inputs, resultado, avisos }: PropsCierre) {
 
       {/* v1.1 (decisión A): el bloque de referencias se muestra a todo el mundo, sin guardas. */}
       <div className="referencias">
-          <h3>Otras referencias, no son un objetivo</h3>
-          <ul className="lista-referencias cifra">
-            <li>Grasa corporal por CUN-BAE: {numCorto(resultado.grasa.referencias.cunbae, 1)} %</li>
-            <li>Grasa corporal por Deurenberg: {numCorto(resultado.grasa.referencias.deurenberg, 1)} %</li>
-            {resultado.grasa.referencias.navy !== undefined ? (
-              <li>Grasa corporal por US Navy: {numCorto(resultado.grasa.referencias.navy, 1)} %</li>
-            ) : null}
-            <li>Masa libre de grasa estimada: {numCorto(resultado.mlg, 1)} kg</li>
-            <li>
-              Índice de masa libre de grasa (FFMI): {numCorto(resultado.ffmi.normalizado, 1)}
-              {resultado.ffmi.categoria ? ` — ${CATEGORIA_FFMI[resultado.ffmi.categoria]}` : ''}
-            </li>
-            <li>Peso para un IMC de 22: {numCorto(resultado.peso_objetivo.referencias.imc22, 1)} kg</li>
+        <h3>Otras referencias, no son un objetivo</h3>
+        <ul className="lista-referencias cifra">
+          <li>Grasa corporal por CUN-BAE: {numCorto(resultado.grasa.referencias.cunbae, 1)} %</li>
+          <li>
+            Grasa corporal por Deurenberg: {numCorto(resultado.grasa.referencias.deurenberg, 1)} %
+          </li>
+          {resultado.grasa.referencias.navy !== undefined ? (
+            <li>Grasa corporal por US Navy: {numCorto(resultado.grasa.referencias.navy, 1)} %</li>
+          ) : null}
+          <li>Masa libre de grasa estimada: {numCorto(resultado.mlg, 1)} kg</li>
+          <li>
+            Índice de masa libre de grasa (FFMI): {numCorto(resultado.ffmi.normalizado, 1)}
+            {resultado.ffmi.categoria ? ` — ${CATEGORIA_FFMI[resultado.ffmi.categoria]}` : ''}
+          </li>
+          <li>
+            Peso para un IMC de 22: {numCorto(resultado.peso_objetivo.referencias.imc22, 1)} kg
+          </li>
           {clasicas
             ? Object.entries(clasicas).map(([clave, valor]) => (
                 <li key={clave}>

@@ -41,14 +41,18 @@ function letras(contenido: string): string {
  * pegadas; entre cadenas distintas no hay separador, así que se busca por fragmentos
  * ("Favoritos:"), no por párrafos enteros.
  */
-export async function textoDelPdf(buffer: { toString(codificacion: 'latin1'): string }): Promise<string> {
+export async function textoDelPdf(buffer: {
+  toString(codificacion: 'latin1'): string
+}): Promise<string> {
   const crudo = buffer.toString('latin1')
   const re = /\/Length (\d+)[^]{0,200}?stream\r?\n/g
   let m: RegExpExecArray | null
   let texto = ''
   while ((m = re.exec(crudo)) !== null) {
     const inicio = m.index + m[0].length
-    const bytes = Uint8Array.from(crudo.slice(inicio, inicio + Number(m[1])), (c: string) => c.charCodeAt(0))
+    const bytes = Uint8Array.from(crudo.slice(inicio, inicio + Number(m[1])), (c: string) =>
+      c.charCodeAt(0),
+    )
     try {
       texto += letras(await inflar(bytes))
     } catch {

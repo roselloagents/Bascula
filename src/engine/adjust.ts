@@ -39,7 +39,7 @@ import type { AjusteMacros, Comida, LimitesAjuste, Resultado } from './types'
  * cierre se salía del 2 % con kcal bajas.
  */
 export function techoHidratosAjuste(L: LimitesAjuste, proteina_g: number, kcal: number): number {
-  const suelo_g = Math.max(L.suelo_grasa_abs_g, GRASA_SUELO_PCT_KCAL * kcal / 9)
+  const suelo_g = Math.max(L.suelo_grasa_abs_g, (GRASA_SUELO_PCT_KCAL * kcal) / 9)
   const techo = roundDown5((kcal - 4 * proteina_g - 9 * roundUp5(suelo_g)) / 4)
   // El redondeo a 5 g del paso 10 puede dejar `hc_recomendado_g` por encima de la cota exacta:
   // sin esta línea "volver a lo recomendado" no devolvía el plan recomendado.
@@ -78,7 +78,7 @@ export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resul
   const kcal = clamp(round10(kcal_pedidas), L.kcal_min, L.kcal_max)
 
   // ---------------- 2. hidratos: múltiplo de 5, entre 30 g y lo que deja el SUELO de grasa
-  const suelo_g = Math.max(L.suelo_grasa_abs_g, GRASA_SUELO_PCT_KCAL * kcal / 9)
+  const suelo_g = Math.max(L.suelo_grasa_abs_g, (GRASA_SUELO_PCT_KCAL * kcal) / 9)
   // Con el techo calculado contra el suelo ya redondeado, `G` nunca cae por debajo del suelo y la
   // única desviación del cierre es el redondeo a 5 g de la propia grasa (≤ 22,5 kcal).
   const suelo_red_g = roundUp5(suelo_g)
@@ -114,9 +114,9 @@ export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resul
   }
 
   // ---------------- 4a. paso 11 completo con las kcal y los HC nuevos
-  const fibra_prop = FIBRA_POR_1000_KCAL * kcal / 1000
+  const fibra_prop = (FIBRA_POR_1000_KCAL * kcal) / 1000
   const suelo_fibra = resultado.low_carb
-    ? Math.max(FIBRA_SUELO_LOWCARB, FIBRA_LOWCARB_POR_1000_KCAL * kcal / 1000)
+    ? Math.max(FIBRA_SUELO_LOWCARB, (FIBRA_LOWCARB_POR_1000_KCAL * kcal) / 1000)
     : Math.min(FIBRA_REFERENCIA, FIBRA_SUELO_PCT_HC * HC)
   const fibra_g = Math.round(clamp(fibra_prop, suelo_fibra, FIBRA_MAX))
   if (fibra_g < FIBRA_REFERENCIA) emitir('INFO_FIBRA_AJUSTADA')
@@ -146,7 +146,7 @@ export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resul
   }
   const principal = indiceMayor(p, -1)
   const repartir = (total: number, vector: readonly number[]): number[] => {
-    const partes = vector.map((v) => round5(total * v / 100))
+    const partes = vector.map((v) => round5((total * v) / 100))
     partes[principal] += total - partes.reduce((a, b) => a + b, 0)
     return partes
   }
@@ -189,8 +189,8 @@ export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resul
       grasa_g: G,
       hc_g: HC,
       fibra_g,
-      azucares_libres_max_g: 0.10 * kcal / 4,
-      pct: { p: 4 * P / kcal, g: 9 * G / kcal, hc: 4 * HC / kcal },
+      azucares_libres_max_g: (0.1 * kcal) / 4,
+      pct: { p: (4 * P) / kcal, g: (9 * G) / kcal, hc: (4 * HC) / kcal },
       gkg: { p: P / PC, g: G / PC, hc: HC / PC },
     },
     cronograma,

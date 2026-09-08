@@ -81,7 +81,9 @@ describe('panel de ajuste', () => {
     expect(html).toContain('La proteína no se toca')
     expect(html).not.toContain('<details class="panel-ajuste" open')
     // El deslizador arranca en los hidratos recomendados y el control de kcal en las suyas.
-    expect(html).toContain(`aria-valuetext="${base.limites_ajuste.hc_recomendado_g} gramos de hidratos al día"`)
+    expect(html).toContain(
+      `aria-valuetext="${base.limites_ajuste.hc_recomendado_g} gramos de hidratos al día"`,
+    )
     expect(html).toContain('Bajar 50 calorías')
     expect(html).toContain('Subir 50 calorías')
   })

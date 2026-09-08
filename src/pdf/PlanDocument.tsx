@@ -1,7 +1,19 @@
 // Documento PDF del plan (docs/SPEC-ux-comidas-pdf.md §4).
 // Regla del contrato: aquí no se calcula nada. Todo número sale de `datos.resultado` / `datos.ejemplos`.
 // Fuentes estándar (Helvetica) para no depender de la red.
-import { Circle, Document, Font, Line, Page, Path, Polyline, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
+import {
+  Circle,
+  Document,
+  Font,
+  Line,
+  Page,
+  Path,
+  Polyline,
+  StyleSheet,
+  Svg,
+  Text,
+  View,
+} from '@react-pdf/renderer'
 import type { ReactNode } from 'react'
 import type {
   AlimentoCiclo,
@@ -255,7 +267,15 @@ function Marco({
 const ESPACIO_TRAS_TITULO = 78
 
 /** `sinCortes` evita que un bloque corto (el aviso legal) se parta a mitad de frase entre dos páginas. */
-function Seccion({ titulo, children, sinCortes }: { titulo: string; children: ReactNode; sinCortes?: boolean }) {
+function Seccion({
+  titulo,
+  children,
+  sinCortes,
+}: {
+  titulo: string
+  children: ReactNode
+  sinCortes?: boolean
+}) {
   return (
     <View style={s.seccion} wrap={!sinCortes}>
       <Text style={s.h2} minPresenceAhead={ESPACIO_TRAS_TITULO}>
@@ -266,7 +286,15 @@ function Seccion({ titulo, children, sinCortes }: { titulo: string; children: Re
   )
 }
 
-function Fila({ etiqueta: e, valor, ultima }: { etiqueta: string; valor: string; ultima?: boolean }) {
+function Fila({
+  etiqueta: e,
+  valor,
+  ultima,
+}: {
+  etiqueta: string
+  valor: string
+  ultima?: boolean
+}) {
   return (
     <View style={ultima ? s.fila : [s.fila, s.filaLinea]} wrap={false}>
       <Text style={s.filaEtiqueta}>{e}</Text>
@@ -325,8 +353,16 @@ function TarjetaMacro({
   frase: string
 }) {
   return (
-    <View style={[s.tarjeta, { marginBottom: 5, paddingVertical: 6, borderLeftWidth: 3, borderLeftColor: color }]} wrap={false}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+    <View
+      style={[
+        s.tarjeta,
+        { marginBottom: 5, paddingVertical: 6, borderLeftWidth: 3, borderLeftColor: color },
+      ]}
+      wrap={false}
+    >
+      <View
+        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}
+      >
         <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 11, color }}>{nombre}</Text>
         <Text style={s.small}>
           {gkg === null ? 'al día' : gkg}
@@ -357,7 +393,9 @@ function LineaAlimento({ alimento }: { alimento: AlimentoPorcion }) {
         {alimento.nombre || SIN_DATO}
         {medida}
       </Text>
-      <Text style={{ width: 62, textAlign: 'right', fontFamily: 'Helvetica-Bold' }}>{gramos(alimento.gramos)}</Text>
+      <Text style={{ width: 62, textAlign: 'right', fontFamily: 'Helvetica-Bold' }}>
+        {gramos(alimento.gramos)}
+      </Text>
     </View>
   )
 }
@@ -388,7 +426,9 @@ function BloqueComidaEjemplo({ comida }: { comida: EjemploComida }) {
           <LineaAlimento key={`${a.id}-${i}`} alimento={a} />
         ))}
         {(comida.alternativas ?? []).length > 0 ? (
-          <Text style={[s.small, { marginTop: 3 }]}>Alternativas: {lista(comida.alternativas.map(sinPuntoFinal))}.</Text>
+          <Text style={[s.small, { marginTop: 3 }]}>
+            Alternativas: {lista(comida.alternativas.map(sinPuntoFinal))}.
+          </Text>
         ) : null}
       </View>
     </View>
@@ -403,7 +443,9 @@ function BloqueDia({ dia, titulo }: { dia: EjemploDia; titulo: string }) {
         <BloqueComidaEjemplo key={`${c.comida}-${i}`} comida={c} />
       ))}
       <View style={[s.tarjeta, { paddingVertical: 7, marginBottom: 6 }]} wrap={false}>
-        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5 }}>Total del día: {totalesTexto(dia.totales)}</Text>
+        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5 }}>
+          Total del día: {totalesTexto(dia.totales)}
+        </Text>
       </View>
       {(dia.notas ?? []).map((n, i) => (
         <Text key={i} style={s.small}>
@@ -438,7 +480,9 @@ const SUBTITULO_COMPRA =
   'a otra y de una semana a otra.'
 
 /** Agrupa los items por sección respetando `ORDEN_SECCIONES`; lo que no encaja cae en "otros". */
-function porSecciones(items: readonly ItemCompra[]): { seccion: SeccionSuper; items: ItemCompra[] }[] {
+function porSecciones(
+  items: readonly ItemCompra[],
+): { seccion: SeccionSuper; items: ItemCompra[] }[] {
   const grupos = new Map<SeccionSuper, ItemCompra[]>()
   for (const item of items) {
     if (!item) continue
@@ -498,7 +542,9 @@ function LineaCompraCiclo({ item, compacta }: { item: ItemCompra; compacta: bool
   return (
     <View style={compacta ? [s.filaCompra, { paddingVertical: 0 }] : s.filaCompra} wrap={false}>
       <View style={{ flex: 2.3, paddingRight: 6 }}>
-        <Text style={[s.celdaCompra, { fontFamily: 'Helvetica-Bold' }]}>{winAnsi(item.producto) || SIN_DATO}</Text>
+        <Text style={[s.celdaCompra, { fontFamily: 'Helvetica-Bold' }]}>
+          {winAnsi(item.producto) || SIN_DATO}
+        </Text>
         <Text style={menudo}>
           {winAnsi(item.nombre) || SIN_DATO}
           {consejo.length > 0 ? ` · ${consejo}` : ''}
@@ -520,7 +566,9 @@ function LineaCompra({ item, compacta }: { item: ItemCompra; compacta: boolean }
   return (
     <View style={compacta ? [s.filaCompra, { paddingVertical: 0 }] : s.filaCompra} wrap={false}>
       <View style={{ flex: 2.3, paddingRight: 6 }}>
-        <Text style={[s.celdaCompra, { fontFamily: 'Helvetica-Bold' }]}>{winAnsi(item.producto) || SIN_DATO}</Text>
+        <Text style={[s.celdaCompra, { fontFamily: 'Helvetica-Bold' }]}>
+          {winAnsi(item.producto) || SIN_DATO}
+        </Text>
         <Text style={menudo}>
           {winAnsi(item.nombre) || SIN_DATO}
           {consejo.length > 0 ? ` · ${consejo}` : ''}
@@ -528,7 +576,9 @@ function LineaCompra({ item, compacta }: { item: ItemCompra; compacta: boolean }
       </View>
       <View style={{ flex: 1.25, paddingRight: 6 }}>
         <Text style={s.celdaCompraNum}>{textoCantidadSeguro(textoCantidadSemana(item))}</Text>
-        <Text style={[...menudo, { textAlign: 'right' }]}>{textoCantidadSeguro(textoCantidadDia(item))}</Text>
+        <Text style={[...menudo, { textAlign: 'right' }]}>
+          {textoCantidadSeguro(textoCantidadDia(item))}
+        </Text>
       </View>
       <Text style={[s.celdaCompraNum, { flex: 1.9, paddingRight: 6 }]}>{comprarTexto(item)}</Text>
       <Text style={[s.celdaCompraNum, { flex: 0.75 }]}>{duracionTexto(item.dura_dias)}</Text>
@@ -542,7 +592,9 @@ function LineaCompra({ item, compacta }: { item: ItemCompra; compacta: boolean }
  * no se reescribe ni se trocea nada: los fragmentos condicionales ya vienen resueltos.
  */
 function BloqueSintomaCiclo({ consejo }: { consejo: ConsejoCiclo }) {
-  const alimentos = (consejo?.alimentos ?? []).filter((a) => typeof a === 'string' && a.trim().length > 0)
+  const alimentos = (consejo?.alimentos ?? []).filter(
+    (a) => typeof a === 'string' && a.trim().length > 0,
+  )
   const texto = typeof consejo?.texto === 'string' ? consejo.texto.trim() : ''
   return (
     <View style={{ marginTop: 6 }} wrap={false}>
@@ -571,7 +623,9 @@ function LineaAlimentosCiclo({
   alimentos: readonly AlimentoCiclo[]
   idsEnLaCompra: readonly string[]
 }) {
-  const validos = alimentos.filter((a) => a && typeof a.nombre === 'string' && a.nombre.trim().length > 0)
+  const validos = alimentos.filter(
+    (a) => a && typeof a.nombre === 'string' && a.nombre.trim().length > 0,
+  )
   if (validos.length === 0) return null
   const grupos: { por_que: string; nombres: string[] }[] = []
   for (const a of validos) {
@@ -609,8 +663,12 @@ function BloqueSeccionCompra({
 }) {
   return (
     <View style={{ marginBottom: compacta ? 2 : 4 }} minPresenceAhead={46}>
-      <View style={[s.tablaCabecera, { paddingBottom: 2, marginBottom: 1, alignItems: 'flex-end' }]}>
-        <Text style={[s.h3, { color: C.acento, flex: 2.3, marginBottom: 0 }]}>{NOMBRE_SECCION[seccion]}</Text>
+      <View
+        style={[s.tablaCabecera, { paddingBottom: 2, marginBottom: 1, alignItems: 'flex-end' }]}
+      >
+        <Text style={[s.h3, { color: C.acento, flex: 2.3, marginBottom: 0 }]}>
+          {NOMBRE_SECCION[seccion]}
+        </Text>
         <Text style={[s.cabeceraCelda, { flex: 1.25, textAlign: 'right' }]}>CANTIDAD</Text>
         <Text style={[s.cabeceraCelda, { flex: 1.9, textAlign: 'right' }]}>COMPRAR</Text>
         <Text style={[s.cabeceraCelda, { flex: 0.75, textAlign: 'right' }]}>DURA</Text>
@@ -642,7 +700,9 @@ function BloqueOpcionalCompra({
       minPresenceAhead={54}
       wrap={false}
     >
-      <View style={[s.tablaCabecera, { paddingBottom: 2, marginBottom: 1, alignItems: 'flex-end' }]}>
+      <View
+        style={[s.tablaCabecera, { paddingBottom: 2, marginBottom: 1, alignItems: 'flex-end' }]}
+      >
         <Text style={[s.h3, { color: C.acento, flex: 2.3, marginBottom: 0 }]}>
           {winAnsi(seccion.titulo) || SIN_DATO}
         </Text>
@@ -679,7 +739,10 @@ function GraficaProyeccion({
   fechaInicio: string
   objetivoKg: number | null
 }) {
-  const escala = crearEscala(proyeccion, [...pesajes.map((p) => p.kg), ...(objetivoKg === null ? [] : [objetivoKg])])
+  const escala = crearEscala(proyeccion, [
+    ...pesajes.map((p) => p.kg),
+    ...(objetivoKg === null ? [] : [objetivoKg]),
+  ])
   if (!escala) return null
 
   const puntos = proyeccion.filter((p) => p && Number.isFinite(p.semana))
@@ -691,7 +754,10 @@ function GraficaProyeccion({
   }))
 
   return (
-    <View style={{ width: escala.ancho, height: escala.alto, position: 'relative', marginBottom: 4 }} wrap={false}>
+    <View
+      style={{ width: escala.ancho, height: escala.alto, position: 'relative', marginBottom: 4 }}
+      wrap={false}
+    >
       <Svg width={escala.ancho} height={escala.alto} viewBox={`0 0 ${escala.ancho} ${escala.alto}`}>
         {escala.marcasY.map((kg, i) => (
           <Line
@@ -717,29 +783,61 @@ function GraficaProyeccion({
           />
         )}
         <Polyline
-          points={puntosPolilinea(puntos.map((p) => ({ x: escala.x(p.semana), y: escala.y(p.peso_esp) })))}
+          points={puntosPolilinea(
+            puntos.map((p) => ({ x: escala.x(p.semana), y: escala.y(p.peso_esp) })),
+          )}
           fill="none"
           stroke={C.acento}
           strokeWidth={2}
         />
         {hitos.map((p) => (
-          <Circle key={`h-${p.semana}`} cx={escala.x(p.semana)} cy={escala.y(p.peso_esp)} r={3} fill={C.acento} />
+          <Circle
+            key={`h-${p.semana}`}
+            cx={escala.x(p.semana)}
+            cy={escala.y(p.peso_esp)}
+            r={3}
+            fill={C.acento}
+          />
         ))}
         {puntosPesaje.length > 1 ? (
-          <Polyline points={puntosPolilinea(puntosPesaje)} fill="none" stroke={C.proteina} strokeWidth={1} />
+          <Polyline
+            points={puntosPolilinea(puntosPesaje)}
+            fill="none"
+            stroke={C.proteina}
+            strokeWidth={1}
+          />
         ) : null}
         {puntosPesaje.map((p, i) => (
           <Circle key={`p-${i}`} cx={p.x} cy={p.y} r={2.4} fill={C.proteina} />
         ))}
-        <Line x1={escala.x0} y1={escala.y1} x2={escala.x1} y2={escala.y1} stroke={C.suave} strokeWidth={0.75} />
-        <Line x1={escala.x0} y1={escala.y0} x2={escala.x0} y2={escala.y1} stroke={C.suave} strokeWidth={0.75} />
+        <Line
+          x1={escala.x0}
+          y1={escala.y1}
+          x2={escala.x1}
+          y2={escala.y1}
+          stroke={C.suave}
+          strokeWidth={0.75}
+        />
+        <Line
+          x1={escala.x0}
+          y1={escala.y0}
+          x2={escala.x0}
+          y2={escala.y1}
+          stroke={C.suave}
+          strokeWidth={0.75}
+        />
       </Svg>
 
       {/* Etiquetas del eje vertical (kilos) */}
       {escala.marcasY.map((kg, i) => (
         <View
           key={`ly-${i}`}
-          style={{ position: 'absolute', left: 0, top: escala.y(kg) - 4, width: GRAFICA.margenIzq - 4 }}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: escala.y(kg) - 4,
+            width: GRAFICA.margenIzq - 4,
+          }}
         >
           <Text style={{ fontSize: 6.5, color: C.suave, textAlign: 'right' }}>{num(kg, 1)}</Text>
         </View>
@@ -752,9 +850,16 @@ function GraficaProyeccion({
       {escala.marcasX.map((semana, i) => (
         <View
           key={`lx-${i}`}
-          style={{ position: 'absolute', left: escala.x(semana) - 22, top: escala.y1 + 3, width: 44 }}
+          style={{
+            position: 'absolute',
+            left: escala.x(semana) - 22,
+            top: escala.y1 + 3,
+            width: 44,
+          }}
         >
-          <Text style={{ fontSize: 6.5, color: C.suave, textAlign: 'center' }}>semana {num(semana)}</Text>
+          <Text style={{ fontSize: 6.5, color: C.suave, textAlign: 'center' }}>
+            semana {num(semana)}
+          </Text>
         </View>
       ))}
 
@@ -762,17 +867,38 @@ function GraficaProyeccion({
       {hitos.map((p) => (
         <View
           key={`lh-${p.semana}`}
-          style={{ position: 'absolute', left: escala.x(p.semana) - 20, top: escala.y(p.peso_esp) - 13, width: 40 }}
+          style={{
+            position: 'absolute',
+            left: escala.x(p.semana) - 20,
+            top: escala.y(p.peso_esp) - 13,
+            width: 40,
+          }}
         >
-          <Text style={{ fontSize: 7, color: C.acento, textAlign: 'center', fontFamily: 'Helvetica-Bold' }}>
+          <Text
+            style={{
+              fontSize: 7,
+              color: C.acento,
+              textAlign: 'center',
+              fontFamily: 'Helvetica-Bold',
+            }}
+          >
             {kilos(p.peso_esp)}
           </Text>
         </View>
       ))}
 
       {objetivoKg === null ? null : (
-        <View style={{ position: 'absolute', left: escala.x1 - 74, top: escala.y(objetivoKg) - 9, width: 72 }}>
-          <Text style={{ fontSize: 6.5, color: C.acento, textAlign: 'right' }}>objetivo {kilos(objetivoKg)}</Text>
+        <View
+          style={{
+            position: 'absolute',
+            left: escala.x1 - 74,
+            top: escala.y(objetivoKg) - 9,
+            width: 72,
+          }}
+        >
+          <Text style={{ fontSize: 6.5, color: C.acento, textAlign: 'right' }}>
+            objetivo {kilos(objetivoKg)}
+          </Text>
         </View>
       )}
     </View>
@@ -792,7 +918,10 @@ function ColumnaProyeccion({ puntos }: { puntos: readonly PuntoProyeccion[] }) {
       {puntos.map((p, i) => (
         <View
           key={`fp-${p.semana}-${i}`}
-          style={[s.tablaFila, { paddingVertical: 1.2, borderBottomWidth: i === puntos.length - 1 ? 0 : 0.5 }]}
+          style={[
+            s.tablaFila,
+            { paddingVertical: 1.2, borderBottomWidth: i === puntos.length - 1 ? 0 : 0.5 },
+          ]}
           wrap={false}
         >
           <Text style={[s.celdaTexto, { flex: 1, fontSize: 8 }]}>{num(p.semana)}</Text>
@@ -924,9 +1053,12 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
   const warns = avisos.filter((a) => a.severidad === 'warn' || a.severidad === 'error')
   const infos = avisos.filter((a) => a.severidad === 'info')
   const destacados = avisos.filter(
-    (a) => AVISOS_DESTACADOS.includes(a.codigo) || (inputs.edad >= 65 && a.codigo === 'INFO_AGUA_MAYORES'),
+    (a) =>
+      AVISOS_DESTACADOS.includes(a.codigo) ||
+      (inputs.edad >= 65 && a.codigo === 'INFO_AGUA_MAYORES'),
   )
-  const objetivoAjustado = inputs.objetivo === 'no_se' || inputs.objetivo !== resultado.objetivo_efectivo
+  const objetivoAjustado =
+    inputs.objetivo === 'no_se' || inputs.objetivo !== resultado.objetivo_efectivo
   const avisoAdaptacion = avisos.find((a) => a.codigo === 'INFO_ADAPTACION')
   const avisoAjuste = avisos.find(
     (a) => a.codigo === 'INFO_OBJETIVO_RESUELTO' || a.codigo.startsWith('WARN_OBJETIVO'),
@@ -960,7 +1092,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
   const seccionesCompra = compra ? porSecciones(compra.items) : []
   const diasIguales =
     !ejemplos?.descanso ||
-    JSON.stringify(ejemplos.entreno?.comidas ?? []) === JSON.stringify(ejemplos.descanso?.comidas ?? [])
+    JSON.stringify(ejemplos.entreno?.comidas ?? []) ===
+      JSON.stringify(ejemplos.descanso?.comidas ?? [])
 
   const clasicas = resultado.peso_objetivo?.referencias?.clasicas ?? null
   const crono = resultado.cronograma
@@ -985,13 +1118,20 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
   // ni en el menú ni en la compra es justo lo que la decisión G venía a evitar.
   const favoritosServidos = ejemplos?.favoritos_aplicados ?? inputs.alimentos_favoritos
   const resumenAlimentosLargo = resumenAlimentos(inputs.alimentos_excluidos, favoritosServidos)
-  const resumenAlimentosBreve = resumenAlimentos(inputs.alimentos_excluidos, favoritosServidos, true)
-  const avisosMenu = (ejemplos?.avisos_menu ?? []).filter((t) => typeof t === 'string' && t.trim().length > 0)
+  const resumenAlimentosBreve = resumenAlimentos(
+    inputs.alimentos_excluidos,
+    favoritosServidos,
+    true,
+  )
+  const avisosMenu = (ejemplos?.avisos_menu ?? []).filter(
+    (t) => typeof t === 'string' && t.trim().length > 0,
+  )
 
   // §4.2 (v1.2): el plazo pedido es un matiz de la fila de ritmo, nunca el ritmo que se imprime.
-  const plazo = typeof inputs.plazo_semanas === 'number' && Number.isFinite(inputs.plazo_semanas)
-    ? inputs.plazo_semanas
-    : null
+  const plazo =
+    typeof inputs.plazo_semanas === 'number' && Number.isFinite(inputs.plazo_semanas)
+      ? inputs.plazo_semanas
+      : null
 
   // §4.5b: proyección y seguimiento. Sin `resultado.proyeccion` no se imprime nada de esto.
   const proyeccion: PuntoProyeccion[] = resultado.proyeccion ?? []
@@ -1003,7 +1143,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
   const proyeccionPlana =
     !avisoProyeccionRecomp && (avisoProyeccionPlana !== undefined || crono === null)
   const notaProyeccion =
-    avisoProyeccionRecomp?.texto ?? (proyeccionPlana ? (avisoProyeccionPlana?.texto ?? NOTA_PROYECCION) : NOTA_PROYECCION)
+    avisoProyeccionRecomp?.texto ??
+    (proyeccionPlana ? (avisoProyeccionPlana?.texto ?? NOTA_PROYECCION) : NOTA_PROYECCION)
   const balance = fraseBalance(
     pesajes,
     proyeccion,
@@ -1020,12 +1161,18 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           menos. ---------- */}
       <Marco fecha={fecha} ajustado={ajustado}>
         <View>
-          <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 30, color: C.acento }}>Báscula</Text>
-          <Text style={{ fontSize: 11, color: C.suave, marginBottom: 12 }}>Tus macros, bien calculados</Text>
+          <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 30, color: C.acento }}>
+            Báscula
+          </Text>
+          <Text style={{ fontSize: 11, color: C.suave, marginBottom: 12 }}>
+            Tus macros, bien calculados
+          </Text>
           <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 17, marginBottom: 2 }}>
             Tu plan nutricional personalizado
           </Text>
-          <Text style={{ fontSize: 9.5, color: C.suave, marginBottom: 12 }}>{fechaLarga(fecha)}</Text>
+          <Text style={{ fontSize: 9.5, color: C.suave, marginBottom: 12 }}>
+            {fechaLarga(fecha)}
+          </Text>
 
           <View style={[s.tarjeta, { marginBottom: 10 }]}>
             <Text style={{ fontSize: 9, color: C.suave }}>TU OBJETIVO</Text>
@@ -1038,7 +1185,9 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
               ) : null}
             </Text>
 
-            <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 0.75, borderTopColor: C.linea }}>
+            <View
+              style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 0.75, borderTopColor: C.linea }}
+            >
               <Text style={{ fontSize: 9, color: C.suave }}>
                 CALORÍAS AL DÍA{ajustado ? ' · AJUSTADO POR TI' : ''}
               </Text>
@@ -1047,7 +1196,14 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                 <Text style={{ fontSize: 14, color: C.suave }}> kcal</Text>
               </Text>
               {/* Los tres macros en UNA línea, con los mismos colores que la pantalla. */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4, marginBottom: 4 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  marginTop: 4,
+                  marginBottom: 4,
+                }}
+              >
                 <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 10.5, color: C.proteina }}>
                   Proteína {gramos(resultado.macros?.proteina_g)}
                 </Text>
@@ -1070,7 +1226,9 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
               />
             </View>
 
-            <View style={{ marginTop: 8, paddingTop: 6, borderTopWidth: 0.75, borderTopColor: C.linea }}>
+            <View
+              style={{ marginTop: 8, paddingTop: 6, borderTopWidth: 0.75, borderTopColor: C.linea }}
+            >
               <Fila
                 etiqueta="Índice de masa corporal (IMC)"
                 valor={`${num(resultado.imc, 1)} · ${etiqueta.imc(resultado.imc_categoria)}`}
@@ -1081,7 +1239,11 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                   resultado.grasa?.fiabilidad,
                 )}`}
               />
-              <Fila etiqueta="Gasto energético estimado" valor={`${fmtKcal(resultado.tdee?.valor)} al día`} ultima />
+              <Fila
+                etiqueta="Gasto energético estimado"
+                valor={`${fmtKcal(resultado.tdee?.valor)} al día`}
+                ultima
+              />
             </View>
           </View>
 
@@ -1102,7 +1264,9 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             <Fila
               etiqueta="Objetivo"
               valor={`${etiqueta.objetivo(resultado.objetivo_efectivo)}${
-                matizRecomposicion(resultado) ? ` · prioridad: ${matizRecomposicion(resultado)}` : ''
+                matizRecomposicion(resultado)
+                  ? ` · prioridad: ${matizRecomposicion(resultado)}`
+                  : ''
               }`}
             />
             {/* §4.2 (v1.2): el ritmo impreso es SIEMPRE `ritmo_efectivo` —el del plan—, y el plazo
@@ -1115,7 +1279,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                   ? etiqueta.ritmo(resultado.ritmo_efectivo)
                   : 'no aplica con este objetivo') +
                 (plazo === null ||
-                (resultado.objetivo_efectivo !== 'perder' && resultado.objetivo_efectivo !== 'ganar')
+                (resultado.objetivo_efectivo !== 'perder' &&
+                  resultado.objetivo_efectivo !== 'ganar')
                   ? ''
                   : ` · fecha pedida: ${num(plazo)} semanas`)
               }
@@ -1151,9 +1316,10 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           ) : null}
 
           <Text style={[s.small, { marginTop: 10 }]}>
-            A tu gasto estimado le hemos restado un 5 % como margen de seguridad, porque casi todos sobrestimamos
-            lo que nos movemos. Ninguna fórmula sin aparato mide la grasa corporal exacta: por eso te damos un
-            rango, no una cifra cerrada. Documento informativo generado automáticamente. No sustituye una valoración nutricional individualizada.
+            A tu gasto estimado le hemos restado un 5 % como margen de seguridad, porque casi todos
+            sobrestimamos lo que nos movemos. Ninguna fórmula sin aparato mide la grasa corporal
+            exacta: por eso te damos un rango, no una cifra cerrada. Documento informativo generado
+            automáticamente. No sustituye una valoración nutricional individualizada.
           </Text>
         </View>
       </Marco>
@@ -1175,19 +1341,25 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
               pie de cada página, así que aquí basta con una banda de dos líneas bien visible. */}
           {ajustado ? (
             <View
-              style={[s.tarjeta, { marginBottom: 8, borderLeftWidth: 4, borderLeftColor: C.acento, padding: 6 }]}
+              style={[
+                s.tarjeta,
+                { marginBottom: 8, borderLeftWidth: 4, borderLeftColor: C.acento, padding: 6 },
+              ]}
               wrap={false}
             >
               <Text style={s.p}>
-                <Text style={{ fontFamily: 'Helvetica-Bold', color: C.acento }}>Plan ajustado por ti.</Text> Has
-                cambiado{' '}
+                <Text style={{ fontFamily: 'Helvetica-Bold', color: C.acento }}>
+                  Plan ajustado por ti.
+                </Text>{' '}
+                Has cambiado{' '}
                 {ajuste?.kcal && ajuste?.hc
                   ? 'las calorías y los hidratos'
                   : ajuste?.kcal
                     ? 'las calorías'
                     : 'los hidratos'}{' '}
-                respecto a lo que te propusimos. Lo que te propusimos era: {fmtKcal(limites?.kcal_recomendada)} y{' '}
-                {gramos(limites?.hc_recomendado_g)} de hidratos.
+                respecto a lo que te propusimos. Lo que te propusimos era:{' '}
+                {fmtKcal(limites?.kcal_recomendada)} y {gramos(limites?.hc_recomendado_g)} de
+                hidratos.
               </Text>
             </View>
           ) : null}
@@ -1200,9 +1372,15 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
               ]}
             />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-              <Text style={[s.small, { color: C.proteina }]}>Proteína {pctFraccion(resultado.macros?.pct?.p)}</Text>
-              <Text style={[s.small, { color: C.grasa }]}>Grasa {pctFraccion(resultado.macros?.pct?.g)}</Text>
-              <Text style={[s.small, { color: C.hc }]}>Carbohidratos {pctFraccion(resultado.macros?.pct?.hc)}</Text>
+              <Text style={[s.small, { color: C.proteina }]}>
+                Proteína {pctFraccion(resultado.macros?.pct?.p)}
+              </Text>
+              <Text style={[s.small, { color: C.grasa }]}>
+                Grasa {pctFraccion(resultado.macros?.pct?.g)}
+              </Text>
+              <Text style={[s.small, { color: C.hc }]}>
+                Carbohidratos {pctFraccion(resultado.macros?.pct?.hc)}
+              </Text>
             </View>
           </View>
 
@@ -1240,8 +1418,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           />
           <Text style={s.small}>
             {notaCierreKcal(ajustado)} El cierre real de tu plan son{' '}
-            {fmtKcal(resultado.kcal_cierre)}. Como referencia, limita los
-            azúcares añadidos a menos de {gramos(resultado.macros?.azucares_libres_max_g)} al día.
+            {fmtKcal(resultado.kcal_cierre)}. Como referencia, limita los azúcares añadidos a menos
+            de {gramos(resultado.macros?.azucares_libres_max_g)} al día.
           </Text>
         </Seccion>
 
@@ -1249,11 +1427,12 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           {resultado.agua ? (
             <View>
               <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 17, color: C.hc }}>
-                Entre {mililitros(resultado.agua.rango?.[0])} y {mililitros(resultado.agua.rango?.[1])} al día
+                Entre {mililitros(resultado.agua.rango?.[0])} y{' '}
+                {mililitros(resultado.agua.rango?.[1])} al día
               </Text>
               <Text style={[s.p, { marginTop: 3 }]}>
-                {mililitros(resultado.agua.ml)} de referencia, aproximadamente {num(resultado.agua.vasos)} vasos de
-                250 ml.
+                {mililitros(resultado.agua.ml)} de referencia, aproximadamente{' '}
+                {num(resultado.agua.vasos)} vasos de 250 ml.
               </Text>
             </View>
           ) : (
@@ -1287,7 +1466,6 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             ) : null}
           </View>
         ) : null}
-
       </Marco>
 
       {/* ---------- Página 4: método, reparto y menú ----------
@@ -1302,15 +1480,15 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             {etiqueta.bmr(resultado.bmr?.ecuacion)}: {fmtKcal(resultado.bmr?.valor)}.
           </Text>
           <Text style={s.p}>
-            Tu gasto total estimado es de {fmtKcal(resultado.tdee?.bruto)}, al que restamos un 5 % de margen de
-            seguridad: {fmtKcal(resultado.tdee?.valor)}. Sobre esa cifra aplicamos tu objetivo y tu ritmo para
-            llegar a las {fmtKcal(resultado.kcal)} de tu plan.
+            Tu gasto total estimado es de {fmtKcal(resultado.tdee?.bruto)}, al que restamos un 5 %
+            de margen de seguridad: {fmtKcal(resultado.tdee?.valor)}. Sobre esa cifra aplicamos tu
+            objetivo y tu ritmo para llegar a las {fmtKcal(resultado.kcal)} de tu plan.
           </Text>
           <Text style={s.small}>
-            El somatotipo (en tu caso, {etiqueta.somatotipo(resultado.macros?.somatotipo)}) es una forma antigua de
-            describir la silueta corporal: la ciencia actual no ha demostrado que sirva para calcular calorías o
-            macros de forma precisa, así que lo usamos solo como un ajuste ligero entre carbohidratos y grasa,
-            nunca en tus calorías ni en tu proteína.
+            El somatotipo (en tu caso, {etiqueta.somatotipo(resultado.macros?.somatotipo)}) es una
+            forma antigua de describir la silueta corporal: la ciencia actual no ha demostrado que
+            sirva para calcular calorías o macros de forma precisa, así que lo usamos solo como un
+            ajuste ligero entre carbohidratos y grasa, nunca en tus calorías ni en tu proteína.
           </Text>
         </Seccion>
 
@@ -1339,18 +1517,33 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
               <Text style={[s.celdaNum, { flex: 1.3 }]}>{fmtKcal(c.kcal)}</Text>
             </View>
           ))}
-          <View style={[s.tablaFila, { borderBottomWidth: 0, backgroundColor: C.acentoClaro }]} wrap={false}>
-            <Text style={[s.celdaTexto, { flex: 2.4, fontFamily: 'Helvetica-Bold' }]}>Total del día</Text>
-            <Text style={[s.celdaNum, { flex: 0.9, fontFamily: 'Helvetica-Bold' }]}>{pct(totalReparto.pct)}</Text>
-            <Text style={[s.celdaNum, { flex: 1.1, fontFamily: 'Helvetica-Bold' }]}>{gramos(totalReparto.p)}</Text>
-            <Text style={[s.celdaNum, { flex: 1.1, fontFamily: 'Helvetica-Bold' }]}>{gramos(totalReparto.g)}</Text>
-            <Text style={[s.celdaNum, { flex: 1.2, fontFamily: 'Helvetica-Bold' }]}>{gramos(totalReparto.hc)}</Text>
-            <Text style={[s.celdaNum, { flex: 1.3, fontFamily: 'Helvetica-Bold' }]}>{fmtKcal(totalReparto.kcal)}</Text>
+          <View
+            style={[s.tablaFila, { borderBottomWidth: 0, backgroundColor: C.acentoClaro }]}
+            wrap={false}
+          >
+            <Text style={[s.celdaTexto, { flex: 2.4, fontFamily: 'Helvetica-Bold' }]}>
+              Total del día
+            </Text>
+            <Text style={[s.celdaNum, { flex: 0.9, fontFamily: 'Helvetica-Bold' }]}>
+              {pct(totalReparto.pct)}
+            </Text>
+            <Text style={[s.celdaNum, { flex: 1.1, fontFamily: 'Helvetica-Bold' }]}>
+              {gramos(totalReparto.p)}
+            </Text>
+            <Text style={[s.celdaNum, { flex: 1.1, fontFamily: 'Helvetica-Bold' }]}>
+              {gramos(totalReparto.g)}
+            </Text>
+            <Text style={[s.celdaNum, { flex: 1.2, fontFamily: 'Helvetica-Bold' }]}>
+              {gramos(totalReparto.hc)}
+            </Text>
+            <Text style={[s.celdaNum, { flex: 1.3, fontFamily: 'Helvetica-Bold' }]}>
+              {fmtKcal(totalReparto.kcal)}
+            </Text>
           </View>
           <Text style={[s.small, { marginTop: 6 }]}>
-            Las horas son de referencia: puedes desplazarlas sin que cambie ningún número. No hay evidencia de que
-            comer más o menos veces al día cambie tu metabolismo, así que elige el número de comidas que mejor se
-            adapte a tu rutina.
+            Las horas son de referencia: puedes desplazarlas sin que cambie ningún número. No hay
+            evidencia de que comer más o menos veces al día cambie tu metabolismo, así que elige el
+            número de comidas que mejor se adapte a tu rutina.
           </Text>
         </Seccion>
 
@@ -1377,8 +1570,9 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                 </Text>
               ))}
               <Text style={[s.small, { marginTop: 6 }]}>
-                Son ejemplos para orientarte, no un menú obligatorio. Puedes sustituir cualquier alimento por otro
-                de la misma familia sin descuadrar tus macros de forma relevante: mira la tabla de equivalencias.
+                Son ejemplos para orientarte, no un menú obligatorio. Puedes sustituir cualquier
+                alimento por otro de la misma familia sin descuadrar tus macros de forma relevante:
+                mira la tabla de equivalencias.
               </Text>
             </View>
           ) : (
@@ -1408,7 +1602,13 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             {SUBTITULO_COMPRA}
           </Text>
           {ejemplos.modo_sencillo ? (
-            <View style={[s.tarjeta, { marginBottom: 6, padding: 6, borderLeftWidth: 3, borderLeftColor: C.acento }]} wrap={false}>
+            <View
+              style={[
+                s.tarjeta,
+                { marginBottom: 6, padding: 6, borderLeftWidth: 3, borderLeftColor: C.acento },
+              ]}
+              wrap={false}
+            >
               <Text style={{ fontFamily: 'Helvetica-Bold', color: C.acento }}>
                 {winAnsi(textoModoSencillo(compra.alimentos_distintos))} para toda la semana.
               </Text>
@@ -1442,84 +1642,86 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
       {/* ---------- Página 4: peso objetivo, consejos y referencias ---------- */}
       <Marco fecha={fecha} ajustado={ajustado}>
         <Seccion titulo="Peso objetivo y cronograma">
-            <View style={[s.tarjeta, { marginBottom: 10 }]}>
-              {resultado.peso_objetivo?.mostrar_central && resultado.peso_objetivo?.efectivo !== null ? (
-                <View>
-                  <Text style={{ fontSize: 9, color: C.suave }}>TU OBJETIVO</Text>
-                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 26, color: C.acento }}>
-                    {kilos(resultado.peso_objetivo?.efectivo)}
-                  </Text>
-                </View>
-              ) : (
-                <View>
-                  <Text style={{ fontSize: 9, color: C.suave }}>FRANJA DE PESO RAZONABLE</Text>
-                  <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 17, color: C.acento }}>
-                    Entre {kilos(resultado.peso_objetivo?.rango?.[0])} y {kilos(resultado.peso_objetivo?.rango?.[1])}
-                  </Text>
-                  <Text style={[s.small, { marginTop: 4 }]}>
-                    Tu masa magra es una estimación con varios kilos de margen, así que te damos una franja y no un
-                    número.
-                  </Text>
-                </View>
-              )}
-              {/* §4.5 (v1.2): en recomposición con meta el número existe, pero no hay fecha detrás y
-                  se dice donde se lee el número. */}
-              {resultado.objetivo_efectivo === 'recomposicion' &&
-              typeof resultado.peso_objetivo?.efectivo === 'number' ? (
-                <Text style={[s.small, { marginTop: 6 }]}>{NOTA_PESO_OBJETIVO_RECOMP}</Text>
-              ) : null}
-              {typeof resultado.peso_objetivo?.hito_intermedio === 'number' ? (
-                <Text style={[s.p, { marginTop: 8 }]}>
-                  Primer hito: {kilos(resultado.peso_objetivo.hito_intermedio)}. Cuando el camino es largo, ir por
-                  etapas ayuda a no perder la motivación.
+          <View style={[s.tarjeta, { marginBottom: 10 }]}>
+            {resultado.peso_objetivo?.mostrar_central &&
+            resultado.peso_objetivo?.efectivo !== null ? (
+              <View>
+                <Text style={{ fontSize: 9, color: C.suave }}>TU OBJETIVO</Text>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 26, color: C.acento }}>
+                  {kilos(resultado.peso_objetivo?.efectivo)}
                 </Text>
+              </View>
+            ) : (
+              <View>
+                <Text style={{ fontSize: 9, color: C.suave }}>FRANJA DE PESO RAZONABLE</Text>
+                <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 17, color: C.acento }}>
+                  Entre {kilos(resultado.peso_objetivo?.rango?.[0])} y{' '}
+                  {kilos(resultado.peso_objetivo?.rango?.[1])}
+                </Text>
+                <Text style={[s.small, { marginTop: 4 }]}>
+                  Tu masa magra es una estimación con varios kilos de margen, así que te damos una
+                  franja y no un número.
+                </Text>
+              </View>
+            )}
+            {/* §4.5 (v1.2): en recomposición con meta el número existe, pero no hay fecha detrás y
+                  se dice donde se lee el número. */}
+            {resultado.objetivo_efectivo === 'recomposicion' &&
+            typeof resultado.peso_objetivo?.efectivo === 'number' ? (
+              <Text style={[s.small, { marginTop: 6 }]}>{NOTA_PESO_OBJETIVO_RECOMP}</Text>
+            ) : null}
+            {typeof resultado.peso_objetivo?.hito_intermedio === 'number' ? (
+              <Text style={[s.p, { marginTop: 8 }]}>
+                Primer hito: {kilos(resultado.peso_objetivo.hito_intermedio)}. Cuando el camino es
+                largo, ir por etapas ayuda a no perder la motivación.
+              </Text>
+            ) : null}
+          </View>
+
+          {crono ? (
+            <View style={s.tarjeta}>
+              <Fila
+                etiqueta="Tiempo estimado"
+                valor={`Entre ${num(crono.semanas?.[0])} y ${num(crono.semanas?.[1])} semanas`}
+              />
+              <Fila
+                etiqueta={crono.precision_fecha === 'mes' ? 'Horizonte aproximado' : 'Fechas'}
+                valor={rangoFechas(crono.fecha_min, crono.fecha_max, crono.precision_fecha)}
+              />
+              {crono.tramo_12sem ? (
+                <Fila
+                  etiqueta="En las próximas 12 semanas"
+                  valor={`Entre ${kilos(crono.tramo_12sem[0], 0)} y ${kilos(crono.tramo_12sem[1], 0)}`}
+                />
+              ) : null}
+              <Fila
+                etiqueta="Ritmo semanal"
+                valor={`${kilos(crono.ritmo_kg_sem, 2)} (${num(crono.ritmo_pct_sem, 2)} % de tu peso)`}
+              />
+              <Fila
+                etiqueta="Cambio total previsto"
+                valor={kilos(crono.delta_kg, 1)}
+                ultima={!(crono.diet_breaks > 0)}
+              />
+              {crono.diet_breaks > 0 ? (
+                <Fila
+                  etiqueta="Semanas a mantenimiento"
+                  valor={`${num(crono.diet_breaks)}, para que el cuerpo descanse del déficit`}
+                  ultima
+                />
               ) : null}
             </View>
-
-            {crono ? (
-              <View style={s.tarjeta}>
-                <Fila
-                  etiqueta="Tiempo estimado"
-                  valor={`Entre ${num(crono.semanas?.[0])} y ${num(crono.semanas?.[1])} semanas`}
-                />
-                <Fila
-                  etiqueta={crono.precision_fecha === 'mes' ? 'Horizonte aproximado' : 'Fechas'}
-                  valor={rangoFechas(crono.fecha_min, crono.fecha_max, crono.precision_fecha)}
-                />
-                {crono.tramo_12sem ? (
-                  <Fila
-                    etiqueta="En las próximas 12 semanas"
-                    valor={`Entre ${kilos(crono.tramo_12sem[0], 0)} y ${kilos(crono.tramo_12sem[1], 0)}`}
-                  />
-                ) : null}
-                <Fila
-                  etiqueta="Ritmo semanal"
-                  valor={`${kilos(crono.ritmo_kg_sem, 2)} (${num(crono.ritmo_pct_sem, 2)} % de tu peso)`}
-                />
-                <Fila
-                  etiqueta="Cambio total previsto"
-                  valor={kilos(crono.delta_kg, 1)}
-                  ultima={!(crono.diet_breaks > 0)}
-                />
-                {crono.diet_breaks > 0 ? (
-                  <Fila
-                    etiqueta="Semanas a mantenimiento"
-                    valor={`${num(crono.diet_breaks)}, para que el cuerpo descanse del déficit`}
-                    ultima
-                  />
-                ) : null}
-                </View>
-            ) : (
-              <Text style={s.p}>
-                {avisoCronograma?.texto ??
-                  'Con este objetivo no hay un peso al que llegar en una fecha. Reevalúa medidas, fotos y ' +
-                    'rendimiento cada 8-12 semanas.'}
-              </Text>
-            )}
-            {/* §4.5: la nota INFO_ADAPTACION va bajo la línea de tiempo, no solo en la página de avisos. */}
-            {crono && avisoAdaptacion ? (
-              <Text style={[s.small, { marginTop: 6 }]}>{avisoAdaptacion.texto}</Text>
-            ) : null}
+          ) : (
+            <Text style={s.p}>
+              {avisoCronograma?.texto ??
+                'Con este objetivo no hay un peso al que llegar en una fecha. Reevalúa medidas, fotos y ' +
+                  'rendimiento cada 8-12 semanas.'}
+            </Text>
+          )}
+          {/* §4.5: la nota INFO_ADAPTACION va bajo la línea de tiempo, no solo en la página de avisos. */}
+          {crono && avisoAdaptacion ? (
+            <Text style={[s.small, { marginTop: 6 }]}>{avisoAdaptacion.texto}</Text>
+          ) : null}
         </Seccion>
 
         {/* ---------- §4.5b (v1.1, decisión F): proyección y seguimiento. Sin `proyeccion` no se
@@ -1546,8 +1748,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
               <View style={{ marginTop: 8 }}>
                 <Text style={s.h3}>Tu seguimiento</Text>
                 <Text style={[s.small, { marginBottom: 4 }]}>
-                  Estos pesajes estaban guardados solo en tu móvil el {fechaLarga(fecha)}. Este PDF es la única
-                  copia que sale de él.
+                  Estos pesajes estaban guardados solo en tu móvil el {fechaLarga(fecha)}. Este PDF
+                  es la única copia que sale de él.
                 </Text>
                 {pesajes.map((p, i) => (
                   <View key={`pes-${p.fecha}-${i}`} style={[s.fila, s.filaLinea]} wrap={false}>
@@ -1574,53 +1776,56 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
         </Seccion>
 
         <Seccion titulo="Otras referencias, no son un objetivo">
-            <View style={s.tarjeta}>
+          <View style={s.tarjeta}>
+            <Fila
+              etiqueta="Grasa corporal"
+              valor={`${rango(resultado.grasa?.rango, (v) => num(v, 0))} % · nivel ${etiqueta.banda(
+                resultado.grasa?.banda,
+              )}`}
+            />
+            <Fila
+              etiqueta="Otras estimaciones de grasa"
+              valor={lista([
+                `CUN-BAE ${num(resultado.grasa?.referencias?.cunbae, 1)} %`,
+                `Deurenberg ${num(resultado.grasa?.referencias?.deurenberg, 1)} %`,
+                ...(typeof resultado.grasa?.referencias?.navy === 'number'
+                  ? [`US Navy ${num(resultado.grasa.referencias.navy, 1)} %`]
+                  : []),
+              ])}
+            />
+            <Fila etiqueta="Masa libre de grasa" valor={kilos(resultado.mlg)} />
+            <Fila
+              etiqueta="Índice de masa magra (FFMI)"
+              valor={`${num(resultado.ffmi?.valor, 1)} · normalizado ${num(
+                resultado.ffmi?.normalizado,
+                1,
+              )} · ${etiqueta.ffmi(resultado.ffmi?.categoria)}`}
+            />
+            <Fila
+              etiqueta="Peso con un IMC de 22"
+              valor={kilos(resultado.peso_objetivo?.referencias?.imc22)}
+            />
+            <Fila
+              etiqueta="Franja de peso por IMC"
+              valor={rango(resultado.peso_objetivo?.referencias?.rango_imc, (v) => kilos(v))}
+              ultima={clasicas === null}
+            />
+            {clasicas ? (
               <Fila
-                etiqueta="Grasa corporal"
-                valor={`${rango(resultado.grasa?.rango, (v) => num(v, 0))} % · nivel ${etiqueta.banda(
-                  resultado.grasa?.banda,
-                )}`}
+                etiqueta="Pesos ideales clásicos"
+                valor={lista(
+                  Object.entries(clasicas).map(
+                    ([clave, valor]) => `${NOMBRE_FORMULA_CLASICA[clave] ?? clave} ${kilos(valor)}`,
+                  ),
+                )}
+                ultima
               />
-              <Fila
-                etiqueta="Otras estimaciones de grasa"
-                valor={lista([
-                  `CUN-BAE ${num(resultado.grasa?.referencias?.cunbae, 1)} %`,
-                  `Deurenberg ${num(resultado.grasa?.referencias?.deurenberg, 1)} %`,
-                  ...(typeof resultado.grasa?.referencias?.navy === 'number'
-                    ? [`US Navy ${num(resultado.grasa.referencias.navy, 1)} %`]
-                    : []),
-                ])}
-              />
-              <Fila etiqueta="Masa libre de grasa" valor={kilos(resultado.mlg)} />
-              <Fila
-                etiqueta="Índice de masa magra (FFMI)"
-                valor={`${num(resultado.ffmi?.valor, 1)} · normalizado ${num(
-                  resultado.ffmi?.normalizado,
-                  1,
-                )} · ${etiqueta.ffmi(resultado.ffmi?.categoria)}`}
-              />
-              <Fila etiqueta="Peso con un IMC de 22" valor={kilos(resultado.peso_objetivo?.referencias?.imc22)} />
-              <Fila
-                etiqueta="Franja de peso por IMC"
-                valor={rango(resultado.peso_objetivo?.referencias?.rango_imc, (v) => kilos(v))}
-                ultima={clasicas === null}
-              />
-              {clasicas ? (
-                <Fila
-                  etiqueta="Pesos ideales clásicos"
-                  valor={lista(
-                    Object.entries(clasicas).map(
-                      ([clave, valor]) => `${NOMBRE_FORMULA_CLASICA[clave] ?? clave} ${kilos(valor)}`,
-                    ),
-                  )}
-                  ultima
-                />
-              ) : null}
-            </View>
-            <Text style={[s.small, { marginTop: 6 }]}>
-              Son puntos de comparación de la literatura (CUN-BAE, Deurenberg, US Navy, Devine, Robinson, Miller y
-              Hamwi), no metas que tengas que alcanzar.
-            </Text>
+            ) : null}
+          </View>
+          <Text style={[s.small, { marginTop: 6 }]}>
+            Son puntos de comparación de la literatura (CUN-BAE, Deurenberg, US Navy, Devine,
+            Robinson, Miller y Hamwi), no metas que tengas que alcanzar.
+          </Text>
         </Seccion>
 
         {/* ---------- Avisos y disclaimer: siguen en el mismo flujo, sin salto forzado, para no
@@ -1647,8 +1852,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
               ninguna respuesta del cuestionario. */}
           <Text style={s.p}>{LINEA_ADANER}</Text>
           <Text style={s.small}>
-            Plan generado el {fechaLarga(fecha)} con el motor de cálculo de Báscula, versión 1. Si vuelves más
-            adelante con datos distintos, el cálculo se rehace con las mismas fórmulas.
+            Plan generado el {fechaLarga(fecha)} con el motor de cálculo de Báscula, versión 1. Si
+            vuelves más adelante con datos distintos, el cálculo se rehace con las mismas fórmulas.
           </Text>
         </Seccion>
       </Marco>

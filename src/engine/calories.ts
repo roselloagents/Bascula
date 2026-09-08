@@ -77,12 +77,13 @@ export function calcularCalorias(e: EntradaCalorias, emitir: EmitirAviso): Salid
 
   if (objetivo_efectivo === 'perder') {
     const ritmo_pct = RITMO_PERDIDA[e.banda as 'muy_alto' | 'alto' | 'medio'][e.ritmo_efectivo]
-    const deficit_ritmo = (ritmo_pct / 100) * e.pesoKg * KCAL_POR_KG_GRASA / 7
+    const deficit_ritmo = ((ritmo_pct / 100) * e.pesoKg * KCAL_POR_KG_GRASA) / 7
     const deficit_cap = cap_pct * e.tdee
     if (deficit_ritmo > deficit_cap) emitir('INFO_DEFICIT_CAPADO_TDEE')
     kcal_calc = e.tdee - Math.min(deficit_ritmo, deficit_cap)
   } else if (objetivo_efectivo === 'ganar') {
-    const sup_pct = e.perfil !== 'fuerza' ? SUPERAVIT_SIN_FUERZA : SUPERAVIT[e.experiencia][e.ritmo_efectivo]
+    const sup_pct =
+      e.perfil !== 'fuerza' ? SUPERAVIT_SIN_FUERZA : SUPERAVIT[e.experiencia][e.ritmo_efectivo]
     kcal_calc = e.tdee + clamp(sup_pct * e.tdee, SUPERAVIT_MIN, SUPERAVIT_MAX)
   } else if (objetivo_efectivo === 'recomposicion') {
     let d = RECOMPOSICION[e.banda]
@@ -112,12 +113,16 @@ export function calcularCalorias(e: EntradaCalorias, emitir: EmitirAviso): Salid
     if (kcal_calc < suelo) {
       kcal_calc = suelo
       suelo_activo = true
-      if (suelo === suelo_ea && suelo_ea > Math.max(suelo_sexo, suelo_bmr)) emitir('WARN_SUELO_CALORICO_EA')
+      if (suelo === suelo_ea && suelo_ea > Math.max(suelo_sexo, suelo_bmr))
+        emitir('WARN_SUELO_CALORICO_EA')
       else if (suelo === suelo_bmr && suelo_bmr >= suelo_sexo) emitir('WARN_SUELO_CALORICO_BMR')
       else emitir('WARN_SUELO_CALORICO_SEXO')
     }
   }
-  if ((objetivo_efectivo === 'mantener' || objetivo_efectivo === 'ganar') && kcal_calc < suelo_sexo) {
+  if (
+    (objetivo_efectivo === 'mantener' || objetivo_efectivo === 'ganar') &&
+    kcal_calc < suelo_sexo
+  ) {
     kcal_calc = suelo_sexo
     suelo_activo = true
     emitir('WARN_GASTO_BAJO_MINIMO')

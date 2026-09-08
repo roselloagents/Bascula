@@ -47,8 +47,8 @@ function limitesGrasa(inputs: Inputs, r: ReturnType<typeof calcular>): [number, 
   const pctTecho =
     r.preferencia_efectiva === 'low_carb' ? GRASA_TECHO_PCT_KCAL_LOWCARB : GRASA_TECHO_PCT_KCAL
   return [
-    Math.max(suelo_gkg * r.macros.base_kg, GRASA_SUELO_PCT_KCAL * r.kcal / 9),
-    pctTecho * r.kcal / 9,
+    Math.max(suelo_gkg * r.macros.base_kg, (GRASA_SUELO_PCT_KCAL * r.kcal) / 9),
+    (pctTecho * r.kcal) / 9,
   ]
 }
 
@@ -72,7 +72,16 @@ describe('paso 9 — la grasa nunca sale de su franja', () => {
             for (const pref of prefs) {
               for (const ritmo of ritmos) {
                 for (const objetivo of ['perder', 'mantener', 'ganar', 'recomposicion'] as const) {
-                  const inputs: Inputs = { ...BASE, sexo, edad, altura_cm: altura, peso_kg: peso, preferencia: pref, ritmo, objetivo }
+                  const inputs: Inputs = {
+                    ...BASE,
+                    sexo,
+                    edad,
+                    altura_cm: altura,
+                    peso_kg: peso,
+                    preferencia: pref,
+                    ritmo,
+                    objetivo,
+                  }
                   const r = calcular(inputs)
                   if (r.excluido) continue
                   casos++

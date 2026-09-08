@@ -57,7 +57,17 @@ const VERDURAS: FoodQuery = {
 const FRUTAS: FoodQuery = {
   rol: 'fruta',
   grupo: 'fruta',
-  ids_preferidos: ['platano', 'manzana', 'pera', 'naranja', 'kiwi', 'mandarina', 'pina', 'uvas', 'fresas'],
+  ids_preferidos: [
+    'platano',
+    'manzana',
+    'pera',
+    'naranja',
+    'kiwi',
+    'mandarina',
+    'pina',
+    'uvas',
+    'fresas',
+  ],
 }
 
 /** Frutas de baja densidad energética: snacks pequeños y bancos low-carb. */
@@ -74,7 +84,15 @@ const FRUTOS_SECOS: FoodQuery = {
   grupo: 'grasa',
   grasa_min: 25,
   grasa_max: 79,
-  ids_preferidos: ['nueces', 'almendras', 'pistachos', 'cacahuetes', 'anacardos', 'semillas_chia', 'semillas_lino'],
+  ids_preferidos: [
+    'nueces',
+    'almendras',
+    'pistachos',
+    'cacahuetes',
+    'anacardos',
+    'semillas_chia',
+    'semillas_lino',
+  ],
 }
 
 const HUEVO: FoodQuery = { rol: 'proteina', ids_preferidos: ['huevo_entero', 'clara_huevo'] }
@@ -141,7 +159,12 @@ const CEREAL_SIN_GLUTEN: FoodQuery = {
   rol: 'carbohidrato',
   grupo: 'carbohidrato',
   estado_excluye: ['crudo'],
-  ids_preferidos: ['arroz_blanco_cocido', 'quinoa_cocida', 'arroz_integral_cocido', 'patata_cocida'],
+  ids_preferidos: [
+    'arroz_blanco_cocido',
+    'quinoa_cocida',
+    'arroz_integral_cocido',
+    'patata_cocida',
+  ],
 }
 
 const TUBERCULO: FoodQuery = {
@@ -172,7 +195,13 @@ const CARNE_MAGRA: FoodQuery = {
   rol: 'proteina',
   grupo: 'proteina',
   proteina_min: 15,
-  ids_preferidos: ['pechuga_pollo', 'pechuga_pavo', 'cerdo_lomo', 'muslo_pollo', 'ternera_solomillo'],
+  ids_preferidos: [
+    'pechuga_pollo',
+    'pechuga_pavo',
+    'cerdo_lomo',
+    'muslo_pollo',
+    'ternera_solomillo',
+  ],
 }
 
 const PESCADO_BLANCO: FoodQuery = {
@@ -196,7 +225,11 @@ const FIAMBRE_MAGRO: FoodQuery = {
   ids_preferidos: ['jamon_cocido', 'pechuga_pavo', 'jamon_serrano'],
 }
 
-const ATUN: FoodQuery = { rol: 'proteina', grupo: 'proteina', ids_preferidos: ['atun_natural', 'jamon_cocido', 'pechuga_pavo'] }
+const ATUN: FoodQuery = {
+  rol: 'proteina',
+  grupo: 'proteina',
+  ids_preferidos: ['atun_natural', 'jamon_cocido', 'pechuga_pavo'],
+}
 
 // Vegetales
 const LEGUMBRE: FoodQuery = {
@@ -225,11 +258,25 @@ const PROTEINA_POLVO: FoodQuery = {
   ids_preferidos: ['proteina_guisante_polvo', 'proteina_soja_polvo'],
 }
 
-const YOGUR_SOJA: FoodQuery = { rol: 'proteina', grupo: 'lacteo', proteina_min: 7, ids_preferidos: ['yogur_soja_proteico'] }
+const YOGUR_SOJA: FoodQuery = {
+  rol: 'proteina',
+  grupo: 'lacteo',
+  proteina_min: 7,
+  ids_preferidos: ['yogur_soja_proteico'],
+}
 
-const BEBIDA_VEGETAL: FoodQuery = { rol: 'complemento', grupo: 'lacteo', ids_preferidos: ['bebida_soja', 'leche_avena'] }
+const BEBIDA_VEGETAL: FoodQuery = {
+  rol: 'complemento',
+  grupo: 'lacteo',
+  ids_preferidos: ['bebida_soja', 'leche_avena'],
+}
 
-const AVENA: FoodQuery = { rol: 'carbohidrato', grupo: 'carbohidrato', estado_excluye: ['crudo'], ids_preferidos: ['avena_copos', 'pan_integral'] }
+const AVENA: FoodQuery = {
+  rol: 'carbohidrato',
+  grupo: 'carbohidrato',
+  estado_excluye: ['crudo'],
+  ids_preferidos: ['avena_copos', 'pan_integral'],
+}
 
 const SEMILLAS: FoodQuery = {
   rol: 'grasa',
@@ -256,14 +303,27 @@ export const HC_LOW_CARB_ALTERNO: FoodQuery = {
   rol: 'carbohidrato',
   grupo: 'carbohidrato',
   estado_excluye: ['crudo'],
-  ids_preferidos: ['patata_cocida', 'arroz_blanco_cocido', 'boniato_cocido', 'quinoa_cocida', 'pan_integral'],
+  ids_preferidos: [
+    'patata_cocida',
+    'arroz_blanco_cocido',
+    'boniato_cocido',
+    'quinoa_cocida',
+    'pan_integral',
+  ],
 }
 
 const CARNE_O_PESCADO: FoodQuery = {
   rol: 'proteina',
   grupo: 'proteina',
   proteina_min: 14,
-  ids_preferidos: ['pechuga_pollo', 'salmon', 'merluza', 'pechuga_pavo', 'cerdo_lomo', 'ternera_solomillo'],
+  ids_preferidos: [
+    'pechuga_pollo',
+    'salmon',
+    'merluza',
+    'pechuga_pavo',
+    'cerdo_lomo',
+    'ternera_solomillo',
+  ],
 }
 
 // ---------- Banco omnívoro (base de `sin_lactosa` y `sin_gluten`) ----------
@@ -423,7 +483,12 @@ const VEG: Plantilla[] = [
   {
     id: 'VEG-LIG-1',
     rol_comida: 'ligera',
-    ancla_proteina: lacteoProteico(['yogur_griego_0', 'yogur_griego_0_sl', 'yogur_griego_natural', 'requeson']),
+    ancla_proteina: lacteoProteico([
+      'yogur_griego_0',
+      'yogur_griego_0_sl',
+      'yogur_griego_natural',
+      'requeson',
+    ]),
     ancla_proteina_2: null,
     ancla_carbohidrato: null,
     ancla_grasa: FRUTOS_SECOS,
@@ -508,7 +573,11 @@ const VGN: Plantilla[] = [
   {
     id: 'VGN-PRI-3',
     rol_comida: 'principal',
-    ancla_proteina: { rol: 'proteina', grupo: 'proteina', ids_preferidos: ['tempeh', 'tiras_soja', 'tofu_firme'] },
+    ancla_proteina: {
+      rol: 'proteina',
+      grupo: 'proteina',
+      ids_preferidos: ['tempeh', 'tiras_soja', 'tofu_firme'],
+    },
     ancla_proteina_2: SOJA_HIDRATADA,
     ancla_carbohidrato: TUBERCULO_BONIATO,
     ancla_grasa: AOVE,
@@ -528,7 +597,11 @@ const VGN: Plantilla[] = [
   {
     id: 'VGN-LIG-2',
     rol_comida: 'ligera',
-    ancla_proteina: { rol: 'proteina', grupo: 'proteina', ids_preferidos: ['altramuces', 'edamame_cocido', 'tofu_firme'] },
+    ancla_proteina: {
+      rol: 'proteina',
+      grupo: 'proteina',
+      ids_preferidos: ['altramuces', 'edamame_cocido', 'tofu_firme'],
+    },
     ancla_proteina_2: null,
     ancla_carbohidrato: PAN_O_TORTITAS,
     ancla_grasa: null,
@@ -575,7 +648,12 @@ const SGL: Plantilla[] = [
     rol_comida: 'desayuno',
     ancla_proteina: LACTEO_BATIDO,
     ancla_proteina_2: HUEVO,
-    ancla_carbohidrato: { rol: 'carbohidrato', grupo: 'carbohidrato', estado_excluye: ['crudo'], ids_preferidos: ['patata_cocida', 'tortitas_arroz', 'boniato_cocido'] },
+    ancla_carbohidrato: {
+      rol: 'carbohidrato',
+      grupo: 'carbohidrato',
+      estado_excluye: ['crudo'],
+      ids_preferidos: ['patata_cocida', 'tortitas_arroz', 'boniato_cocido'],
+    },
     ancla_grasa: AOVE,
     verdura: VERDURAS,
     fruta: null,
@@ -615,7 +693,12 @@ const SGL: Plantilla[] = [
     rol_comida: 'ligera',
     ancla_proteina: LACTEO_REQUESON,
     ancla_proteina_2: null,
-    ancla_carbohidrato: { rol: 'carbohidrato', grupo: 'carbohidrato', estado_excluye: ['crudo'], ids_preferidos: ['tortitas_arroz'] },
+    ancla_carbohidrato: {
+      rol: 'carbohidrato',
+      grupo: 'carbohidrato',
+      estado_excluye: ['crudo'],
+      ids_preferidos: ['tortitas_arroz'],
+    },
     ancla_grasa: FRUTOS_SECOS,
     verdura: null,
     fruta: FRUTAS,
@@ -668,12 +751,22 @@ const LCB: Plantilla[] = [
   {
     id: 'LCB-DES-2',
     rol_comida: 'desayuno',
-    ancla_proteina: lacteoProteico(['yogur_griego_0', 'yogur_griego_0_sl', 'queso_fresco_batido_0', 'yogur_griego_natural']),
+    ancla_proteina: lacteoProteico([
+      'yogur_griego_0',
+      'yogur_griego_0_sl',
+      'queso_fresco_batido_0',
+      'yogur_griego_natural',
+    ]),
     ancla_proteina_2: HUEVO,
     ancla_carbohidrato: HC_LOW_CARB,
     ancla_grasa: FRUTOS_SECOS,
     verdura: null,
-    fruta: { rol: 'fruta', grupo: 'fruta', tags_incluye: ['low_carb'], ids_preferidos: ['fresas', 'sandia', 'melon'] },
+    fruta: {
+      rol: 'fruta',
+      grupo: 'fruta',
+      tags_incluye: ['low_carb'],
+      ids_preferidos: ['fresas', 'sandia', 'melon'],
+    },
   },
   {
     id: 'LCB-PRI-1',
@@ -719,12 +812,21 @@ const LCB: Plantilla[] = [
   {
     id: 'LCB-LIG-3',
     rol_comida: 'ligera',
-    ancla_proteina: lacteoProteico(['yogur_griego_0', 'yogur_griego_0_sl', 'queso_fresco_batido_0']),
+    ancla_proteina: lacteoProteico([
+      'yogur_griego_0',
+      'yogur_griego_0_sl',
+      'queso_fresco_batido_0',
+    ]),
     ancla_proteina_2: null,
     ancla_carbohidrato: null,
     ancla_grasa: null,
     verdura: null,
-    fruta: { rol: 'fruta', grupo: 'fruta', tags_incluye: ['low_carb'], ids_preferidos: ['fresas', 'sandia', 'melon'] },
+    fruta: {
+      rol: 'fruta',
+      grupo: 'fruta',
+      tags_incluye: ['low_carb'],
+      ids_preferidos: ['fresas', 'sandia', 'melon'],
+    },
   },
   {
     // Snack mínimo sin acompañamiento: única forma de cerrar tomas de menos de 150 kcal.

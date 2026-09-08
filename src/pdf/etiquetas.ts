@@ -24,7 +24,11 @@ import type {
 } from '../engine/types'
 import { alimentoPorId } from '../data/foods'
 
-function traduce<K extends string>(mapa: Record<K, string>, clave: K | null | undefined, porDefecto = '—'): string {
+function traduce<K extends string>(
+  mapa: Record<K, string>,
+  clave: K | null | undefined,
+  porDefecto = '—',
+): string {
   if (clave === null || clave === undefined) return porDefecto
   return mapa[clave] ?? porDefecto
 }
@@ -155,12 +159,16 @@ export const etiqueta = {
   fiabilidad: (v: Fiabilidad | null | undefined) => traduce(FIABILIDAD, v),
   metodoGrasa: (v: MetodoGrasa | null | undefined) => traduce(METODO_GRASA, v),
   banda: (v: BandaGrasa | null | undefined) => traduce(BANDA, v),
-  ffmi: (v: FfmiCategoria | null | undefined) => traduce(FFMI, v, 'sin categoría con este nivel de grasa'),
+  ffmi: (v: FfmiCategoria | null | undefined) =>
+    traduce(FFMI, v, 'sin categoría con este nivel de grasa'),
   bmr: (v: BmrEcuacion | null | undefined) => traduce(BMR, v),
   somatotipo: (v: Somatotipo | null | undefined) => traduce(SOMATOTIPO, v),
   /** Lista de condiciones en lenguaje llano. `'tca'` nunca se serializa (CONTRATO). */
   condiciones: (vs: readonly Condicion[] | null | undefined): string[] =>
-    (vs ?? []).filter((c) => c !== 'tca').map((c) => traduce(CONDICION, c, '')).filter((t) => t.length > 0),
+    (vs ?? [])
+      .filter((c) => c !== 'tca')
+      .map((c) => traduce(CONDICION, c, ''))
+      .filter((t) => t.length > 0),
 }
 
 /** Nombre clásico de peso ideal en texto llano. */

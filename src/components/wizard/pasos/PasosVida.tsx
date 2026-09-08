@@ -27,11 +27,27 @@ import {
 import { Pantalla, type PropsPaso } from './comun'
 
 const ACTIVIDADES: { valor: ActividadDiaria; titulo: string; detalle: string }[] = [
-  { valor: 'sedentario', titulo: 'Sedentario', detalle: 'Trabajo sentado, me muevo poco (menos de 5.000 pasos al día)' },
-  { valor: 'ligero', titulo: 'Ligero', detalle: 'De pie parte del día o camino algo (5.000-7.500 pasos)' },
-  { valor: 'moderado', titulo: 'Moderado', detalle: 'Trabajo activo o camino bastante (7.500-10.000 pasos)' },
+  {
+    valor: 'sedentario',
+    titulo: 'Sedentario',
+    detalle: 'Trabajo sentado, me muevo poco (menos de 5.000 pasos al día)',
+  },
+  {
+    valor: 'ligero',
+    titulo: 'Ligero',
+    detalle: 'De pie parte del día o camino algo (5.000-7.500 pasos)',
+  },
+  {
+    valor: 'moderado',
+    titulo: 'Moderado',
+    detalle: 'Trabajo activo o camino bastante (7.500-10.000 pasos)',
+  },
   { valor: 'alto', titulo: 'Alto', detalle: 'Trabajo físico o camino mucho (10.000-12.500 pasos)' },
-  { valor: 'muy_alto', titulo: 'Muy alto', detalle: 'Trabajo físico intenso: obra, reparto, agricultura (más de 12.500 pasos)' },
+  {
+    valor: 'muy_alto',
+    titulo: 'Muy alto',
+    detalle: 'Trabajo físico intenso: obra, reparto, agricultura (más de 12.500 pasos)',
+  },
 ]
 
 export function PasoActividad({ b, set }: PropsPaso) {
@@ -147,8 +163,8 @@ export function PasoEntrenamiento({ b, set }: PropsPaso) {
           />
           {e.dias_semana === 0 ? (
             <p className="nota">
-              Con 0 días a la semana, lo calculamos igual que si no entrenaras: dinos los días reales
-              cuando empieces.
+              Con 0 días a la semana, lo calculamos igual que si no entrenaras: dinos los días
+              reales cuando empieces.
             </p>
           ) : null}
 
@@ -222,9 +238,21 @@ export function PasoEntrenamiento({ b, set }: PropsPaso) {
 }
 
 const OBJETIVOS: { valor: Objetivo; titulo: string; detalle: string }[] = [
-  { valor: 'perder', titulo: 'Perder grasa', detalle: 'Quiero bajar de peso cuidando el músculo que ya tengo.' },
-  { valor: 'mantener', titulo: 'Mantenerme', detalle: 'Estoy a gusto con mi peso y quiero comer mejor y con orden.' },
-  { valor: 'ganar', titulo: 'Ganar músculo', detalle: 'Quiero subir de peso ganando sobre todo masa muscular.' },
+  {
+    valor: 'perder',
+    titulo: 'Perder grasa',
+    detalle: 'Quiero bajar de peso cuidando el músculo que ya tengo.',
+  },
+  {
+    valor: 'mantener',
+    titulo: 'Mantenerme',
+    detalle: 'Estoy a gusto con mi peso y quiero comer mejor y con orden.',
+  },
+  {
+    valor: 'ganar',
+    titulo: 'Ganar músculo',
+    detalle: 'Quiero subir de peso ganando sobre todo masa muscular.',
+  },
   {
     valor: 'recomposicion',
     titulo: 'Recomposición: perder grasa y ganar músculo a la vez',
@@ -300,9 +328,17 @@ export function PasoObjetivo({ b, set }: PropsPaso) {
 }
 
 const RITMOS: { valor: Ritmo; titulo: string; detalle: string }[] = [
-  { valor: 'suave', titulo: 'Suave', detalle: 'El cambio será más lento, pero más fácil de mantener.' },
+  {
+    valor: 'suave',
+    titulo: 'Suave',
+    detalle: 'El cambio será más lento, pero más fácil de mantener.',
+  },
   { valor: 'moderado', titulo: 'Moderado', detalle: 'Un equilibrio entre velocidad y comodidad.' },
-  { valor: 'agresivo', titulo: 'Agresivo', detalle: 'Más rápido, pero exige más disciplina y más hambre.' },
+  {
+    valor: 'agresivo',
+    titulo: 'Agresivo',
+    detalle: 'Más rápido, pero exige más disciplina y más hambre.',
+  },
 ]
 
 /** [SPEC] SPEC-ux §1 paso 12: segunda línea fija del selector de plazo. */
@@ -433,8 +469,8 @@ export function PasoRitmo({ b, set }: PropsPaso) {
       ) : null}
 
       <p className="nota">
-        Ajustaremos el ritmo final a lo que sea seguro para tu caso; puede que apliquemos el más suave
-        aunque elijas otro.
+        Ajustaremos el ritmo final a lo que sea seguro para tu caso; puede que apliquemos el más
+        suave aunque elijas otro.
       </p>
     </Pantalla>
   )
@@ -485,7 +521,12 @@ export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
           // Sin meta no puede haber plazo: la cuarta opción del paso de ritmo desaparece y el
           // plazo se descarta con ella (§1 paso 12).
           onElegir={() =>
-            set({ quierePesoObjetivo: false, peso_objetivo: '', usarPlazo: false, plazo_semanas: null })
+            set({
+              quierePesoObjetivo: false,
+              peso_objetivo: '',
+              usarPlazo: false,
+              plazo_semanas: null,
+            })
           }
         />
       </div>
@@ -507,12 +548,19 @@ export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
             error={errores.peso_objetivo}
             max={300}
             marcado={estaMarcado(marcados, 'peso_objetivo')}
-            describedPor={imc !== null && !errores.peso_objetivo ? ID_NOTA_PESO_OBJETIVO : undefined}
+            describedPor={
+              imc !== null && !errores.peso_objetivo ? ID_NOTA_PESO_OBJETIVO : undefined
+            }
           />
           {imc !== null && !errores.peso_objetivo ? (
             // `role="status"` y `aria-live`, igual que la nota de "falta …" del cuestionario: es
             // el aviso de seguridad del paso y hasta ahora no llegaba a un lector de pantalla.
-            <p className="nota nota-recuadro" id={ID_NOTA_PESO_OBJETIVO} role="status" aria-live="polite">
+            <p
+              className="nota nota-recuadro"
+              id={ID_NOTA_PESO_OBJETIVO}
+              role="status"
+              aria-live="polite"
+            >
               Eso supondría un IMC aproximado de {numCorto(imc, 1)}.
               {imc < 18.5
                 ? ' Es un IMC de bajo peso: en resultados te explicaremos por qué te proponemos ajustarlo.'
@@ -527,13 +575,25 @@ export function PasoPesoObjetivo({ b, set, errores, marcados }: PropsPaso) {
 }
 
 const BASES: { valor: PreferenciaBase; titulo: string; detalle: string }[] = [
-  { valor: 'omnivoro', titulo: 'Como de todo', detalle: 'Sin restricciones: carne, pescado, huevos y lácteos.' },
-  { valor: 'vegetariano', titulo: 'Vegetariano', detalle: 'Sin carne ni pescado; sí huevos y lácteos.' },
+  {
+    valor: 'omnivoro',
+    titulo: 'Como de todo',
+    detalle: 'Sin restricciones: carne, pescado, huevos y lácteos.',
+  },
+  {
+    valor: 'vegetariano',
+    titulo: 'Vegetariano',
+    detalle: 'Sin carne ni pescado; sí huevos y lácteos.',
+  },
   { valor: 'vegano', titulo: 'Vegano', detalle: 'Sin ningún alimento de origen animal.' },
 ]
 
 const RESTRICCIONES: { valor: Restriccion; titulo: string; detalle: string }[] = [
-  { valor: 'sin_lactosa', titulo: 'Sin lactosa', detalle: 'Evito la leche y los lácteos con lactosa.' },
+  {
+    valor: 'sin_lactosa',
+    titulo: 'Sin lactosa',
+    detalle: 'Evito la leche y los lácteos con lactosa.',
+  },
   { valor: 'sin_gluten', titulo: 'Sin gluten', detalle: 'Evito el trigo, la cebada y el centeno.' },
 ]
 
@@ -594,8 +654,8 @@ export function PasoPreferencias({ b, set }: PropsPaso) {
         onCambiar={(low_carb) => set({ low_carb })}
       />
       <p className="nota">
-        Este sí cambia los números: te subimos la grasa al 45 % de las calorías y bajamos el mínimo de
-        hidratos. Si tienes diabetes no lo aplicaremos y te lo explicaremos en el resultado.
+        Este sí cambia los números: te subimos la grasa al 45 % de las calorías y bajamos el mínimo
+        de hidratos. Si tienes diabetes no lo aplicaremos y te lo explicaremos en el resultado.
       </p>
 
       <Grupo etiqueta="¿Cuántas comidas al día prefieres hacer?" fila>
@@ -611,9 +671,9 @@ export function PasoPreferencias({ b, set }: PropsPaso) {
         ))}
       </Grupo>
       <p className="nota nota-recuadro">
-        No hay evidencia de que comer más o menos veces al día cambie tu metabolismo. Elige el número
-        de comidas que mejor se adapte a tu rutina: lo único que cambia es cómo repartimos las mismas
-        calorías y macros.
+        No hay evidencia de que comer más o menos veces al día cambie tu metabolismo. Elige el
+        número de comidas que mejor se adapte a tu rutina: lo único que cambia es cómo repartimos
+        las mismas calorías y macros.
       </p>
 
       <Grupo
@@ -646,9 +706,9 @@ export function PasoPreferencias({ b, set }: PropsPaso) {
       />
       {b.menu_sencillo ? (
         <p className="nota nota-recuadro">
-          Tu menú usará como mucho 12 alimentos distintos en toda la semana, con dos versiones de cada
-          comida que se van alternando. Tus calorías y tus macros no cambian: solo cambia la variedad
-          del menú y, con ella, la lista de la compra.
+          Tu menú usará como mucho 12 alimentos distintos en toda la semana, con dos versiones de
+          cada comida que se van alternando. Tus calorías y tus macros no cambian: solo cambia la
+          variedad del menú y, con ella, la lista de la compra.
         </p>
       ) : null}
     </Pantalla>

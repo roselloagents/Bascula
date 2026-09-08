@@ -7,14 +7,28 @@ import { generarEjemplos } from '../index'
 import type { OpcionesPlan } from './fixtures'
 import { inputsDe, resultadoDe } from './fixtures'
 
-const PREFERENCIAS: Preferencia[] = ['omnivoro', 'vegetariano', 'vegano', 'sin_lactosa', 'sin_gluten', 'low_carb']
+const PREFERENCIAS: Preferencia[] = [
+  'omnivoro',
+  'vegetariano',
+  'vegano',
+  'sin_lactosa',
+  'sin_gluten',
+  'low_carb',
+]
 
 /** Barrido de planes realistas: 2-6 comidas, 1.300-3.500 kcal, con y sin peri-entreno. */
 const PLANES: OpcionesPlan[] = [
   { kcal: 1300, nComidas: 2, preferencia: 'omnivoro', objetivo: 'perder', pesoKg: 62, peri: 1 },
   { kcal: 1500, nComidas: 3, preferencia: 'omnivoro', objetivo: 'perder', pesoKg: 70, peri: null },
   { kcal: 1800, nComidas: 4, preferencia: 'omnivoro', objetivo: 'mantener', pesoKg: 78, peri: 2 },
-  { kcal: 2200, nComidas: 5, preferencia: 'omnivoro', objetivo: 'recomposicion', pesoKg: 84, peri: 3 },
+  {
+    kcal: 2200,
+    nComidas: 5,
+    preferencia: 'omnivoro',
+    objetivo: 'recomposicion',
+    pesoKg: 84,
+    peri: 3,
+  },
   { kcal: 2600, nComidas: 6, preferencia: 'omnivoro', objetivo: 'ganar', pesoKg: 90, peri: 5 },
   { kcal: 3500, nComidas: 4, preferencia: 'omnivoro', objetivo: 'ganar', pesoKg: 100, peri: 2 },
   { kcal: 3500, nComidas: 2, preferencia: 'omnivoro', objetivo: 'ganar', pesoKg: 100, peri: 0 },
@@ -42,23 +56,29 @@ describe('generarEjemplos — tolerancias por comida', () => {
       it(`cierra dentro del ±10 % de kcal — ${etiqueta(plan)}`, () => {
         const ejemplos = generar(plan)
         for (const comida of ejemplos.entreno.comidas) {
-          const desviacion = Math.abs(comida.totales.kcal - comida.objetivo.kcal) / comida.objetivo.kcal
-          expect(desviacion, `${etiqueta(plan)} · ${comida.comida}: ${comida.totales.kcal} vs ${comida.objetivo.kcal}`)
-            .toBeLessThanOrEqual(0.1)
+          const desviacion =
+            Math.abs(comida.totales.kcal - comida.objetivo.kcal) / comida.objetivo.kcal
+          expect(
+            desviacion,
+            `${etiqueta(plan)} · ${comida.comida}: ${comida.totales.kcal} vs ${comida.objetivo.kcal}`,
+          ).toBeLessThanOrEqual(0.1)
         }
       })
 
       it(`cierra la proteína dentro del umbral terminal del ±15 % — ${etiqueta(plan)}`, () => {
         const ejemplos = generar(plan)
         for (const comida of ejemplos.entreno.comidas) {
-          const desviacion = Math.abs(comida.totales.prot - comida.objetivo.prot) / comida.objetivo.prot
+          const desviacion =
+            Math.abs(comida.totales.prot - comida.objetivo.prot) / comida.objetivo.prot
           if (desviacion > 0.15) {
             // §3.3 no permite imprimir un gramaje imposible en silencio: si la proteína no
             // cierra, el menú debe llevar su nota (y el aviso vegetal si la causa es esa).
             const conNota = ejemplos.entreno.notas.some(
               (n) => n.startsWith(`${comida.comida}:`) && n.includes('proteína'),
             )
-            expect(conNota, `${etiqueta(plan)} · ${comida.comida}: proteína fuera sin nota`).toBe(true)
+            expect(conNota, `${etiqueta(plan)} · ${comida.comida}: proteína fuera sin nota`).toBe(
+              true,
+            )
           } else {
             expect(desviacion).toBeLessThanOrEqual(0.15)
           }
@@ -78,18 +98,29 @@ describe('generarEjemplos — integridad de los datos', () => {
           expect(comida.alimentos.length, `${etiqueta(plan)} · ${comida.comida}`).toBeGreaterThan(0)
           for (const a of comida.alimentos) {
             expect(esFinito(a.gramos) && a.gramos > 0, `${a.id}`).toBe(true)
-            expect(esFinito(a.kcal) && esFinito(a.prot) && esFinito(a.carb) && esFinito(a.fat)).toBe(true)
+            expect(
+              esFinito(a.kcal) && esFinito(a.prot) && esFinito(a.carb) && esFinito(a.fat),
+            ).toBe(true)
             expect(a.medida.trim().length, `${a.id} sin medida casera`).toBeGreaterThan(0)
             const alimento = alimentoPorId(a.id)
             expect(alimento, `${a.id} no está en la base`).toBeDefined()
             const paso = esContable(alimento!) ? alimento!.unidad_g : a.gramos >= 100 ? 10 : 5
-            expect(a.gramos % paso, `${a.id}: ${a.gramos} g no cae en la rejilla de ${paso} g`).toBe(0)
+            expect(
+              a.gramos % paso,
+              `${a.id}: ${a.gramos} g no cae en la rejilla de ${paso} g`,
+            ).toBe(0)
           }
-          for (const valor of [comida.totales.kcal, comida.totales.prot, comida.totales.carb, comida.totales.fat]) {
+          for (const valor of [
+            comida.totales.kcal,
+            comida.totales.prot,
+            comida.totales.carb,
+            comida.totales.fat,
+          ]) {
             expect(esFinito(valor)).toBe(true)
           }
         }
-        for (const valor of Object.values(ejemplos.entreno.totales)) expect(esFinito(valor)).toBe(true)
+        for (const valor of Object.values(ejemplos.entreno.totales))
+          expect(esFinito(valor)).toBe(true)
       }
     })
 
@@ -183,21 +214,30 @@ describe('generarEjemplos — preferencias dietéticas', () => {
       const ejemplos = generar(plan)
       const desviacion =
         Math.abs(ejemplos.entreno.totales.carb - resultado.macros.hc_g) / resultado.macros.hc_g
-      expect(desviacion, `${etiqueta(plan)}: ${ejemplos.entreno.totales.carb} vs ${resultado.macros.hc_g} g`)
-        .toBeLessThanOrEqual(0.2)
+      expect(
+        desviacion,
+        `${etiqueta(plan)}: ${ejemplos.entreno.totales.carb} vs ${resultado.macros.hc_g} g`,
+      ).toBeLessThanOrEqual(0.2)
     }
   })
 
   it('usa la preferencia efectiva del motor: diabetes + low_carb cae en el banco omnívoro', () => {
     const plan: OpcionesPlan = { kcal: 2200, nComidas: 4, preferencia: 'omnivoro', peri: 2 }
-    const inputs = { ...inputsDe(plan), preferencia: 'low_carb' as const, condiciones: ['diabetes' as const] }
+    const inputs = {
+      ...inputsDe(plan),
+      preferencia: 'low_carb' as const,
+      condiciones: ['diabetes' as const],
+    }
     const ejemplos = generarEjemplos(inputs, resultadoDe(plan))
     const ids = ejemplos.entreno.comidas.flatMap((c) => c.alimentos.map((a) => a.id))
     const cerealesNormales = ids.filter((id) => {
       const a = alimentoPorId(id)!
       return a.grupo === 'carbohidrato' && !a.tags.includes('low_carb')
     })
-    expect(cerealesNormales.length, 'el banco low-carb no habría usado cereales normales').toBeGreaterThan(0)
+    expect(
+      cerealesNormales.length,
+      'el banco low-carb no habría usado cereales normales',
+    ).toBeGreaterThan(0)
     expect(ejemplos.entreno.notas.some((n) => n.includes('insulina'))).toBe(true)
   })
 })
@@ -246,35 +286,56 @@ describe('generarEjemplos — textos, notas y consejos', () => {
         expect(ejemplos.consejos.length, etiqueta(plan)).toBeGreaterThanOrEqual(3)
         expect(ejemplos.consejos.length, etiqueta(plan)).toBeLessThanOrEqual(5)
         for (const comida of ejemplos.entreno.comidas) {
-          expect(comida.alternativas.length, `${etiqueta(plan)} · ${comida.comida}`).toBeGreaterThanOrEqual(2)
+          expect(
+            comida.alternativas.length,
+            `${etiqueta(plan)} · ${comida.comida}`,
+          ).toBeGreaterThanOrEqual(2)
           expect(comida.alternativas.length).toBeLessThanOrEqual(3)
-          for (const alt of comida.alternativas) expect(alt).toMatch(/^Cambia \d+ g de .+ por \d+ g de .+\.$/)
+          for (const alt of comida.alternativas)
+            expect(alt).toMatch(/^Cambia \d+ g de .+ por \d+ g de .+\.$/)
         }
       }
     }
   })
 
   it('reparte en varios platos las tomas que no caben en uno solo', () => {
-    const plan: OpcionesPlan = { kcal: 3500, nComidas: 2, preferencia: 'omnivoro', pesoKg: 100, peri: 0 }
+    const plan: OpcionesPlan = {
+      kcal: 3500,
+      nComidas: 2,
+      preferencia: 'omnivoro',
+      pesoKg: 100,
+      peri: 0,
+    }
     const ejemplos = generar(plan)
     const grandes = ejemplos.entreno.comidas.filter((c) => c.objetivo.kcal > 900)
     expect(grandes.length).toBeGreaterThan(0)
     for (const c of grandes) {
       expect(
-        ejemplos.entreno.notas.some((n) => n.startsWith(`${c.comida}:`) && /(dos|tres|cuatro) platos/.test(n)),
+        ejemplos.entreno.notas.some(
+          (n) => n.startsWith(`${c.comida}:`) && /(dos|tres|cuatro) platos/.test(n),
+        ),
         `${c.comida} sin nota de reparto en platos`,
       ).toBe(true)
     }
   })
 
   it('resuelve las tomas pequeñas con una plantilla de snack', () => {
-    const plan: OpcionesPlan = { kcal: 1300, nComidas: 6, preferencia: 'omnivoro', pesoKg: 55, peri: null }
+    const plan: OpcionesPlan = {
+      kcal: 1300,
+      nComidas: 6,
+      preferencia: 'omnivoro',
+      pesoKg: 55,
+      peri: null,
+    }
     const ejemplos = generar(plan)
     const pequenas = ejemplos.entreno.comidas.filter((c) => c.objetivo.kcal < 150)
     for (const c of pequenas) {
       expect(c.alimentos.length, `${c.comida}`).toBeLessThanOrEqual(3)
       const desviacion = Math.abs(c.totales.kcal - c.objetivo.kcal) / c.objetivo.kcal
-      expect(desviacion, `${c.comida}: ${c.totales.kcal} vs ${c.objetivo.kcal}`).toBeLessThanOrEqual(0.1)
+      expect(
+        desviacion,
+        `${c.comida}: ${c.totales.kcal} vs ${c.objetivo.kcal}`,
+      ).toBeLessThanOrEqual(0.1)
     }
   })
 
@@ -322,7 +383,10 @@ describe('generarEjemplos — cobertura del banco', () => {
       const plan: OpcionesPlan = { kcal: 2600, nComidas: 6, preferencia, pesoKg: 85, peri: 5 }
       const ejemplos = generar(plan)
       const ids = new Set(ejemplos.entreno.comidas.flatMap((c) => c.alimentos.map((a) => a.id)))
-      expect(ids.size, `${preferencia}: solo ${ids.size} alimentos distintos`).toBeGreaterThanOrEqual(6)
+      expect(
+        ids.size,
+        `${preferencia}: solo ${ids.size} alimentos distintos`,
+      ).toBeGreaterThanOrEqual(6)
       for (const id of ids) expect(ALIMENTOS.some((a) => a.id === id)).toBe(true)
     }
   })
@@ -341,7 +405,10 @@ describe('generarEjemplos — tomas repartidas en varios platos (§3.3)', () => 
           const ejemplos = generarEjemplos(inputs, resultadoDe(opciones))
           for (const c of ejemplos.entreno.comidas) {
             const ids = c.alimentos.map((a) => a.id)
-            expect(new Set(ids).size, `${preferencia} ${plan.kcal} ${c.comida}: ${ids.join(' ')}`).toBe(ids.length)
+            expect(
+              new Set(ids).size,
+              `${preferencia} ${plan.kcal} ${c.comida}: ${ids.join(' ')}`,
+            ).toBe(ids.length)
           }
           if (ejemplos.entreno.notas.some((n) => n.includes('va repartido en'))) conVariosPlatos++
         }

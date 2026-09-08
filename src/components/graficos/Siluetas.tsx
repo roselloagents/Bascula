@@ -112,7 +112,8 @@ export function SiluetaGrasa({
   alto?: number
 }) {
   const tabla = sexo === 'mujer' ? GRASA_MUJER : GRASA_HOMBRE
-  const proporciones = tabla[categoria] ?? (sexo === 'mujer' ? GRASA_MUJER.media : GRASA_HOMBRE.medio)
+  const proporciones =
+    tabla[categoria] ?? (sexo === 'mujer' ? GRASA_MUJER.media : GRASA_HOMBRE.medio)
   return <Silueta proporciones={proporciones} alto={alto} />
 }
 
@@ -186,7 +187,12 @@ export function IlustracionMedidas({ sexo }: { sexo: Sexo }) {
 
   return (
     <figure className="figura-medidas">
-      <svg viewBox="0 0 200 208" height="240" role="img" aria-label="Dónde colocar la cinta métrica">
+      <svg
+        viewBox="0 0 200 208"
+        height="240"
+        role="img"
+        aria-label="Dónde colocar la cinta métrica"
+      >
         <g color="var(--tinta-suave)">
           <Silueta proporciones={proporciones} alto={200} />
         </g>
