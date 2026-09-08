@@ -2,17 +2,43 @@
 
 Calculadora de calorías y macronutrientes en español. Contestas trece preguntas cortas —sexo,
 edad, altura, peso, condiciones médicas, grasa corporal, constitución, actividad, entrenamiento,
-objetivo, ritmo, peso al que quieres llegar y forma de comer; catorce si eres mujer, con la de la
-regla— y devuelve tu objetivo de calorías, el reparto en proteína, grasa, hidratos y fibra, la
-hidratación, el reparto por comidas, un menú de ejemplo con gramajes reales, la lista de la compra
-de la semana, la curva de peso esperada semana a semana y un informe en PDF.
+objetivo, peso al que quieres llegar, ritmo, forma de comer y qué alimentos no quieres ver;
+quince si eres mujer, con las del embarazo y la regla— y devuelve tu objetivo de calorías, el
+reparto en proteína, grasa, hidratos y fibra, la hidratación, el reparto por comidas, un menú de
+ejemplo con gramajes reales, la lista de la compra de la semana, la curva de peso esperada semana
+a semana y un informe en PDF.
 
 Es una aplicación de una sola página, **sin servidor y sin base de datos**: todo el cálculo ocurre
 en el navegador y lo único que se guarda es un borrador en el `localStorage` del propio dispositivo.
 No hay cuentas, no hay analítica y ningún dato sale del móvil: la página no hace una sola petición
 a un tercero, ni siquiera para las tipografías, que van autoalojadas en `public/fonts`.
 
-## Qué trae la v1.1
+## Qué trae la v1.2
+
+Cuatro cosas que salieron de escuchar a una usuaria de verdad usando la v1.1:
+
+- **Alimentos que no te gustan y favoritos.** La última pregunta del cuestionario deja marcar, con
+  chips agrupados por tipo de alimento, lo que no quieres ver y lo que sí te apetece comer. Un
+  alimento tachado no aparece en ningún sitio —ni en el menú, ni en las sustituciones, ni en las
+  equivalencias, ni en la lista de la compra— y los favoritos entran los primeros. Solo se enseñan
+  los alimentos que encajan con tu forma de comer: una vegana no ve pollo. Desde la pantalla de
+  resultados, cada alimento del menú lleva un **"No me gusta"** que rehace el menú y la compra al
+  momento (con "Deshacer"), sin tocar ni una caloría del plan.
+- **Peso objetivo y plazo.** Si tienes una fecha en mente, la dices: "5 kg en 12 semanas". El motor
+  elige el ritmo más suave de su tabla que llegue a tiempo, y si no llega ninguno te lo dice en
+  vez de prometerte lo que no puede cumplir. Los suelos de seguridad siguen mandando por encima
+  del plazo.
+- **Recomposición con peso objetivo.** Quien recompone con prioridad en perder grasa ya tiene su
+  peso objetivo y su proyección: una banda entre lo que baja la báscula por el déficit y lo que se
+  queda igual porque el músculo compensa. Sin fecha, porque en recomposición no se puede prometer:
+  la báscula baja más despacio de lo que cambia el cuerpo. Mide también la cintura.
+- **Síntomas de la regla.** Al decir que la tienes puedes marcar qué notas esos días —dolor,
+  hinchazón, antojos, cansancio, sangrado abundante— y la tarjeta del ciclo pasa a dar consejos
+  concretos sobre alimentos (hierro con vitamina C para el sangrado, omega-3 y magnesio para el
+  dolor, potasio para la hinchazón) y una sección opcional en la lista de la compra. **No cambia
+  ni un número del plan**, y así se dice.
+
+## Qué traía la v1.1
 
 Cuatro cosas que salieron del uso real, no de una lista de ideas:
 
@@ -61,6 +87,12 @@ Sin magia y sin cajas negras: el cálculo es una implementación literal de
    la semana en como mucho doce alimentos distintos.
 8. **Ajuste manual (paso 18)**: una función aparte, `ajustarMacros`, que parte siempre del plan
    recomendado y rehace todo lo derivado. En `localStorage` se guarda solo el ajuste, nunca el plan.
+9. **Ciclo (paso 19)**: los síntomas de la regla no entran en ninguna fórmula; solo eligen qué
+   consejos y qué alimentos se enseñan en la tarjeta del ciclo y en la compra opcional.
+
+Los alimentos que marcas como favoritos o como "no me gusta" **no entran en ningún cálculo**: solo
+ordenan y filtran el menú, la compra y las equivalencias, así que cambiarlos no mueve tus calorías
+ni invalida el ajuste manual que tuvieras guardado.
 
 Todo es determinista: los mismos datos dan siempre el mismo plan, sin `Math.random` en ninguna
 parte. Hay cortes de seguridad —menores de 18 y mayores de 75, embarazo y lactancia, condición
@@ -70,7 +102,7 @@ renal o hepática— en los que la aplicación deriva a un profesional en vez de
 
 | Documento | Qué contiene |
 | --- | --- |
-| [`docs/SPEC-calculo.md`](docs/SPEC-calculo.md) | Los dieciocho pasos del motor (el 18 es el ajuste manual), las tablas, los avisos y los dieciséis vectores de prueba. |
+| [`docs/SPEC-calculo.md`](docs/SPEC-calculo.md) | Los diecinueve pasos del motor (el 18 es el ajuste manual y el 19, los consejos del ciclo), las tablas, los avisos y los diecinueve vectores de prueba. |
 | [`docs/SPEC-ux-comidas-pdf.md`](docs/SPEC-ux-comidas-pdf.md) | El cuestionario, la pantalla de resultados, el panel de ajuste, la proyección y el seguimiento, el generador de menús, la lista de la compra y el PDF. |
 | [`docs/CONTRATO.md`](docs/CONTRATO.md) | La API entre módulos: `Inputs`, `Resultado`, `Ejemplos`, `ListaCompra` y `DatosPdf`. |
 | [`docs/DESIGN-brief.md`](docs/DESIGN-brief.md) | Identidad visual: paleta, tipografía, tono y reglas de composición. |
@@ -101,7 +133,7 @@ scripts/       Utilidades de desarrollo (generar PDF de muestra sin navegador).
 | `npm test` | Suite de Vitest: motor, menús, lista de la compra, PDF y accesibilidad. |
 | `npm run lint` | ESLint sobre todo el proyecto. |
 | `npm run typecheck` | `tsc -b --noEmit` sin generar nada. |
-| `node docs/verify-vectors.mjs` | Verifica los dieciséis vectores de la §5 y un barrido de invariantes contra la implementación de referencia. |
+| `node docs/verify-vectors.mjs` | Verifica los diecinueve vectores de la §5 y un barrido de invariantes contra la implementación de referencia. |
 | `node scripts/pdf-sample.mjs [carpeta]` | Genera los PDF de muestra sin abrir el navegador. |
 
 Requisitos: Node.js 20 o superior y npm. `npm install` y a correr.

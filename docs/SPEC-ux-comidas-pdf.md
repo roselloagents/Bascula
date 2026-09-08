@@ -1230,9 +1230,20 @@ Los puntos importantes, escritos como reglas y no como intención:
 - **Los favoritos no saltan ningún filtro.** Un favorito que no pasa la base, las restricciones o la
   `FoodQuery` simplemente no aparece en esa consulta; ser favorito solo cambia el **orden**, nunca la
   validez. Esto es lo que impide que "me encanta el queso" meta queso en la consulta de carbohidrato.
-- **La rotación se aplica sobre la lista ya ordenada.** El desplazamiento por usuario y por comida sigue
-  igual (§3.2): lo único que cambia es qué hay en la posición 0. En modo sencillo y en tomas ligeras,
-  donde la rotación ya arrancaba en 0, el favorito gana directamente.
+- **Los favoritos son una cabecera fija: la rotación se aplica solo al resto de la lista.** El
+  desplazamiento por usuario y por comida sigue siendo el de §3.2, pero se calcula **sobre la lista sin
+  los favoritos**, y estos se anteponen después. Escrito como "la rotación desplaza la lista entera" la
+  regla se vuelve contra sí misma: marcar la ternera como favorita corría la lista y podía **sacar** la
+  ternera del menú, que es exactamente lo contrario de lo que pide el usuario. Con la cabecera fija,
+  sin favoritos el orden que sale es idéntico al de la v1.1 (verificado con un volcado alimento a
+  alimento de los catorce vectores en los dos modos) y con favoritos el alimento entra de verdad.
+- **Ningún alimento ocupa dos anclas del mismo plato.** Un favorito que sirve para dos roles (el atún
+  como proteína y la legumbre como proteína *y* carbohidrato) producía "atún, atún y arroz" o una
+  comida entera de garbanzos. Cada ancla posterior de un plato descarta primero lo que ya está en ese
+  plato —en `preferidos` y, si ahí no queda nada, en `reserva`—; solo si no queda ningún otro
+  candidato se permite la repetición, porque antes un plato con el mismo alimento dos veces que un
+  plato sin ancla (§3.2, punto 4). La guarda **solo se activa para quien ha marcado algo en el paso
+  14**: sin listas, ni un menú de la v1.1 se mueve.
 - **Determinismo total.** Las dos listas son entradas del generador como cualquier otra: mismos inputs →
   mismo menú, sin `Math.random` en ninguna parte.
 
@@ -1268,6 +1279,13 @@ de 12 alimentos distintos**:
    mínimos (2 candidatos en `proteina` y en `carbohidrato`, 1 en `grasa`, `verdura` y `fruta`) y en el
    mismo orden (fila `omnivoro` → resto de la base por `id` → desactivar el modo sencillo). Ningún
    relleno puede meter un excluido.
+5. **El tope de 12 se comprueba sobre la semana ya construida, no sobre la lista corta.** El
+   intercambio del punto 3 no basta: un favorito puede ganar unas consultas y no otras, y sumar así un
+   decimotercer alimento distinto. Se genera la semana entera, se cuentan los alimentos distintos y, si
+   pasan de 12, **se retira el último favorito** (el orden del usuario es la prioridad) y se vuelve a
+   generar, hasta que quepa. Un favorito que no cabe no entra, que es lo que ya autoriza el punto 3.
+   En la práctica esto pasa con las bases más cortas: en vegano y en vegetariano, `garbanzos_cocidos`
+   marcado como favorito se queda fuera y el menú sale igual que sin marcarlo.
 
 #### Regla de respaldo cuando las exclusiones vacían una consulta (normativa)
 
