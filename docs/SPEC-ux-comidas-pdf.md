@@ -432,8 +432,12 @@ Sin pantalla adicional: se usa directamente CUN-BAE. Microcopy de confirmación 
 **Nudge bajo la subpregunta (v1.2, decisión H).** Cuando dentro de la subpregunta se marca **"Perder
 grasa"**, aparece debajo, en tono de nota y sin ningún botón ni bloqueo:
 
-> "Si lo que quieres sobre todo es que la báscula baje varios kilos, elige Perder grasa: tendrás ritmo,
-> peso objetivo y fecha."
+> "Si lo que quieres sobre todo es que la báscula baje varios kilos, vuelve arriba y elige el objetivo
+> «Perder grasa» en vez de Recomposición: tendrás ritmo, peso objetivo y fecha."
+
+El texto nombra **el objetivo de arriba**, no la opción de la subpregunta (v1.2, revisión): las dos se
+llaman "Perder grasa" y están en la misma pantalla, a dos centímetros una de otra, así que el nudge se
+leía como "elige la opción que ya tienes elegida".
 
 Solo se muestra con `recomposicion_prioridad === 'perder'`, y no cambia nada por sí mismo: es
 información, no una corrección. Viene del feedback real —*"estoy en el rango normal hacia arriba, por lo
@@ -496,6 +500,18 @@ ir el peso. No te vamos a dar una fecha: en recomposición no se puede."
 
 **Microcopy si elige dar un número:** debajo del input, en cuanto hay un valor, texto dinámico de previsualización simple (sin recalcular el motor completo, solo una estimación de IMC): "Eso supondría un IMC aproximado de {imc}." Si ese IMC cae por debajo de 18,5, se añade: "Es un IMC de bajo peso: en resultados te explicaremos por qué te proponemos ajustarlo." (sin bloquear el avance; el ajuste real ocurre en el motor, `[Paso 13]`, y se comunica como aviso en resultados).
 
+**La nota es un aviso de seguridad y tiene que llegar a todo el mundo** (v1.2, revisión): lleva `id`,
+`role="status"` y `aria-live="polite"`, y el campo numérico la referencia con `aria-describedby`, el
+mismo patrón que la nota de "Para seguir, falta …" del cuestionario. Era la única nota del wizard que
+no se anunciaba, y justamente la que el dueño pidió con todas las letras ("si digo 40 kilos, que
+avise").
+
+**Y avisa también en el sentido contrario** (v1.2, revisión): con `objetivo === 'perder'` y un peso
+objetivo **por encima** del actual (o `ganar` con uno por debajo), a partir de 1 kg de diferencia, la
+misma nota añade "Ese peso está por encima del que tienes ahora y tu objetivo es perder grasa: revisa
+uno de los dos." No bloquea nada —la regla 6.2 del motor ya reconvierte el objetivo—, pero el paso
+sabía detectar la incoherencia por abajo (IMC < 18,5) y callaba en la simétrica.
+
 **Validación:** si se elige "Sí" pero se deja vacío → no se avanza. Fuera de 30-300 kg → `[ERR_INPUT_RANGO]`.
 
 ---
@@ -532,6 +548,11 @@ barra de progreso (no es un paso):
   días y `max` = hoy + 364 días. La fecha se convierte a semanas con
   `plazo_semanas = round((fecha − hoy) / 7)` y se **acota a [4, 52]**; el chip correspondiente queda
   marcado si coincide. En `InputCalculo` viaja siempre `plazo_semanas`, nunca una fecha.
+  **Al abrir el campo se desmarca el chip elegido antes y `plazo_semanas` vuelve a `null`** (v1.2,
+  revisión): con el campo vacío y el chip todavía marcado no se sabía cuál manda, la previsualización
+  seguía enseñando el número viejo y, si el usuario no llegaba a escribir una fecha, el plan salía con
+  el chip anterior sin decírselo. Mientras no haya fecha, la previsualización dice "Pon la fecha y te
+  decimos cuántos gramos por semana serían.".
 - **Previsualización honesta (obligatoria, `aria-live="polite"`).** En cuanto hay plazo, debajo del
   selector, con el signo correcto según la dirección:
   > "Son {|peso_objetivo − peso| con un decimal} kg en {plazo_semanas} semanas: unos
@@ -615,7 +636,11 @@ usuaria: *"lo primero que me ha puesto es el brócoli y a mí el brócoli no me 
 hay alguno que te encanta, márcalo como favorito y lo pondremos primero. Esto no cambia ni una caloría
 de tu plan: solo cambia qué comes."
 
-**Control segmentado, arriba y fijo al hacer scroll (dos opciones, `role="radiogroup"`):**
+**Control segmentado, arriba y fijo al hacer scroll (dos opciones, `role="radiogroup"`).** Cumple el
+patrón ARIA completo: **un solo botón en el orden de tabulación** (`tabIndex = 0` el seleccionado, `-1`
+el otro) y las flechas izquierda/derecha y arriba/abajo mueven la selección y el foco. La barra fija
+lleva además el **resumen vivo** repetido (abajo), porque la pantalla mide cuatro pantallas de móvil y
+el recuento del final no se veía nunca.
 
 | Segmento | Valor | Estado inicial |
 |---|---|---|
@@ -635,7 +660,7 @@ tarjeta del ciclo y en la sección opcional de la compra, así que tienen que po
 | Grupo en pantalla | Regla de pertenencia (determinista, sobre `foods.json`) |
 |---|---|
 | Carne y pescado | `grupo === 'proteina'` y no cae en ninguna de las dos filas siguientes |
-| Huevos y lácteos | `grupo === 'lacteo'`, o `id ∈ {huevo_entero, clara_huevo}` |
+| Huevos, lácteos y bebidas vegetales | `grupo === 'lacteo'`, o `id ∈ {huevo_entero, clara_huevo}` |
 | Legumbres y soja | `grupo === 'proteina'` y (`tags` incluye `vegano` o `roles` incluye `carbohidrato`) |
 | Arroz, pasta, pan y patata | `grupo === 'carbohidrato'` |
 | Frutas | `grupo === 'fruta'` |
@@ -644,7 +669,10 @@ tarjeta del ciclo y en la sección opcional de la compra, así que tienen que po
 
 Las tres filas de `grupo === 'proteina'` se evalúan **en el orden de la tabla**: primero huevos, después
 legumbres y soja, y lo que queda es carne y pescado. Así `huevo_entero` (vegetariano pero no vegano) cae
-en "Huevos y lácteos" y `tofu` o `lentejas_cocidas`, en "Legumbres y soja". Un grupo sin ningún alimento
+en el grupo de los lácteos y `tofu` o `lentejas_cocidas`, en "Legumbres y soja". El rótulo de ese
+grupo nombra las bebidas vegetales (v1.2, revisión): viven en `grupo === 'lacteo'` por su papel en el
+menú, pero quien no toma lácteos las busca justo ahí y leía "Huevos y lácteos" como "aquí no hay nada
+para mí". Un grupo sin ningún alimento
 que pase el filtro **no se pinta** (una vegana no ve el encabezado "Carne y pescado" vacío). Dentro de
 cada grupo, los chips van ordenados por `nombre_corto` con `localeCompare('es')`.
 
@@ -664,10 +692,15 @@ equivalencias y en la lista de la compra.
    la regla de respaldo de §3.2b, que es donde se puede hacer bien.
 
 **Resumen vivo**, justo encima de la barra de navegación, en una región `aria-live="polite"`:
-"{n} que no te gustan · {m} favoritos". Con cero de los dos no se pinta.
+"{n} que no te gustan · {m} favoritos". Con cero de los dos no se pinta. El mismo texto se repite en la
+barra pegada arriba, junto al control segmentado.
 
 **Botón de salida (copy literal):** "Seguir sin marcar nada", como acción secundaria junto a "Ver mi
-plan". Envía las dos listas vacías. El botón primario **nunca** está deshabilitado en este paso.
+plan". Envía las dos listas vacías. **Solo se pinta mientras no hay nada marcado** (v1.2, revisión):
+en cuanto el usuario marca un alimento, ese botón pasa a ser uno que borra sus dos listas sin
+confirmación y con un rótulo que miente —y el momento en que más tiene que perder es justo cuando llega
+desde el enlace "Cambiar" de resultados, con sus exclusiones ya guardadas—. Con algo marcado queda solo
+"Ver mi plan". El botón primario **nunca** está deshabilitado en este paso.
 
 **Campos:** `alimentos_excluidos: string[]` y `alimentos_favoritos: string[]` (ids de `foods.json`).
 `alimentos_favoritos` viaja **en el orden en que el usuario los marcó** —ese orden es normativo (§3.2b)—;
@@ -852,9 +885,14 @@ alerta. Al pulsarla, **en este orden y sin salir de la pantalla**:
    **No se vuelve a llamar al motor**: `calcular` ignora estas listas (`SPEC-calculo.md` §0.3), así que
    ni las calorías ni los macros ni la proyección pueden moverse. Tampoco cambia `firmaDeInputs`, así que
    el ajuste manual guardado y los pesajes siguen en pie.
-3. Aparece un aviso efímero (`role="status"`) durante **6 segundos**, anclado al bloque de menús:
-   **"Fuera {nombre}. Hemos rehecho el menú y la compra."** con un botón **"Deshacer"** que retira el id
-   de la lista y vuelve a regenerar. Pasados los 6 s el aviso desaparece; el cambio, no.
+3. Aparece un aviso efímero (`role="status"`) durante **6 segundos**, como **barra fija abajo** y con
+   el foco puesto en su botón: **"Fuera {nombre}. Hemos rehecho el menú y la compra."** con un botón
+   **"Deshacer"** que retira el id de la lista y vuelve a regenerar. Pasados los 6 s el aviso
+   desaparece; el cambio, no. La barra fija y el foco son de la v1.2 (revisión): pintado al final del
+   día, el aviso quedaba a tres pantallas por debajo del alimento que se acababa de quitar —2 725 px
+   en un móvil de 375 × 812 al quitar algo del desayuno—, desaparecía a los ocho segundos sin que
+   nadie lo viera y la acción era, de hecho, irreversible desde resultados. Con el foco en "Deshacer"
+   es además alcanzable con teclado y con lector de pantalla.
 4. Si al regenerar el generador ha tenido que usar igualmente el alimento en algún rol obligatorio
    (regla de respaldo de §3.2b), su aviso —"No hemos podido evitar {alimento} en {comida}"— se pinta
    donde el resto de notas del menú, con el texto que trae `ejemplos.avisos_menu`.
@@ -864,8 +902,13 @@ del menú y encima de las equivalencias:
 
 > "Sin: brócoli, coliflor · Favoritos: pollo, arroz  ·  [Cambiar]"
 
-Los nombres son `nombre_corto` (§3.0), separados por ", " y en el orden de cada lista (los favoritos, en
-el del usuario). Cada mitad se omite si su lista está vacía. **"Cambiar"** es un enlace que lleva al
+Los nombres son `nombre_corto` (§3.0), separados por ", " y **ordenados alfabéticamente en español**
+(`localeCompare('es')`): el orden interno de los excluidos es por `id`, que es estable para el borrador
+pero se lee como una lista desordenada ("Brócoli, Lomo de cerdo, Coliflor, Judía verde"). Cada mitad se
+**corta en seis nombres** y sigue con "y N más" —con 54 exclusiones el bloque medía 421 px de alto y
+748 caracteres—, y de los favoritos se nombran los de `ejemplos.favoritos_aplicados` (§3.2b), no los del
+cuestionario. Si algún favorito marcado no ha entrado, una línea pequeña lo dice ("2 favoritos más no
+han entrado en el menú de esta semana"). Cada mitad se omite si su lista está vacía. **"Cambiar"** es un enlace que lleva al
 **paso 14** del wizard con el borrador cargado; al volver a "Ver mi plan" desde ahí, la huella del plan
 no ha cambiado, así que se recupera el ajuste manual tal cual.
 
@@ -899,10 +942,11 @@ Va **justo debajo del bloque de ejemplos de menú y de sus equivalencias**, pleg
 
 ### 2.6 Peso objetivo y cronograma
 
-**Qué número se enseña (regla normativa, `peso_objetivo.mostrar_central`).** El motor devuelve `mostrar_central: boolean`. Cuando es `false` —fiabilidad `baja` del %grasa, que es el caso por defecto, o un peso objetivo corregido por `WARN_OBJETIVO_GRASA_MUY_BAJA`— **no se muestra ningún número grande**: solo la franja, "entre {rango[0]} y {rango[1]} kg", con el copy "tu masa magra es una estimación con varios kilos de margen, así que te damos una franja y no un número". El valor central sigue existiendo en la salida porque el cronograma necesita un punto de llegada, pero no se presenta como "tu objetivo". Esta regla vale igual en pantalla y en el PDF (§4.5).
+**Qué número se enseña (regla normativa, v1.2 revisión).** El motor devuelve `mostrar_central: boolean`, `false` cuando la fiabilidad del %grasa es `baja` (el caso por defecto) o cuando el peso objetivo se corrigió por `WARN_OBJETIVO_GRASA_MUY_BAJA`. La franja como titular se reserva ahora para **quien no ha dado ninguna meta**: si el usuario ha escrito un peso objetivo, su cifra manda siempre. Titular una franja propuesta —que además dejaba su número fuera: "Entre 53 y 62 kg" para quien había pedido 63— mientras la gráfica, la tabla de la proyección y los avisos del plazo sí hablaban de sus 63 kg era romper la promesa de la decisión H en la única tarjeta donde se responde. Esta regla vale igual en pantalla y en el PDF (§4.5).
 
-- Si `peso_objetivo.efectivo !== null` **y** `mostrar_central === true`: número grande "{peso_objetivo.efectivo} kg" con etiqueta "tu objetivo" y, si venía de "no lo sé", nota: "Te proponemos este peso según tu altura y tu %grasa actual; puedes cambiarlo cuando quieras."
-- Si `peso_objetivo.efectivo !== null` y `mostrar_central === false`: franja "entre {rango[0]} y {rango[1]} kg" con el mismo tamaño de tipografía que el resto de cifras secundarias, sin número destacado.
+- Si `peso_objetivo.efectivo !== null` **y** (`mostrar_central === true` **o** `inputs.peso_objetivo !== null`): número grande "{peso_objetivo.efectivo} kg". La etiqueta es "tu objetivo" si el número lo dio el usuario y "el peso que te proponemos" si lo propuso el motor, y en ese segundo caso va con la nota: "Te proponemos este peso según tu altura y tu %grasa actual; puedes cambiarlo cuando quieras."
+- Si además `mostrar_central === false` (grasa estimada), debajo del número van dos notas: "Por tu masa magra estimada te propondríamos entre {rango[0]} y {rango[1]} kg, pero el número que manda es el tuyo" y la nota fija de peso objetivo. La franja no desaparece: baja a nota.
+- Si `peso_objetivo.efectivo !== null`, `mostrar_central === false` **y** el usuario no dio meta: franja "entre {rango[0]} y {rango[1]} kg" como titular, con el mismo tamaño de tipografía que el resto de cifras secundarias y el copy "tu masa magra es una estimación con varios kilos de margen, así que te damos una franja y no un número".
 - Si hay `hito_intermedio`: tarjeta secundaria "Primer hito: {hito_intermedio} kg" con copy: "Cuando el camino es largo, ir por etapas ayuda a no perder la motivación."
 - Si `cronograma !== null`: línea de tiempo simple con:
   - "Entre {semanas[0]} y {semanas[1]} semanas". El formato de las fechas lo manda `cronograma.precision_fecha`: con `'dia'` se imprime la fecha completa ("de {fecha_min} a {fecha_max}"); con `'mes'` **solo mes y año** ("hacia junio de 2027"), porque un calendario exacto a 40 semanas es el mecanismo clásico de abandono cuando no se cumple.
@@ -927,7 +971,7 @@ Va inmediatamente debajo del bloque de peso objetivo y cronograma, con el encabe
 - **Móvil primero.** `viewBox` fijo con `preserveAspectRatio="xMidYMid meet"` y `width: 100%`, altura entre 180 y 220 px. Nada de scroll horizontal: si no caben las etiquetas del eje X, se pintan una de cada dos.
 - **Temas.** Todos los colores salen de variables CSS; la gráfica se ve igual en claro y en oscuro.
 
-**Accesibilidad (obligatoria).** El `<svg>` lleva `role="img"` y un `aria-label` con el resumen ("Proyección de peso: de 78,0 kg en la semana 0 a entre 68,0 y 68,0 kg en la semana 22"). Además, **debajo de la gráfica y siempre presente en el DOM**, un `<details>` con el rótulo "Ver los números" que contiene la **tabla equivalente** con una fila por semana y las columnas *Semana · Mínimo · Esperado · Máximo*. La tabla no es un extra: es la versión accesible de la gráfica y tiene que llevar exactamente los mismos números.
+**Accesibilidad (obligatoria).** El `<svg>` lleva `role="img"` y un `aria-label` con el resumen ("Proyección de peso: de 78,0 kg en la semana 0 a entre 71,0 y 74,0 kg en la semana 22"). **Cuando los dos extremos de la banda final redondean al mismo número, la frase dice "a 63 kg en la semana 18"** y no "entre 63 y 63 kg" (v1.2, revisión): quien no ve la gráfica recibía una frase rota justo en el caso más frecuente, el de la banda cerrada sobre la meta. Además, **debajo de la gráfica y siempre presente en el DOM**, un `<details>` con el rótulo "Ver los números" que contiene la **tabla equivalente** con una fila por semana y las columnas *Semana · Mínimo · Esperado · Máximo*. La tabla no es un extra: es la versión accesible de la gráfica y tiene que llevar exactamente los mismos números.
 
 **Copy fijo bajo la gráfica** (la "Nota proyección" de `SPEC-calculo.md` §4, íntegra): "Esta curva es una estimación, no una promesa: sale de tu déficit actual y de un factor de adaptación que crece con el tiempo. Tu peso real va a oscilar por agua, sal e intestino; lo que importa es la tendencia de varias semanas, no el dato de un día."
 
@@ -951,9 +995,14 @@ Debajo de la proyección, plegado por defecto. Encabezado **"Tu seguimiento en e
   valor fuera de rango, va el texto correspondiente en un `<p>` con `role="alert"` y el `<input>` con
   `aria-invalid="true"`:
   - anterior a `fecha_inicio` → **"Esa fecha es anterior al día en que empezaste el plan ({fecha}).
-    Elige una posterior."**
+    Elige una entre ese día y hoy."**
   - posterior a hoy → **"Todavía no puedes apuntar un peso de una fecha futura."**
   - vacía o no interpretable → **"Pon la fecha del día en que te pesaste."**
+  - **el primer día del plan** (`fecha_inicio === hoy`, y por tanto el rango válido es un único día),
+    los dos primeros mensajes se sustituyen por uno solo: **"Hoy es el primer día de tu plan: de
+    momento solo puedes apuntar el pesaje del {hoy}."** Con los mensajes generales, quien ponía una
+    fecha anterior leía "elige una posterior", ponía una posterior y leía "no puedes apuntar una fecha
+    futura", y se quedaba dando vueltas entre los dos (v1.2, revisión).
   El mensaje del peso sigue las mismas reglas: fuera de 30-300 kg → **"Pon un peso entre 30 y 300 kg."**
 - Si ya existe un pesaje en esa fecha, se **sustituye** (no se duplica) y se avisa con un texto breve: "Ya tenías un pesaje ese día; lo hemos actualizado."
 
@@ -1054,7 +1103,7 @@ Se muestra **siempre**, a todo el mundo, sin depender de ninguna respuesta, y ap
 |---|---|---|
 | `id` | string | Identificador único (validado: no hay duplicados) |
 | `nombre` | string | Nombre en español de España, con el estado entre paréntesis cuando importa ("Arroz blanco (cocido)") |
-| `nombre_corto` | string | **v1.2.** Nombre corto para los chips del paso 14 del wizard y para el resumen de §2.5: **máximo 18 caracteres**, en español, sin el estado entre paréntesis y sin la marca ("Pollo", "Brócoli", "Yogur griego 0%"). Obligatorio en todos los alimentos. El nombre largo se sigue usando en el menú, en las equivalencias, en la compra y en `Ejemplos.alimentos_ciclo` |
+| `nombre_corto` | string | **v1.2.** Nombre corto para los chips del paso 14 del wizard, para el resumen de §2.5 y para las notas del generador: **máximo 24 caracteres** (18 hasta la revisión de la v1.2: abreviar "Prot. de guisante" o "Queso batido s/lac" hacía el chip más corto y la pantalla peor, y en 375 px un chip largo simplemente ocupa su fila entera), en español, sin el estado entre paréntesis y sin la marca ("Pollo", "Brócoli", "Yogur griego 0%"). Obligatorio en todos los alimentos y **único**: dos alimentos que el usuario no pueda distinguir en un chip son un error de datos ("Soja seca" / "Soja hidratada", no "Soja text. seca" / "Soja texturizada"). El nombre largo se sigue usando en el menú, en las equivalencias, en la compra y en `Ejemplos.alimentos_ciclo` |
 | `grupo` | `'proteina' \| 'lacteo' \| 'carbohidrato' \| 'grasa' \| 'verdura' \| 'fruta'` | Familia alimentaria (se usa para las equivalencias y para el filtro `sin_lactosa`) |
 | `roles` | `('proteina' \| 'carbohidrato' \| 'grasa' \| 'verdura' \| 'fruta' \| 'complemento')[]` | **Rol funcional en el menú, independiente del grupo.** Las legumbres declaran `['proteina','carbohidrato']`; el yogur griego 0 %, `['proteina']`; el salmón, `['proteina','grasa']`. `'complemento'` es el rol de las bebidas de baja densidad que acompañan a un ancla sin ser ellas mismas el ancla (leches, kéfir, bebidas vegetales: 9 alimentos de la base). `FoodQuery` filtra por `roles`, no por `grupo` |
 | `estado` | `'crudo' \| 'cocido' \| 'seco' \| 'listo'` | Estado en que están medidos los macros. Determina los límites de ración (§3.3) |
@@ -1072,7 +1121,7 @@ Se muestra **siempre**, a todo el mundo, sin depender de ninguna respuesta, y ap
 1. **Las kcal de una comida se calculan siempre como `Σ (alimento.kcal · gramos / 100)`**, nunca como `4·P + 4·HC + 9·G`. La diferencia entre ambos métodos llega a 47 kcal por 100 g en alimentos ricos en fibra o en grasa (nueces 654 vs 701; almendras 579 vs 622; avena 389 vs 357), suficiente para hacer fallar por sí sola la validación del ±10 % de §3.3.
 2. Como `carbohidratos` incluye la fibra, el objetivo de HC del motor (que también es hidrato total) y el del menú son directamente comparables. `hc_netos` no entra en ningún cálculo del generador.
 3. `estado` es obligatorio y limita qué alimentos pueden entrar en una plantilla: **los cereales, pastas y arroces con `estado = 'crudo'` están excluidos del banco de plantillas** (solo aparecen en la tabla de equivalencias, etiquetados "en crudo"), porque las reglas de ración de §3.3 están escritas para el alimento tal y como se come.
-4. La validación de la base (test automático) comprueba: ids únicos; presencia de todos los campos obligatorios (incluido `nombre_corto`, no vacío y de **18 caracteres o menos**); `|kcal − (4P + 4HC + 9G)| / kcal ≤ 0,15`; `fibra ≤ carbohidratos`; `hc_netos = carbohidratos − fibra`; que todo alimento con `unidad_g` tenga también `unidad_nombre`; **que `grupo`, `estado`, `roles` y `tags` solo contengan valores del enum declarado en la tabla de arriba**; y **que todo alimento encaje en exactamente una fila de la tabla de `clampRacion` (§3.3): ni cero, ni dos o más**. Las dos últimas comprobaciones son nuevas: sin ellas, nueve alimentos con `roles: ['complemento']` —un valor que no existía en el enum— pasaban la validación entera siendo inalcanzables por rol para el generador, y una plantilla del banco vegano (VGN-DES-2) dependía de uno de ellos (`bebida_soja`). La cota **por arriba** (una sola fila aplicable) es igual de necesaria que la cota por abajo: con la tabla anterior la mantequilla encajaba en dos filas con mínimos de 5 g y de 100 g, y la validación no lo detectaba porque solo exigía "al menos una".
+4. La validación de la base (test automático) comprueba: ids únicos; presencia de todos los campos obligatorios (incluido `nombre_corto`, no vacío, **único** y de **24 caracteres o menos**); `|kcal − (4P + 4HC + 9G)| / kcal ≤ 0,15`; `fibra ≤ carbohidratos`; `hc_netos = carbohidratos − fibra`; que todo alimento con `unidad_g` tenga también `unidad_nombre`; **que `grupo`, `estado`, `roles` y `tags` solo contengan valores del enum declarado en la tabla de arriba**; y **que todo alimento encaje en exactamente una fila de la tabla de `clampRacion` (§3.3): ni cero, ni dos o más**. Las dos últimas comprobaciones son nuevas: sin ellas, nueve alimentos con `roles: ['complemento']` —un valor que no existía en el enum— pasaban la validación entera siendo inalcanzables por rol para el generador, y una plantilla del banco vegano (VGN-DES-2) dependía de uno de ellos (`bebida_soja`). La cota **por arriba** (una sola fila aplicable) es igual de necesaria que la cota por abajo: con la tabla anterior la mantequilla encajaba en dos filas con mínimos de 5 g y de 100 g, y la validación no lo detectaba porque solo exigía "al menos una".
 
 **Excepción declarada del tag `sin_lactosa`.** `mantequilla` es `grupo: 'lacteo'` y lleva `sin_lactosa` sin ser una variante declarada sin lactosa ni un queso curado: su lactosa residual (≈0,6 g/100 g) queda por debajo de 0,15 g en la ración máxima de su fila (25 g), muy por debajo del umbral de tolerancia habitual. La regla general sigue siendo la de §3.2 (un lácteo sin el tag lo excluye el filtro); esta es la única excepción y está aquí para que no se lea como un error de datos.
 
@@ -1216,11 +1265,23 @@ el orden de los pasos es normativo:
 4. EXCLUIDOS: se retira todo id de perfil.excluidos          ← v1.2, ANTES de cualquier otro criterio
 5. variantes `_sl` (§3.2) y lista blanca `permitidos` (§3.7.2)
 6. partición en `preferidos` y `reserva`, con este orden dentro de `preferidos`:
-      a) los FAVORITOS que han sobrevivido a 1-5, en el orden del usuario
+      a) los FAVORITOS que han sobrevivido a 1-5 **y que pueden adelantar en esta toma**
+         (regla de abajo), en el orden del usuario
       b) el resto de `ids_preferidos` de la plantilla, en el orden de la plantilla
       c) (si la consulta no trae `ids_preferidos`) los favoritos primero y el resto por `id`
    `reserva` = lo que queda, ordenado por `id` como hasta ahora
 ```
+
+**Dónde adelanta un favorito (v1.2, revisión):** en las tomas **principales** —las que
+`rolComidaDe` clasifica como `principal`, es decir, Comida y Cena— manda el gusto y el favorito va
+delante de todo lo que comparta su rol. En el desayuno, la merienda y los tentempiés manda la
+plantilla: el favorito solo adelanta si ya está en los `ids_preferidos` de esa consulta. Una
+consulta sin `ids_preferidos` —donde la plantilla no opina— siempre deja pasar al favorito.
+
+Sin esta regla, marcar "pechuga de pollo" y "arroz blanco" convertía el desayuno en una comida
+(«08:00 · 180 g de naranja · 250 g de requesón · 70 g de pechuga de pollo · 55 g de arroz»), y en
+modo sencillo era peor todavía. La plantilla es quien sabe qué alimentos tienen sentido a las ocho
+de la mañana; el favorito ordena dentro de lo que ella considera apto.
 
 Los puntos importantes, escritos como reglas y no como intención:
 
@@ -1244,6 +1305,12 @@ Los puntos importantes, escritos como reglas y no como intención:
   candidato se permite la repetición, porque antes un plato con el mismo alimento dos veces que un
   plato sin ancla (§3.2, punto 4). La guarda **solo se activa para quien ha marcado algo en el paso
   14**: sin listas, ni un menú de la v1.1 se mueve.
+- **Con favoritos, el hidrato y la grasa también esquivan lo ya usado en el día.** Las anclas de esos
+  dos roles se pedían con `evitarUsados = false` (la variedad la daba la rotación), así que un favorito
+  de hidrato o de grasa ganaba **todas** las tomas del día: boniato en las cuatro comidas, arroz en el
+  desayuno incluido. Cuando el perfil trae favoritos, esas dos consultas pasan a evitar lo ya servido y
+  sus ids se anotan en `usados` junto a los de proteína, verdura y fruta. **Sin favoritos no cambia
+  nada**: la regla solo se activa con listas marcadas, y ningún menú de la v1.1 se mueve.
 - **Determinismo total.** Las dos listas son entradas del generador como cualquier otra: mismos inputs →
   mismo menú, sin `Math.random` en ninguna parte.
 
@@ -1258,9 +1325,22 @@ Un alimento excluido **no puede aparecer en ningún sitio**. En la práctica, es
 | Tablas de equivalencias (§2.5) | `equivalencias()` recibe el `PerfilDietetico` y filtra igual |
 | Lista de la compra (§3.7.3) | sale del menú, así que no puede traerlos; ningún camino la rellena aparte |
 | Alimentos del ciclo y sección opcional de la compra (§3.8) | se filtran también por `excluidos` |
+| Lista "Prioriza:" de la tarjeta del ciclo (§2.2c y §4.3b) | v1.2, revisión: el paso 19 del motor retira los nombres cuyos ids estén todos excluidos, y la pantalla y el PDF lo vuelven a aplicar (`consejosSinExcluidos`) porque el "No me gusta" de §2.5 cambia las listas sin llamar al motor |
+
+**Exclusiones encadenadas.** Hay alimentos que son otro alimento con otra forma: excluir `coliflor`
+excluye también `arroz_coliflor`, que es coliflor rallada y salteada. La cadena va en un solo
+sentido (excluir el arroz de coliflor no retira la coliflor) y vive en `normalizarListasAlimentos`,
+así que la aplican por igual el menú, las equivalencias, la compra y la tarjeta del ciclo.
 
 Los favoritos, en cambio, **solo** afectan al menú y al orden de las alternativas: las tablas de
 equivalencias siguen ordenadas como estaban (son una referencia, no una recomendación).
+
+**Favoritos realmente servidos (`Ejemplos.favoritos_aplicados`).** El generador publica la lista de
+los favoritos que han llegado a la semana (menú o lista de la compra). El resumen de §2.5 y la fila
+de §4.2/§4.4 imprimen **esa** lista y no la del cuestionario: el tope de 12 del modo sencillo puede
+dejar alguno fuera, y prometer en el informe un favorito que no está en ninguna parte era
+exactamente lo que la decisión G venía a evitar. Cuando hay marcados que no entran, la pantalla lo
+dice en una línea pequeña ("2 favoritos más no han entrado en el menú de esta semana").
 
 #### Modo sencillo (§3.7.2) con excluidos y favoritos
 
@@ -1286,6 +1366,13 @@ de 12 alimentos distintos**:
    generar, hasta que quepa. Un favorito que no cabe no entra, que es lo que ya autoriza el punto 3.
    En la práctica esto pasa con las bases más cortas: en vegano y en vegetariano, `garbanzos_cocidos`
    marcado como favorito se queda fuera y el menú sale igual que sin marcarlo.
+6. **El día B se construye con un solo favorito, el primero de la lista** (v1.2, revisión). En modo
+   sencillo la rotación por día está apagada, así que tres favoritos ganaban las dos tomas
+   principales de los siete días y la semana entera se quedaba en **cinco** alimentos distintos,
+   con la promesa del modo ("hasta doce") incumplida por abajo. Con esta regla los días 1, 3, 5 y 7
+   llevan todo lo que le gusta al usuario y los días 2, 4 y 6 llevan su favorito principal y la
+   otra opción de la lista corta: medido sobre el perfil de la usuaria de la v1.2, con tres
+   favoritos la semana pasa de 5 a 12 alimentos distintos.
 
 #### Regla de respaldo cuando las exclusiones vacían una consulta (normativa)
 
@@ -1297,8 +1384,10 @@ si una FoodQuery se queda SIN candidatos por culpa de las exclusiones:
       toma, o el ancla de carbohidrato fuera de low-carb):
          se usa el MEJOR candidato excluido — el primero de la lista que la consulta habría elegido
          si el usuario no lo hubiera marcado — y se anota en `Ejemplos.avisos_menu`:
-         "No hemos podido evitar {nombre} en {comida}: sin él no salen los macros de esa toma.
-          Cámbialo por lo que quieras de la tabla de equivalencias."
+         "No hemos podido evitar {nombre_corto} en {comida}: sin ese alimento no salen los macros
+          de esa toma. Puedes cambiarlo por lo que quieras de la tabla de equivalencias."
+         ({nombre_corto} es el `nombre_corto` de `foods.json` con la inicial en minúscula, y la
+          frase no tiene género: "gambas" es femenino plural y "lomo de cerdo" masculino singular.)
    3. si la FoodQuery es OPCIONAL (verdura, fruta, ancla de grasa, segunda proteína), no se usa ningún
       excluido: se omite la consulta, como ya hacía el punto 4 de §3.2
 ```
@@ -1617,12 +1706,22 @@ cierre de kcal de §3.3 y no cuentan en `alimentos_distintos`.
 
 De 2 a 4 alimentos, con esta regla, en este orden:
 
-1. Se recorren los síntomas de `resultado.ciclo.sintomas` **en su orden canónico** y, por cada uno, sus
-   ids candidatos de la tabla de abajo, también en orden.
-2. Cada id se acepta si pasa **la base, todas las restricciones y `alimentos_excluidos`** (§3.2b). El
-   tag `extra` **no** lo descarta aquí: esta es justamente la lista para la que existen esos alimentos.
-3. Se deduplica por `id` y se corta en **4**. Si salen menos de 2, se publica lo que haya (o
-   `undefined` si no hay ninguno). No se rellena con nada que no venga de la tabla.
+1. Cada id pertenece al **primer** síntoma que lo lista en el orden canónico (así el `por_que` que se
+   publica es siempre el suyo), y se acepta si pasa **la base, todas las restricciones y
+   `alimentos_excluidos`** (§3.2b). El tag `extra` **no** lo descarta aquí: esta es justamente la lista
+   para la que existen esos alimentos.
+2. Las cuatro plazas se reparten **POR RONDAS entre los síntomas marcados**, en su orden canónico: el
+   primer candidato válido de cada síntoma, después el segundo, y así hasta llenar. El corte se aplica
+   **al final**, no mientras se llena.
+3. Si salen menos de 2, se publica lo que haya (o `undefined` si no hay ninguno). No se rellena con
+   nada que no venga de la tabla.
+
+El reparto por rondas es de la revisión de la v1.2, y no es cosmético: llenar las plazas de forma
+voraz, síntoma a síntoma, dejaba a quien marcaba «dolor fuerte» —que tiene exactamente cuatro
+candidatos y va el primero del orden canónico— con una lista compuesta al 100 % por los alimentos del
+dolor. El hierro del sangrado abundante, que es el motivo declarado de la decisión I, no aparecía
+nunca: la tarjeta prometía hierro y la sección de la compra de al lado traía omega-3. Con las rondas,
+dolor + sangrado abundante da **dos de cada uno**.
 
 | Síntoma | Ids candidatos, en orden | `por_que` (copy literal) |
 |---|---|---|
@@ -1654,8 +1753,14 @@ items  = de 1 a 3 líneas
 síntoma** antes de repetir síntoma. Cada línea se calcula con las mismas fórmulas de §3.7.3, con una
 única diferencia: **la cantidad es fija y pequeña**, `gramos_semana = 2 · racionTipica_g` redondeado, en
 vez de salir del menú. `gramos_dia`, `envases`, `dura_dias` y el consejo se derivan de ahí exactamente
-igual, y la línea lleva el mismo formato de cuatro columnas (§2.5b) para que pantalla y PDF no necesiten
-un renderizado aparte.
+igual.
+
+**Y la línea NO habla el idioma semanal del plan** (v1.2, revisión). La sección se presenta como lo que
+es —dos raciones para dos o tres días al mes— y decía a la vez "120 g en la semana · 17,1 g al día · te
+dura 10 días", que es el vocabulario de la compra de siete días y contradecía su propia nota dos líneas
+más arriba. En esta sección, y solo en esta, las columnas son **tres** (producto · cantidad · comprar),
+la cantidad se redacta con `textoCantidadCiclo` —«120 g en total, unas 2 raciones»— y la columna DURA
+no se imprime. Pantalla y PDF comparten ese formateador, como comparten los otros dos.
 
 **Y no cuenta en el plan:** `alimentos_distintos` sigue siendo `items.length`, sin la sección opcional; el
 tope de 12 del modo sencillo (§3.7.2) tampoco la cuenta, y su test tampoco.
@@ -1669,8 +1774,10 @@ tope de 12 del modo sencillo (§3.7.2) tampoco la cuenta, y su test tampoco.
 - El PDF es una **instantánea fiel** de la pantalla de resultados en el momento de la descarga: mismos números, mismos avisos, mismo ejemplo de menú (el que estuviera activo, no uno aleatorio nuevo). "Fiel" es una obligación verificable: todo número visible en pantalla tiene que estar también en el PDF. Las páginas 3 y 5 recogen los bloques que la v1 dejaba fuera (azúcares libres, MLG, metodología ampliada, marca de objetivo reconvertido).
 - **Única excepción, y es en sentido contrario:** `'tca'` nunca aparece en ninguna lista de condiciones del PDF. Desde la v1.1 esa excepción es teórica —la interfaz ya no puede producir ese valor (decisión A)—, pero la regla de serialización se mantiene escrita.
 - Formato A4, orientación vertical, tipografía legible (mínimo 10pt cuerpo de texto), **6-8 páginas**. El límite original (4-6) no era compatible con el contenido que las §4.2-§4.6 obligan a imprimir: los nueve vectores de la §5 salían en 6-8 páginas ya antes de añadir la tabla de equivalencias que exige la §4.4. Se han fundido la página de peso objetivo/consejos/referencias y la de avisos en un solo flujo (sin salto forzado) y se ha compactado el interlineado; el test de integración del exportador falla si algún vector pasa de 8 páginas. **Con la página de lista de la compra de §4.4b el rango pasa a 6-9 páginas y el test, a 9**: la lista es una página entera y no se puede fundir con los menús, porque está pensada para imprimirse suelta y llevarla al supermercado. **Con la proyección y el seguimiento de la v1.1 (§4.5b) el rango pasa a 6-10 páginas y el test, a 10**: los dos bloques van en la misma página de peso objetivo y cronograma cuando caben, y en una página propia cuando no.
+- **La línea "Para esos días" agrupa por motivo** (v1.2, revisión): los alimentos se agrupan por su `por_que` —que es uno por síntoma— y el motivo se imprime **una vez por grupo** ("sardinas, nueces, lino y cacao puro (omega-3 y magnesio, que ayudan con el dolor); lentejas y ternera (hierro…)"), en vez de repetir el mismo paréntesis detrás de cada alimento y atribuirle a cada uno las propiedades de todo el grupo. Y la coletilla solo promete lo que de verdad está en la lista: si algún alimento nombrado no ha entrado en la sección opcional (que corta en tres), se escribe "Los que hemos podido, los tienes al final de tu lista de la compra…".
+- **La variante breve del resumen de alimentos de §4.2 va toda en minúscula**, etiqueta y nombres ("sin brócoli, coliflor · favoritos pechuga de pollo"): mezclar la etiqueta en minúscula con los `nombre_corto` capitalizados de `foods.json` dejaba la fila en "sin Brócoli, Coliflor", que es lo peor de las dos opciones.
 - **Sin guionado automático.** `@react-pdf/renderer` parte las palabras con patrones de partición **ingleses**, y este documento está entero en español de España: imprimía "escur-ridos" (partiendo el dígrafo `rr`), "rebland-ecen", "de-scongelar" y "solomil-lo", sobre todo en la lista de la compra, que es la página pensada para imprimir y llevar al súper. Se desactiva con `Font.registerHyphenationCallback(palabra => [palabra])` en la cabecera del documento: el texto pasa a partirse solo entre palabras.
-- **Ninguna página del documento puede quedar casi vacía.** Una sección que no cabe viaja entera a la siguiente en vez de partirse por la mitad (`wrap={false}` en "Cómo lo calculamos", en la tabla de equivalencias y en la tarjeta del ciclo). Una página con el último párrafo de una sección y nada más se lee como un fallo de maquetación y, además, es la que empuja el documento contra el tope de páginas.
+- **Ninguna página del documento puede quedar casi vacía.** Una sección que no cabe viaja entera a la siguiente en vez de partirse por la mitad (`wrap={false}` en "Cómo lo calculamos" y en la tabla de equivalencias). **Excepción obligatoria: la tarjeta del ciclo se parte** (v1.2, revisión). Con cuatro o cinco síntomas marcados mide más que una página A4 completa, y `@react-pdf` no divide un nodo que declara `wrap={false}`: lo deja entero en la página en curso y lo que sobresale se imprime **fuera del MediaBox**, es decir, recortado e invisible. La firma del fallo era que el documento *encogía* al añadir contenido (10 páginas con tres síntomas, 9 con cinco). Lo que sigue sin partirse es cada bloque de síntoma por separado, que siempre cabe, y hay un test que comprueba que el número de páginas con cinco síntomas no baja del de tres. Una página con el último párrafo de una sección y nada más se lee como un fallo de maquetación y, además, es la que empuja el documento contra el tope de páginas.
 - Cada bloque de contenido lleva su fuente/cita si aplica (p. ej. "Mifflin-St Jeor, 1990"), en letra pequeña al pie del bloque, no como nota académica invasiva.
 - El PDF nunca omite el disclaimer completo ni los avisos activos: no es una versión "resumida y sin avisos" del resultado.
 
@@ -1687,7 +1794,7 @@ tope de 12 del modo sencillo (§3.7.2) tampoco la cuenta, y su test tampoco.
 - Tabla de datos de entrada: sexo, edad, altura, peso, %grasa (rango + método), actividad diaria, entrenamiento (tipo/días/duración/intensidad), objetivo, ritmo, **preferencias alimentarias** y nº de comidas.
 - **Preferencias alimentarias (v1.1).** Ya no es una sola fila con un valor: se imprime como "{base}{, sin lactosa}{, sin gluten}{ · bajo en hidratos}" a partir de `resultado.preferencia_base`, `resultado.restricciones` y `resultado.low_carb` — nunca de `inputs.preferencia`, que puede no reflejar lo que el usuario marcó. Ejemplo: "Vegano, sin gluten · bajo en hidratos".
 - **Prioridad de recomposición (v1.1).** Con `objetivo_efectivo === 'recomposicion'` y `recomposicion_prioridad !== 'equilibrado'`, la fila de objetivo lleva el matiz: "Recomposición · prioridad: perder grasa" o "· prioridad: ganar músculo".
-- **Plazo (v1.2).** Si `inputs.plazo_semanas` es un número, la fila de ritmo lleva el matiz "{ritmo} · fecha pedida: {plazo_semanas} semanas". El ritmo que se imprime es siempre `resultado.ritmo_efectivo`, no el que marcó el usuario: es el del plan. El aviso `INFO_RITMO_POR_PLAZO` o `WARN_PLAZO_IRREAL` explica la diferencia en la última página.
+- **Plazo (v1.2).** Si `inputs.plazo_semanas` es un número **y `resultado.objetivo_efectivo` es `perder` o `ganar`**, la fila de ritmo lleva el matiz "{ritmo} · fecha pedida: {plazo_semanas} semanas". El ritmo que se imprime es siempre `resultado.ritmo_efectivo`, no el que marcó el usuario: es el del plan. El aviso `INFO_RITMO_POR_PLAZO` o `WARN_PLAZO_IRREAL` explica la diferencia en la última página. La guarda del objetivo es de la v1.2 (revisión): con `objetivo: 'no_se'` el asistente enseña el paso de ritmo y el de peso objetivo, así que `plazo_semanas` llega relleno, y si el paso 6.1 resuelve a `mantener` o `recomposicion` el motor lo ignora en silencio; el PDF imprimía entonces "Ritmo no aplica con este objetivo · fecha pedida: 12 semanas", una línea que se contradice y que ningún aviso explicaba.
 - **Alimentos (v1.2).** Si hay `alimentos_excluidos` o `alimentos_favoritos`, una fila más: "Alimentos: sin {lista de `nombre_corto`} · favoritos {lista}", con la mitad que no aplique omitida. Es la misma línea que la pantalla imprime bajo el menú (§2.5), y va aquí porque forma parte de lo que el usuario respondió.
 - **Regla (v1.1).** `menstruacion` **no se imprime nunca** en la tabla de datos de entrada. Sus consecuencias sí (la tarjeta de §4.3b y los avisos de la última página), pero el dato en sí es innecesario en un documento que el usuario imprime o comparte. **Lo mismo vale para `sintomas_regla` (v1.2):** los consejos de la tarjeta del ciclo se imprimen, la lista de síntomas marcados **no**.
 - Bloque de resultados clave (igual que la cabecera de la pantalla de resultados, sección 2.1): kcal, IMC + categoría, %grasa rango, TDEE.
@@ -1893,6 +2000,30 @@ viven en `SPEC-calculo.md` o en `verify-vectors.mjs` se registran en el §7 de a
 fórmula de la lista de la compra y ningún menú existente. Los cuatro alimentos nuevos llevan el tag
 `extra` justamente para eso: entran en la base y en `mercadona.json` sin tocar la rotación ni la reserva
 de ninguna `FoodQuery`, así que los vectores de §3.6 siguen siendo los mismos.
+
+#### Ronda de cierre de la v1.2 (revisión adversaria de UX, menús y PDF, 2026-09-08)
+
+Recorrido real en móvil (375 × 812) y revisión adversaria del generador y del exportador. Aceptados y
+aplicados; la sección de cada uno queda arriba con la marca "(v1.2, revisión)".
+
+| # | Sev. | Dónde | Resumen |
+|---|---|---|---|
+| U-1 | critical | paso 14 | "Seguir sin marcar nada" borraba las dos listas sin confirmación y con un rótulo falso, justo cuando se llega desde "Cambiar" con exclusiones guardadas. Ahora solo se pinta si no hay nada marcado. |
+| U-2 | major | §2.5 | El "Deshacer" de "No me gusta" aparecía al final del día (2 725 px por debajo del pliegue) y moría en 8 s: pasa a barra fija abajo y recibe el foco. |
+| U-3 | major | §2.6 | El peso objetivo escrito por el usuario no se enseñaba como cifra principal con la grasa estimada: la franja propuesta baja a nota y el titular es siempre su número. |
+| U-4 | major | §3.8.1 | `alimentosCiclo` repartía las cuatro plazas de forma voraz y el dolor se las llevaba todas: reparto por rondas de síntoma. |
+| U-5 | major | §3.2b | Los favoritos se anteponían sin mirar la toma y metían pollo y arroz en el desayuno: solo adelantan en comida y cena, o si la plantilla ya los lista. |
+| U-6 | major | §3.2b | Un favorito de hidrato o de grasa ganaba las cuatro tomas del día; en modo sencillo la semana se quedaba en cinco alimentos. `evitarUsados` para esos dos roles y día B con un solo favorito. |
+| U-7 | major | paso 11 | La nota del IMC del peso objetivo no era anunciable (sin `role`, sin `aria-live`, sin `aria-describedby`). |
+| U-8 | major | §3.2b | El aviso del excluido inevitable usaba un nombre derivado y género masculino ("sin él", "Cámbialo") para alimentos femeninos y plurales. |
+| U-9 | major | §4.0 | La tarjeta del ciclo, con `wrap={false}`, se imprimía fuera del papel a partir de cuatro síntomas. |
+| U-10 | major | §3.2b | Los consejos del ciclo recomendaban alimentos excluidos mientras la compra sí los respetaba (ver también `SPEC-calculo.md`, paso 19). |
+| U-11 | minor | paso 10, §2.6b, §2.6c, §3.8.2, §4.2, §4.4b, paso 12, paso 14, §3.0 | Copy y detalle: el nudge nombra el objetivo de arriba; la descripción de la gráfica no dice "entre 63 y 63 kg"; el primer día del plan da un solo mensaje de fecha; la compra de los días de regla tiene su propia cantidad y tres columnas; el plazo solo se imprime si el motor lo ha leído; la variante breve va en minúscula; abrir el campo de fecha limpia el chip; el resumen de alimentos se ordena y se corta en seis; el radiogroup del paso 14 cumple el patrón ARIA; `nombre_corto` distingue soja seca/hidratada, proteína de guisante/soja y queso batido sin lactosa, y el grupo de lácteos nombra las bebidas vegetales. |
+
+**Rechazado:** nada. El único hallazgo que no se aplica tal cual es el buscador del paso 14 (U-11,
+"3 553 px de página"): se ha resuelto con la alternativa barata que el propio hallazgo propone —repetir
+el resumen vivo en la barra pegada arriba—, porque un buscador dentro del wizard es una pantalla nueva
+y esta ronda cierra la v1.2, no la amplía.
 
 ### v1.1 — decisiones A-F del feedback real de usuarios (2026-09-07)
 

@@ -23,11 +23,16 @@ Cuatro cosas que salieron de escuchar a una usuaria de verdad usando la v1.1:
   equivalencias, ni en la lista de la compra— y los favoritos entran los primeros. Solo se enseñan
   los alimentos que encajan con tu forma de comer: una vegana no ve pollo. Desde la pantalla de
   resultados, cada alimento del menú lleva un **"No me gusta"** que rehace el menú y la compra al
-  momento (con "Deshacer"), sin tocar ni una caloría del plan.
+  momento (con "Deshacer" en una barra fija abajo), sin tocar ni una caloría del plan. Los favoritos
+  se sirven donde tienen sentido —en la comida y en la cena, o donde la plantilla ya los tenía—:
+  marcar pollo y arroz no convierte el desayuno en una comida. Y el resumen del plan nombra los que
+  de verdad han entrado en la semana, no los que marcaste.
 - **Peso objetivo y plazo.** Si tienes una fecha en mente, la dices: "5 kg en 12 semanas". El motor
-  elige el ritmo más suave de su tabla que llegue a tiempo, y si no llega ninguno te lo dice en
-  vez de prometerte lo que no puede cumplir. Los suelos de seguridad siguen mandando por encima
-  del plazo.
+  elige el ritmo más suave de su tabla que llegue a tiempo —midiendo las semanas de verdad, con sus
+  descansos, no una regla de tres— y si no llega ninguno te lo dice en vez de prometerte lo que no
+  puede cumplir. Si tu meta está por debajo de lo que es seguro, el ritmo se calcula contra la meta
+  que el plan publica, no contra la que se descarta. Los suelos de seguridad siguen mandando por
+  encima del plazo, y cuando el plan no puede darte un calendario tampoco te da una fecha.
 - **Recomposición con peso objetivo.** Quien recompone con prioridad en perder grasa ya tiene su
   peso objetivo y su proyección: una banda entre lo que baja la báscula por el déficit y lo que se
   queda igual porque el músculo compensa. Sin fecha, porque en recomposición no se puede prometer:
@@ -35,8 +40,10 @@ Cuatro cosas que salieron de escuchar a una usuaria de verdad usando la v1.1:
 - **Síntomas de la regla.** Al decir que la tienes puedes marcar qué notas esos días —dolor,
   hinchazón, antojos, cansancio, sangrado abundante— y la tarjeta del ciclo pasa a dar consejos
   concretos sobre alimentos (hierro con vitamina C para el sangrado, omega-3 y magnesio para el
-  dolor, potasio para la hinchazón) y una sección opcional en la lista de la compra. **No cambia
-  ni un número del plan**, y así se dice.
+  dolor, potasio para la hinchazón) y una sección opcional en la lista de la compra, con dos o tres
+  cosas pequeñas para esos días. Los alimentos se reparten entre los síntomas que marcas, así que
+  con dolor y sangrado abundante salen los dos, y ninguno de ellos es algo que hayas marcado como
+  "no me gusta". **No cambia ni un número del plan**, y así se dice.
 
 ## Qué traía la v1.1
 
@@ -92,7 +99,9 @@ Sin magia y sin cajas negras: el cálculo es una implementación literal de
 
 Los alimentos que marcas como favoritos o como "no me gusta" **no entran en ningún cálculo**: solo
 ordenan y filtran el menú, la compra y las equivalencias, así que cambiarlos no mueve tus calorías
-ni invalida el ajuste manual que tuvieras guardado.
+ni invalida el ajuste manual que tuvieras guardado. La única excepción es la lista de "prioriza
+esto" de la tarjeta del ciclo, que tampoco es un número: no puede recomendarte algo que acabas de
+marcar como que no te gusta.
 
 Todo es determinista: los mismos datos dan siempre el mismo plan, sin `Math.random` en ninguna
 parte. Hay cortes de seguridad —menores de 18 y mayores de 75, embarazo y lactancia, condición

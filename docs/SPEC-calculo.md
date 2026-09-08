@@ -502,24 +502,51 @@ obj = objetivo; exp = experiencia; pobj = peso_objetivo
    usuario, y los suavizados de 6.7 (tca, edad ≥ 65) y 6.7bis (regla) se aplican después sobre
    él y MANDAN. (Se llama 6.7ter porque llegó después, no porque se ejecute después.)
 
+   **La meta contra la que se mide el plazo es la EFECTIVA**, la que va a publicar el paso 13, no
+   la que escribió el usuario: los suelos de seguridad (IMC mínimo por edad y grasa esencial)
+   pueden subirla y el techo de `ganar` bajarla, y dividir por el plazo una meta que el propio
+   informe rechaza aplicaba un ritmo más duro que el que exige el plan real (un hombre de 150 cm y
+   55 kg que pide 38 kg recibe la meta 49 y le basta el ritmo `moderado`; con la meta cruda salía
+   `agresivo` y su suelo calórico). Se calcula aquí con las mismas fórmulas del paso 13:
+
+      meta_segura(pobj) = perder: max(pobj, imc_min · h², MLG / (1 − g_min/100))
+                          ganar:  min(max(pobj, imc_min · h²), 27,5 · h²)
+      con imc_min = 22 si edad ≥ 65, si no 18,5, y g_min = 12 (hombre) / 20 (mujer)
+
    si plazo_semanas !== null y pobj !== null y obj ∈ {perder, ganar}:
-      ritmo_req = |pobj − PC| / plazo_semanas                       // kg por semana que exige la fecha
+      meta  = meta_segura(pobj)
+      delta = (obj === 'perder') ? PC − meta : meta − PC
+      si delta ≤ 0 → el plazo NO se lee: no hay camino que fechar y no se emite ningún aviso
       perder:  kg_sem(r) = tabla 3.7[banda][r] / 100 · PC
       ganar:   kg_sem(r) = clamp(sup_pct(r) · TDEE, 150, 500) · 7 / 7700
                con sup_pct(r) = (perfil !== 'fuerza') ? 0.05 : tabla 3.8[experiencia][r]
-      ritmo_plazo = el PRIMER r de [suave, moderado, agresivo] con kg_sem(r) ≥ ritmo_req − 1e-9
+      // semanas que ese ritmo produce DE VERDAD, con la aritmética del paso 14: la parte lineal
+      // más una semana de mantenimiento por cada 8 (los diet breaks del cronograma).
+      semanas(r) = ceil(delta / kg_sem(r) − 1e-9)
+                   + (obj === 'perder' y delta / kg_sem(r) > 10 ? floor(delta / kg_sem(r) / 8) : 0)
+      ritmo_plazo = el PRIMER r de [suave, moderado, agresivo] con kg_sem(r) > 0 y semanas(r) ≤ plazo_semanas
       si existe  → ritmo_ef = ritmo_plazo;  emitir INFO_RITMO_POR_PLAZO
       si no      → ritmo_ef = ritmo_plazo = 'agresivo';  emitir WARN_PLAZO_IRREAL
    (el `ritmo` que eligió el usuario se descarta: ha pedido una fecha, y la fecha es más concreta
     que "moderado". La pantalla lo dice con todas las letras, `SPEC-ux-comidas-pdf.md` §1 paso 11.)
 
+   Juzgar los candidatos con `semanas(r)` y no con la tasa pelada es lo que **cierra el bucle** con
+   el paso 14: el plazo elegía el ritmo con un modelo (tasa lineal) y el paso 17 lo juzgaba con
+   otro (cronograma, que añade adaptación y descansos), así que el motor avisaba de que la fecha
+   era imposible cuando un ritmo de su propia tabla la alcanzaba, y el resultado no era monótono
+   —pedir MÁS tiempo podía dar una respuesta peor que pedir menos—.
+
    **Las tres cosas que el plazo NO puede hacer**, y que el paso 17 reevalúa contra el plan final:
    (a) sobrevivir a un suavizado de seguridad —si `ritmo_efectivo !== ritmo_plazo`, la fecha ya no
    se alcanza y `INFO_RITMO_POR_PLAZO` se sustituye por `WARN_PLAZO_IRREAL`—; (b) sobrevivir al
    techo del paso 7 y a los suelos —si el cronograma del paso 14 sale con `semanas[0] > plazo_semanas`,
-   misma sustitución—; (c) sobrevivir a una reconversión del objetivo —si `objetivo_efectivo ∉
+   **o si no hay cronograma en absoluto**, misma sustitución: sin calendario no se puede sostener
+   ninguna promesa de fecha—; (c) sobrevivir a una reconversión del objetivo —si `objetivo_efectivo ∉
    {perder, ganar}`, los dos avisos se retiran, porque hablan de una meta de peso que ya no existe—.
-   Los tres casos se resuelven en el paso 17, contra los números finales, exactamente como
+   Y la regla simétrica: si el cronograma **cabe entero** dentro del plazo (`semanas[1] ≤ plazo`),
+   `WARN_PLAZO_IRREAL` se retira, porque negar una fecha que el propio calendario alcanza es
+   mentir en la otra dirección.
+   Los cuatro casos se resuelven en el paso 17, contra los números finales, exactamente como
    `WARN_PERDIDA_MAYOR_65`.
 
    si 'tca' ∈ condiciones: INFO_RITMO_SUAVE; si ritmo_ef !== 'suave' → ritmo_ef = 'suave'
@@ -1217,10 +1244,22 @@ si objetivo_efectivo === 'recomposicion' y peso_obj_ef !== null → eliminar INF
 REGLA (v1.2, PLAZO): los dos avisos del paso 6.7ter se reevalúan contra el plan FINAL
 si plazo_semanas === null o pobj === null o objetivo_efectivo ∉ {perder, ganar}:
       eliminar INFO_RITMO_POR_PLAZO y WARN_PLAZO_IRREAL
-si no, si ritmo_efectivo !== ritmo_plazo   (un suavizado de seguridad ha bajado el ritmo)
-     o (cronograma !== null y cronograma.semanas[0] > plazo_semanas):
-      eliminar INFO_RITMO_POR_PLAZO; emitir WARN_PLAZO_IRREAL (si no estaba)
+si no, si ritmo_plazo !== null:
+   si cronograma !== null y cronograma.semanas[1] <= plazo_semanas      (llega de sobra)
+         eliminar WARN_PLAZO_IRREAL
+         y, si ritmo_efectivo !== ritmo_plazo, eliminar también INFO_RITMO_POR_PLAZO
+   si no, si ritmo_efectivo !== ritmo_plazo   (un suavizado de seguridad ha bajado el ritmo)
+        o cronograma === null                 (no hay calendario que pueda cumplir la fecha)
+        o cronograma.semanas[0] > plazo_semanas:
+         eliminar INFO_RITMO_POR_PLAZO; emitir WARN_PLAZO_IRREAL (si no estaba)
 ```
+
+Las dos direcciones importan y las dos se comprueban en el barrido de `verify-vectors.mjs`:
+`INFO_RITMO_POR_PLAZO` **exige** un cronograma que llegue (sin él, el aviso afirmaba que el plan
+alcanza una fecha que el propio informe declaraba incalculable dos líneas más abajo), y
+`WARN_PLAZO_IRREAL` **no puede** convivir con un calendario que cabe entero dentro del plazo
+pedido (decía «no te prometemos esa fecha» y a renglón seguido imprimía 17-19 semanas para un
+plazo de 24).
 
 La segunda línea es la misma idea que la primera: el paso 10bis puede reescribir `objetivo_efectivo` a
 `mantener` después de que el paso 7 haya emitido la prioridad de recomposición. Cuando eso pasa,
@@ -1374,6 +1413,16 @@ L = limites_ajuste;  P = macros.proteina_g;  TDEE = tdee.valor;  obje = objetivo
 - **El peso objetivo no se mueve.** Cambiar la meta bajo un deslizador de macros sería incomprensible; lo que sí cambia —y es la consecuencia honesta— es el cronograma, que se rehace con el nuevo déficit.
 
 ### Paso 19 — Ciclo: consejos por síntomas (v1.2, decisión I, normativo)
+
+**Los excluidos del paso 14 sí llegan hasta aquí (revisión de la v1.2).** Es la única excepción a
+"el motor ignora `alimentos_excluidos`", y no toca ningún número: de la lista `alimentos` de cada
+consejo se retiran los nombres genéricos cuyos ids de `foods.json` estén **todos** excluidos
+(«Lentejas o garbanzos» se queda mientras quede uno de los dos). Sin esta regla la tarjeta se
+contradecía sola: recomendaba arriba, en "Prioriza:", lo que la sección opcional de la compra
+descartaba tres líneas más abajo. El mapa nombre → ids vive junto a la tabla de consejos, y el
+filtro se publica aparte (`consejosSinExcluidos`) porque el "No me gusta" de la pantalla de
+resultados cambia las listas **sin volver a llamar al motor**: la pantalla y el PDF lo aplican otra
+vez sobre los consejos ya calculados, y la operación es idempotente.
 
 Lo ejecuta `calcular` al final, después del paso 17 y sin tocar ni un número del plan. Publica
 `Resultado.ciclo`.
@@ -1739,7 +1788,7 @@ Devine, Robinson, Miller, Hamwi (paso 13). Fórmulas clínicas de los años 60�
 | `WARN_GANANCIA_LEJANA` | aviso | `ganar` y `(pobj − PC) / PC > 0.10` | Ganar más del 10 % de tu peso lleva bastante más de un ciclo de volumen. Te mostramos solo las primeras 20 semanas: al final de esa fase, recalcula con tu peso real. |
 | `WARN_CRONOGRAMA_LARGO` | aviso | `semanas[1] > 52` o el horizonte se ha recortado | El calendario estimado es largo: te mostramos solo el primer tramo. Fija hitos intermedios y revisa el plan cada 4–8 semanas con tus datos reales; más allá de dos años una proyección de este tipo no tiene ningún valor predictivo. |
 | `WARN_PROTEINA_POR_TOMA` | aviso | Alguna comida con `p_i ≥ 20 %` recibe `< 20 g` de proteína | Alguna de tus comidas principales se queda por debajo de 20 g de proteína. Puedes juntar dos tomas o aceptar que alguna sea un tentempié ligero; el total diario es lo que más cuenta. |
-| `WARN_PROTEINA_TOMA_ALTA` | aviso | Alguna comida con `P_i > 0,55 g/kg` de peso corporal | Con este número de comidas concentras mucha proteína en una sola toma. El total diario sigue siendo lo que más cuenta, pero repartirla en 3 tomas se aprovecha algo mejor. |
+| `WARN_PROTEINA_TOMA_ALTA` | aviso | Alguna comida con `P_i > 0,55 g/kg` de peso corporal | Con {n_comidas} comidas al día concentras mucha proteína en una sola toma. El total diario sigue siendo lo que más cuenta, pero repartirla en {n_comidas + 1} tomas se aprovecha algo mejor. / (con `n_comidas ≥ 4`) Con tu reparto de {n_comidas} comidas alguna toma concentra bastante proteína. No pasa nada: el total del día es lo que manda y no hace falta que la partas más. Si te sienta pesada, pasa una parte a la comida de al lado. |
 | `WARN_IMC_BAJO` | aviso | `IMC < 18.5` | Tu IMC indica bajo peso. Si no es algo buscado, conviene descartar causas médicas con tu médico de cabecera. |
 | `WARN_IMC_35` | aviso | `35 ≤ IMC < 40` | Con tu IMC actual, un abordaje supervisado por médico o dietista-nutricionista te dará mejores resultados y más seguridad. Aquí tienes una orientación general para empezar. |
 | `WARN_IMC_40` | aviso | `IMC ≥ 40` | Con un IMC de este nivel, el plan nutricional debería ir acompañado de supervisión médica. Te mostramos una orientación general, pero busca apoyo profesional antes de aplicarla. |
@@ -1779,8 +1828,16 @@ Devine, Robinson, Miller, Hamwi (paso 13). Fórmulas clínicas de los años 60�
 | `INFO_RECOMP_PRIORIDAD_GANAR` | info | `objetivo_efectivo === 'recomposicion'` y `recomposicion_prioridad === 'ganar'` (emitido en el paso 7, **reevaluado en el paso 17** igual que el anterior) | Nos has dicho que ahora te importa más ganar músculo, así que no te ponemos déficit: comerás en tu gasto estimado. Con la proteína alta y entrenamiento de fuerza 3-4 días por semana es donde más músculo se gana sin engordar. Si dentro de un par de meses la cintura sube, vuelve a calcular pidiendo prioridad a perder grasa. |
 | `INFO_CICLO` | info | `sexo === 'mujer'` y `menstruacion ∈ {regular, irregular}` (paso 17) | Tu gasto energético cambia poco a lo largo del ciclo, así que no ajustamos tus calorías por eso. Lo que sí cambia es lo que marca la báscula: la semana antes de la regla es normal retener 1-2 kg de agua y tener más hambre (unas 100-300 kcal). Pésate siempre en la misma fase del ciclo si quieres comparar, no te asustes con el peso de esa semana, y si comes 100-200 kcal más esos días, compénsalo en el resto de la semana sin cambiar el total. En los días de regla, cuida el hierro: {carne roja, legumbre o verdura de hoja / legumbre, verdura de hoja y frutos secos} acompañados de algo de vitamina C. |
 | `WARN_CICLO_AUSENTE` | aviso | `sexo === 'mujer'`, `menstruacion ∈ {irregular, ausente}` y (`objetivo_efectivo === 'perder'` o `banda ∈ {muy_bajo, bajo}` o `ritmo === 'agresivo'`) (paso 17) | Nos has dicho que tu regla es irregular o que no la tienes, y a la vez {tu plan lleva déficit, poca grasa corporal o un ritmo rápido / tienes poca grasa corporal o has pedido un ritmo rápido}. Esa combinación puede indicar baja disponibilidad energética (lo que se llama RED-S): comer por debajo de lo que gastas durante meses altera las hormonas, el hueso y el propio ciclo.{ Hemos suavizado el ritmo a moderado.} Si llevas tres meses o más sin regla y no es por anticonceptivos ni por la menopausia, pide cita con tu médico{ antes de seguir con el déficit}. |
-| `INFO_RITMO_POR_PLAZO` | info | `plazo_semanas !== null`, `pobj !== null`, `objetivo_efectivo ∈ {perder, ganar}` y el paso 6.7ter encontró un ritmo de la tabla que llega a tiempo (reevaluado en el paso 17: se retira si un suavizado lo bajó o si el cronograma pasa del plazo) | Nos has dicho que quieres llegar a {peso_objetivo} kg en {plazo_semanas} semanas: son unos {ritmo_req_g} g por semana. Hemos puesto el ritmo {suave/moderado/agresivo}, el más suave de los nuestros que llega a esa fecha, y hemos ignorado el que habías elegido antes. Si la fecha no es tan importante, un ritmo más suave se sostiene mejor y cuesta menos músculo. |
-| `WARN_PLAZO_IRREAL` | aviso | Paso 6.7ter: ningún ritmo de la tabla alcanza `ritmo_req`; o, desde el paso 17, un suavizado de seguridad bajó el ritmo del plazo, o `cronograma.semanas[0] > plazo_semanas` | Para llegar a {peso_objetivo} kg en {plazo_semanas} semanas harían falta unos {ritmo_req_g} g por semana, y ese no es un ritmo que podamos proponerte con seguridad. {Hemos puesto el más rápido de nuestra tabla. / Hemos aplicado el ritmo que tu caso permite.} No te prometemos esa fecha: la buena es la que sale de tu plan real.{ Con este plan el cálculo da entre {semanas_min} y {semanas_max} semanas.} Perder más rápido no es perder mejor: por debajo de cierto ritmo lo que se va es músculo. |
+| `INFO_RITMO_POR_PLAZO` | info | `plazo_semanas !== null`, `pobj !== null`, `objetivo_efectivo ∈ {perder, ganar}` y el paso 6.7ter encontró un ritmo de la tabla que llega a tiempo (reevaluado en el paso 17: se retira si un suavizado lo bajó, si no hay cronograma o si el cronograma pasa del plazo) | Tu fecha son {plazo_semanas} semanas y la meta de tu plan son {peso_objetivo_ef} kg: eso es un ritmo de unos {ritmo_req_g} g por semana. Hemos puesto el ritmo {suave/moderado/agresivo}, el más suave de los nuestros que llega a esa fecha.{ Si la fecha no es tan importante, un ritmo más suave se sostiene mejor y cuesta menos músculo.} |
+| `WARN_PLAZO_IRREAL` | aviso | Paso 6.7ter: ningún ritmo de la tabla llega a tiempo; o, desde el paso 17, un suavizado de seguridad bajó el ritmo del plazo, no hay cronograma, o `cronograma.semanas[0] > plazo_semanas` | Para llegar a {peso_objetivo_ef} kg en {plazo_semanas} semanas harían falta unos {ritmo_req_g} g por semana, y ese ritmo no sale de tu plan. {Hemos puesto el más rápido de nuestra tabla. / Hemos aplicado el ritmo que tu caso permite.}{ No te prometemos esa fecha: la buena es la que sale de tu plan real. Con este plan el cálculo da entre {semanas_min} y {semanas_max} semanas. / Con tu plan real no podemos calcularte un calendario, así que esa fecha menos todavía.} {Perder más rápido no es perder mejor: por encima de cierto ritmo lo que se va es músculo. / Ganar más rápido no es ganar mejor: por encima de cierto superávit lo que se gana es grasa.} |
+
+Los dos avisos del plazo hablan de **`peso_objetivo.efectivo`**, la meta del plan, no de la que
+escribió el usuario: cuando los suelos del paso 13 la corrigen, decir "para llegar a 38 kg" en el
+mismo informe que fija la meta en 49 es una contradicción, y `{ritmo_req_g}` se calcula con esa
+misma meta efectiva. La última frase de `INFO_RITMO_POR_PLAZO` solo se imprime si
+`ritmo_efectivo !== 'suave'` (con el suave puesto no existe ninguno más suave que sugerir), y el
+aviso ya no afirma haber ignorado el ritmo elegido antes: quien entra por "Tengo una fecha en
+mente" puede no haber elegido ninguno.
 | `INFO_PROYECCION_RECOMP` | info | Paso 14: proyección de recomposición con déficit real (las cuatro condiciones de ese paso) | En recomposición la báscula baja mucho más despacio de lo que cambia tu cuerpo: puedes perder grasa y ganar músculo a la vez y quedarte casi en el mismo peso. Por eso no te damos una fecha, sino una banda: por abajo, lo que bajarías si todo lo que pierdes fuese grasa; por arriba, quedarte en el peso de hoy porque el músculo lo compensa. Las dos cosas serían un buen resultado. Mídete también la cintura y hazte fotos cada cuatro semanas: ahí se ve lo que la báscula no enseña. |
 | `INFO_PROYECCION_PLANA` | info | `cronograma === null` (paso 14b) | Con este objetivo no proyectamos una curva de peso: lo que esperamos es que tu peso se mantenga, con la oscilación normal de un kilo arriba o abajo por agua, sal e intestino. Lo que sí debería cambiar es cómo te queda la ropa, las medidas y las cargas del entrenamiento. |
 | `INFO_AJUSTE_MANUAL` | info | Paso 18 con `ajuste.kcal === true` o `ajuste.hc === true` | Has ajustado a mano las calorías o los hidratos, así que estos ya no son los números que te propusimos. Hemos recalculado con tu ajuste la grasa, el reparto por comidas, el menú, la lista de la compra y el calendario. La proteína no la tocamos: es la que protege tu músculo cuando comes menos. Puedes volver a lo recomendado cuando quieras. |
@@ -1844,7 +1901,7 @@ Copy fijo del informe (no depende de condiciones):
 
 ## 5. Vectores de prueba
 
-Los diecinueve casos de esta sección están **generados por `docs/verify-vectors.mjs`**, la implementación de referencia de este documento, y se regeneran con `node docs/verify-vectors.mjs` cada vez que cambia una regla. Los nueve primeros son los vectores originales; del 10 al 14, los que pidió la revisión adversaria (bucle de factibilidad, regla de margen del paso 7, borde de la banda `medio`, cap renal con IMC ≥ 30 y usuario de más de 65 años); el 15 y el 16 son los de la v1.1 (proyección + regla + preferencias combinables, y recomposición con prioridad + ajuste manual); el 17, 18 y 19 son los de la v1.2 (recomposición con déficit real —peso objetivo y proyección—, plazo imposible y plazo holgado). Todos los números de aquí son normativos: un motor que no los reproduzca no cumple la especificación.
+Los veinte casos de esta sección están **generados por `docs/verify-vectors.mjs`**, la implementación de referencia de este documento, y se regeneran con `node docs/verify-vectors.mjs` cada vez que cambia una regla. Los nueve primeros son los vectores originales; del 10 al 14, los que pidió la revisión adversaria (bucle de factibilidad, regla de margen del paso 7, borde de la banda `medio`, cap renal con IMC ≥ 30 y usuario de más de 65 años); el 15 y el 16 son los de la v1.1 (proyección + regla + preferencias combinables, y recomposición con prioridad + ajuste manual); el 17, 18 y 19 son los de la v1.2 (recomposición con déficit real —peso objetivo y proyección—, plazo imposible y plazo holgado), y el 20 el que cerró su revisión (meta por debajo del suelo de seguridad con plazo: el ritmo se mide contra la meta efectiva). Todos los números de aquí son normativos: un motor que no los reproduzca no cumple la especificación.
 
 Convenciones: `fecha_inicio = 2026-09-07` en todos; los intermedios se muestran con 1 decimal (tolerancia ±0,15 en tests: con ±0,1 los valores que caen justo en el medio unidad quedaban en el borde exacto de la tolerancia) y las salidas redondeadas se comparan con igualdad exacta. Los avisos se comparan como conjunto, ya aplicadas las reglas de supresión del paso 6.
 
@@ -2382,7 +2439,7 @@ Input: mujer, 45 años, 165 cm, 68 kg; grasa `medidas` cuello 33 / cintura 82 / 
 Input: hombre, 38 años, 180 cm, 95 kg; grasa `desconocido`; sin somatotipo; actividad `sedentario`; sin entrenamiento; objetivo `perder`, ritmo **`suave`**; `peso_objetivo: 80`, **`plazo_semanas: 8`**; `preferencia_base: 'omnivoro'`; 3 comidas.
 
 1. IMC = **29,3** → `sobrepeso`. 2. CUN-BAE = 29,4 % (fiabilidad `baja`, banda `muy_alto`). 3. MLG = **67,11 kg**. 4. BMR = **1890,0** (`mifflin`; Katch 1819,6). 5. PAL 1,40; TDEE = **2513,7**.
-6. **Paso 6.7ter**: `ritmo_req` = |80 − 95| / 8 = **1,875 kg/sem**. Tabla 3.7[`muy_alto`]: suave 0,50 % → 0,475 kg/sem; moderado 0,75 % → 0,7125; agresivo 1,00 % → 0,95. **Ninguno llega** ⇒ `ritmo_ef = 'agresivo'` y **`WARN_PLAZO_IRREAL`** (el ritmo `suave` que había elegido el usuario se descarta). Ningún suavizado posterior aplica (edad < 65, sin `tca`, hombre).
+6. **Paso 6.7ter**: la meta 80 kg ya está por encima de los dos suelos del paso 13, así que `meta = 80` y `delta = 15 kg`. Tabla 3.7[`muy_alto`]: suave 0,50 % → 0,475 kg/sem (32 semanas de dieta + 3 descansos = **35**); moderado 0,75 % → 0,7125 (22 + 2 = **24**); agresivo 1,00 % → 0,95 (16 + 1 = **17**). **Ninguno cabe en 8** ⇒ `ritmo_ef = 'agresivo'` y **`WARN_PLAZO_IRREAL`** (el ritmo `suave` que había elegido el usuario se descarta). Ningún suavizado posterior aplica (edad < 65, sin `tca`, hombre).
 7. Déficit por ritmo = 1,00 % · 95 · 1 100 = 1 045 kcal/día; techo = 30 % · TDEE = 754,1 ⇒ `INFO_DEFICIT_CAPADO_TDEE`; kcal_calc = 1759,6 < suelo BMR 1890 ⇒ **kcal = 1890** con `WARN_SUELO_CALORICO_BMR`.
 8-11. **P = 160 g** (1,700 g/kg), **G = 70 g**, **HC = 155 g**, cierre **1890** (Δ 0); fibra **26 g**; azúcares libres máx. 47,3 g.
 12. Agua: **2850 ml** (rango 2600–3100; 11 vasos).
@@ -2397,7 +2454,7 @@ Input: hombre, 38 años, 180 cm, 95 kg; grasa `desconocido`; sin somatotipo; act
 Input: mujer, 34 años, 168 cm, 78 kg; grasa `desconocido`; sin somatotipo; actividad `ligero`; fuerza 3 d × 50 min, intensidad media, intermedia, entrena por la tarde; objetivo `perder`, ritmo **`agresivo`**; `peso_objetivo: 72`, **`plazo_semanas: 24`**; `preferencia_base: 'omnivoro'`; 4 comidas; sin `menstruacion`.
 
 1. IMC = **27,6** → `sobrepeso`. 2. CUN-BAE = 38,5 % (fiabilidad `baja`, banda `muy_alto`). 3. MLG = **48,01 kg**. 4. BMR = **1499,0** (`mifflin`). 5. Perfil `fuerza`; PAL 1,50; MET 5,0 → ejercicio/día 111,4; TDEE = **2241,9**.
-6. **Paso 6.7ter**: `ritmo_req` = 6 / 24 = **0,25 kg/sem**. Tabla 3.7[`muy_alto`]: suave 0,50 % · 78 = **0,39 kg/sem ≥ 0,25** ⇒ gana el **primero** de la lista: `ritmo_ef = 'suave'` e **`INFO_RITMO_POR_PLAZO`**. El `agresivo` que había elegido la usuaria se descarta, y el aviso se lo dice.
+6. **Paso 6.7ter**: la meta 72 kg está por encima de los suelos, así que `meta = 72` y `delta = 6 kg`. Tabla 3.7[`muy_alto`]: suave 0,50 % · 78 = 0,39 kg/sem ⇒ 15,4 semanas de dieta + 1 descanso = **17 ≤ 24** ⇒ gana el **primero** de la lista: `ritmo_ef = 'suave'` e **`INFO_RITMO_POR_PLAZO`**. El `agresivo` que había elegido la usuaria se descarta. Nótese que las 17 semanas estimadas aquí son exactamente las `semanas[0]` del cronograma del paso 14: los dos pasos usan la misma aritmética, y por eso el aviso sobrevive al paso 17.
 7. Déficit = 0,50 % · 78 · 1 100 = 429 kcal (techo 25 % · TDEE = 560,5, no muerde) ⇒ kcal_calc = 1812,9; suelos: sexo 1200, BMR 1499, EA 30 · 48,01 + 111,4 = 1551,7, ninguno muerde. **kcal = 1810**.
 8-11. **P = 155 g** (2,200 g/kg de base, `INFO_PROTEINA_CAPADA`), **G = 65 g**, **HC = 150 g**, cierre **1805** (Δ −5); fibra **25 g**; azúcares libres máx. 45,3 g.
 12. Agua: **2750 ml** (rango 2500–3000; 11 vasos).
@@ -2406,6 +2463,23 @@ Input: mujer, 34 años, 168 cm, 78 kg; grasa `desconocido`; sin somatotipo; acti
 15. FFMI = 17,0; normalizado **17,1**; categoría `null`.
 16. Reparto (4 comidas, peri = Merienda): Desayuno 25 % P40 G15 HC40 455 kcal · Comida 30 % P45 G20 HC35 500 kcal · Merienda 15 % P25 G10 HC30 310 kcal (peri) · Cena 30 % P45 G20 HC45 540 kcal.
 17. Avisos: `INFO_ADAPTACION`, `INFO_GRASA_ESTIMADA`, `INFO_PROTEINA_CAPADA`, **`INFO_RITMO_POR_PLAZO`**, `WARN_PROTEINA_TOMA_ALTA`.
+
+### Caso 20 — Hombre 38 años, meta por debajo del suelo y plazo de 24 semanas (v1.2, H)
+
+Input: hombre, 38 años, **150 cm**, 55 kg; grasa `desconocido`; sin somatotipo; actividad `ligero`; fuerza 3 d × 50 min, intensidad media, intermedio, entrena por la tarde; objetivo `perder`, ritmo `moderado`; **`peso_objetivo: 38`**, **`plazo_semanas: 24`**; `preferencia_base: 'omnivoro'`; 3 comidas.
+
+Es el caso que fija la regla de la meta efectiva: el usuario pide 38 kg, el paso 13 sube la meta a 49 kg (IMC mínimo y grasa esencial) y **el plazo se mide contra los 49, no contra los 38**.
+
+1. IMC = **24,4** → `normal`. 2. CUN-BAE = 22,3 % (fiabilidad `baja`, banda `alto`). 3. MLG = **42,72 kg**. 4. BMR = **1302,5** (`mifflin`). 5. Perfil `fuerza`; PAL 1,50; ejercicio/día 78,6; TDEE = **1930,7**.
+6. **Paso 6.7ter**: `meta_segura(38)` = max(38; 18,5 · 2,25 = 41,6; 42,72 / 0,88 = 48,5) = **48,5** (el paso 13 lo redondea a 49,0), `delta` = 55 − 48,5 = **6,5 kg**. Tabla 3.7[`alto`]: suave 0,40 % · 55 = 0,22 kg/sem ⇒ 30 + 3 = **33 semanas**, no cabe; moderado 0,60 % · 55 = 0,33 ⇒ 20 + 2 = **22 ≤ 24** ⇒ `ritmo_ef = 'moderado'` e **`INFO_RITMO_POR_PLAZO`**. Con la meta cruda (38 kg, 17 kg de camino) habría salido `agresivo`, un ritmo que la meta publicada no exige y que habría chocado con el suelo calórico.
+7. Déficit = 0,60 % · 55 · 1 100 = 363 kcal (techo 25 % · TDEE = 482,7, no muerde) ⇒ **kcal = 1570**; ningún suelo muerde (sexo 1500, BMR 1302,5, EA 30 · 42,72 + 78,6 = 1360,3).
+8-11. **P = 120 g**, **G = 50 g**, **HC = 160 g**, cierre **1570** (Δ 0); fibra **24 g** (`INFO_FIBRA_AJUSTADA`); azúcares libres máx. 39,3 g.
+12. Agua: **2200 ml** (rango 2000–2450; 9 vasos).
+13. Peso objetivo: método `grasa`; sugerido 50,5 kg (rango 46,5–54,0; `mostrar_central = false`); **efectivo 49,0 kg** con `WARN_OBJETIVO_IMC_BAJO` y `WARN_OBJETIVO_GRASA_MUY_BAJA`; hito `null`.
+14. Cronograma: `ritmo_kg_sem` = **0,3279** (0,60 %/sem), `delta_kg` = 6,0, `diet_breaks` = 2, **semanas [21, 24]**: cabe entero en las 24 pedidas, así que `INFO_RITMO_POR_PLAZO` se mantiene. Fechas 2027-02-01 … 2027-02-22, `precision_fecha = 'mes'`, `tramo_12sem` = [3,5; 4,0].
+15. FFMI = 19,0; normalizado **20,9**; categoría `null`.
+16. Reparto (3 comidas, peri = Cena): Desayuno 30 % P35 G15 HC50 475 kcal · Comida 35 % P45 G15 HC45 495 kcal · Cena 35 % P40 G20 HC65 600 kcal (peri).
+17. Avisos: `INFO_ADAPTACION`, `INFO_FIBRA_AJUSTADA`, `INFO_GRASA_ESTIMADA`, `INFO_MICRONUTRIENTES`, **`INFO_RITMO_POR_PLAZO`**, `WARN_OBJETIVO_GRASA_MUY_BAJA`, `WARN_OBJETIVO_IMC_BAJO`, `WARN_PROTEINA_TOMA_ALTA`. El texto del aviso del plazo habla de **49 kg**, la meta del plan, y de **250 g por semana**: nombrar los 38 kg que el propio informe acaba de rechazar era la contradicción que cerró la revisión de la v1.2.
 
 ### Resumen de salidas (para tests de regresión)
 
@@ -2430,6 +2504,7 @@ Input: mujer, 34 años, 168 cm, 78 kg; grasa `desconocido`; sin somatotipo; acti
 | 17 | 1680 | 135 | 60 | 150 | 24 | 2400 | 63,0 | — | mifflin |
 | 18 | 1890 | 160 | 70 | 155 | 26 | 2850 | 80,0 | 30–37 | mifflin |
 | 19 | 1810 | 155 | 65 | 150 | 25 | 2750 | 72,0 | 17–19 | mifflin |
+| 20 | 1570 | 120 | 50 | 160 | 24 | 2200 | 49,0 | 21–24 | mifflin |
 
 Regenerar con `node docs/verify-vectors.mjs` (la tabla se imprime al final, bajo "RESUMEN DE SALIDAS"). El mismo script ejecuta un barrido aleatorio de 112 380 perfiles válidos —sobre la rejilla completa del dominio de la §1: alturas 130-230 cm y pesos 35-300 kg, y ahora también los dos formatos de preferencia, las cuatro prioridades de recomposición, las cinco respuestas de la regla, nueve ajustes manuales distintos y, desde la v1.2, ocho plazos y siete combinaciones de síntomas— contra **40 familias** de invariantes de seguridad y debe terminar con **0 violaciones**.
 
@@ -2664,6 +2739,25 @@ que ya era seguro**, y cuando ni lo más rápido llega, lo dice en vez de invent
 consecuencia buscada de la decisión H: los dos son recomposiciones con déficit real, y hasta la v1.1
 recibían como "peso objetivo" su propio peso actual y una raya horizontal mientras el informe les decía
 que llevaban déficit.
+
+#### Ronda de cierre de la v1.2 (revisión adversaria del motor, 2026-09-08)
+
+Cuatro hallazgos `major` sobre el plazo, todos aceptados y aplicados. Los cuatro tenían la misma raíz:
+el paso 6.7ter razonaba con una meta y un modelo distintos de los que el resto del informe publica.
+
+| # | Sev. | Decisión | Resumen |
+|---|---|---|---|
+| V12-1 | major | Aceptado (aplicado) | `INFO_RITMO_POR_PLAZO` sobrevivía con `cronograma === null`: el aviso prometía una fecha en el mismo informe que la declaraba incalculable (274 de 5 958 perfiles con plazo). El paso 17 trata ahora `cronograma === null` como "no se puede sostener la promesa" y lo sustituye por `WARN_PLAZO_IRREAL`, cuyo texto tiene variante propia sin calendario. Invariante **S30c**. |
+| V12-2 | major | Aceptado (aplicado) | El paso 6.7ter dividía por el plazo la meta **cruda**, antes de los suelos del paso 13, y aplicaba un ritmo más duro del que exige la meta que el propio informe publica (hombre 150 cm / 55 kg, meta 38 → efectiva 49: salía `agresivo` donde bastaba `moderado`). Se calcula `meta_segura(pobj)` en el paso 6 con las mismas fórmulas del 13. Vector nuevo **20**; los vectores 18 y 19 no se mueven. |
+| V12-3 | major | Aceptado (aplicado) | `WARN_PLAZO_IRREAL` podía imprimir un calendario que cabía de sobra en el plazo pedido (481 de 5 958). Regla simétrica en el paso 17: con `cronograma.semanas[1] ≤ plazo_semanas` el aviso se retira. Invariante **S30f**. |
+| V12-4 | major | Aceptado (aplicado, opción "cerrar el bucle") | El plazo elegía el ritmo con la tasa lineal de la tabla y el paso 17 lo juzgaba con el cronograma (adaptación + diet breaks): el motor negaba fechas que un ritmo de su propia tabla alcanzaba, y el resultado no era monótono (pedir 16 semanas daba un plan peor que pedir 15). El paso 6.7ter compara ahora `semanas(r)`, con la misma aritmética del paso 14. |
+| V12-5 | minor | Aceptado (aplicado) | Copy de los dos avisos del plazo: hablan de la meta **efectiva**, `INFO_RITMO_POR_PLAZO` no sugiere "un ritmo más suave" cuando ya lleva el suave ni afirma haber ignorado un ritmo que el usuario puede no haber elegido, y `WARN_PLAZO_IRREAL` dice que el músculo se pierde **por encima** de cierto ritmo, no por debajo. |
+| V12-6 | minor | Aceptado (aplicado) | `WARN_PROTEINA_TOMA_ALTA` proponía "repartirla en 3 tomas" a quien ya come 3, 4 o 5 veces: el texto depende ahora de `n_comidas` y, con 4 o más, cambia el consejo por "el total del día es lo que manda". |
+| V12-7 | major | Aceptado (aplicado) | Los consejos del ciclo recomendaban alimentos que el usuario había marcado como "no me gusta" mientras la compra opcional sí los respetaba. Paso 19 y `consejosSinExcluidos` (arriba). Invariante **S33b**. |
+
+**Estado tras la ronda de cierre:** `node docs/verify-vectors.mjs` → **20 vectores** sin incoherencias y
+**0 violaciones** en 112 380 perfiles del barrido, con 40 familias de invariantes (nuevas de esta ronda:
+S30c, S30f, S30g, S33b). Los vectores 1-19 conservan todos sus números.
 
 ### v1.1 — decisiones A-F del feedback real de usuarios (2026-09-07)
 
