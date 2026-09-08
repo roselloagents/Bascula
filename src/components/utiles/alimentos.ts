@@ -134,3 +134,82 @@ export function resumenMarcados(excluidos: readonly string[], favoritos: readonl
   }
   return partes.join(' · ')
 }
+
+/* ---- Buscador y plegado de la pantalla (§1 paso 14, v1.2.1) ------------ */
+
+/**
+ * Texto listo para comparar: en minúsculas y sin acentos. Se descompone en NFD y se tiran los
+ * diacríticos, así que "Brócoli", "brocoli" y "BROCOLI" son la misma cadena.
+ */
+export function normalizarTexto(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+/**
+ * `true` si el alimento responde a lo escrito en el buscador. Se mira en `nombre_corto` **y** en
+ * `nombre`, palabra a palabra y por subcadena: "lino" encuentra "Semillas de lino" (que no es su
+ * nombre corto) y "yogur 0" encuentra "Yogur griego 0%" (dos trozos sueltos del mismo nombre).
+ * Con el buscador vacío pasan todos.
+ */
+export function coincide(alimento: Alimento, consulta: string): boolean {
+  const trozos = normalizarTexto(consulta)
+    .split(/\s+/)
+    .filter((trozo) => trozo !== '')
+  if (trozos.length === 0) return true
+  // Los trozos no llevan espacios, así que ninguno puede colarse a caballo de los dos nombres.
+  const donde = `${normalizarTexto(alimento.nombre_corto)} ${normalizarTexto(alimento.nombre)}`
+  return trozos.every((trozo) => donde.includes(trozo))
+}
+
+/**
+ * Los grupos que tienen alguna coincidencia, con solo los alimentos que coinciden. Con el
+ * buscador vacío se devuelven los siete tal cual: buscar no reordena ni reagrupa nada.
+ */
+export function filtrarGrupos(grupos: readonly GrupoChips[], consulta: string): GrupoChips[] {
+  if (normalizarTexto(consulta) === '') return [...grupos]
+  return grupos
+    .map((grupo) => ({
+      ...grupo,
+      alimentos: grupo.alimentos.filter((alimento) => coincide(alimento, consulta)),
+    }))
+    .filter((grupo) => grupo.alimentos.length > 0)
+}
+
+/** Cuántos alimentos hay en total en una lista de grupos. */
+export function cuentaAlimentos(grupos: readonly GrupoChips[]): number {
+  return grupos.reduce((suma, grupo) => suma + grupo.alimentos.length, 0)
+}
+
+/** [SPEC] SPEC-ux §1 paso 14, línea de resultados del buscador (copy literal). */
+export function lineaBusqueda(cuantos: number, consulta: string): string {
+  if (cuantos === 0) {
+    return 'Ningún alimento se llama así. Prueba con otro nombre o mira los grupos.'
+  }
+  return `${cuantos} ${cuantos === 1 ? 'alimento' : 'alimentos'} para «${consulta.trim()}»`
+}
+
+/** Los ids marcados que caen dentro de un grupo, separados por lista (cabecera plegable). */
+export function marcadosDelGrupo(
+  grupo: GrupoChips,
+  excluidos: readonly string[],
+  favoritos: readonly string[],
+): { excluidos: string[]; favoritos: string[] } {
+  const dentro = (ids: readonly string[]) =>
+    grupo.alimentos.map((alimento) => alimento.id).filter((id) => ids.includes(id))
+  return { excluidos: dentro(excluidos), favoritos: dentro(favoritos) }
+}
+
+/**
+ * "✕ 2 · ★ 1": las marcas de un grupo, en corto, para la cabecera plegable. Cadena vacía si no
+ * hay ninguna. Es la versión visual; la hablada la da `resumenMarcados` con las mismas listas.
+ */
+export function marcasDeGrupo(marcados: { excluidos: string[]; favoritos: string[] }): string {
+  const partes: string[] = []
+  if (marcados.excluidos.length > 0) partes.push(`✕ ${marcados.excluidos.length}`)
+  if (marcados.favoritos.length > 0) partes.push(`★ ${marcados.favoritos.length}`)
+  return partes.join(' · ')
+}
