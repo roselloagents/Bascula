@@ -17,6 +17,9 @@ const IDS_CREMAS = ['mantequilla_cacahuete']
 function filasAplicables(a: Alimento): string[] {
   const rol = (r: string): boolean => (a.roles as string[]).includes(r)
   const filas: string[] = []
+  // v1.2: la fila `extra` tiene precedencia sobre todas las demás, así que la exclusividad mutua
+  // del resto se evalúa solo entre los alimentos que NO llevan ese tag (§3.3).
+  if (a.tags.includes('extra')) return ['extra']
   if (a.grupo === 'proteina' && ['crudo', 'cocido', 'listo'].includes(a.estado) && !rol('carbohidrato')) {
     filas.push('proteina')
   }
@@ -39,10 +42,21 @@ function filasAplicables(a: Alimento): string[] {
 }
 
 describe('base de alimentos', () => {
-  it('tiene 101 alimentos y ningún id duplicado', () => {
-    expect(ALIMENTOS.length).toBe(101)
+  it('tiene 105 alimentos (101 del plan + 4 `extra`) y ningún id duplicado', () => {
+    expect(ALIMENTOS.length).toBe(105)
+    expect(ALIMENTOS.filter((a) => a.tags.includes('extra')).length).toBe(4)
     const ids = new Set(ALIMENTOS.map((a) => a.id))
     expect(ids.size).toBe(ALIMENTOS.length)
+  })
+
+  it('da a cada alimento un `nombre_corto` de 18 caracteres o menos y único', () => {
+    const cortos = new Set<string>()
+    for (const a of ALIMENTOS) {
+      expect(a.nombre_corto, a.id).toBeTruthy()
+      expect(a.nombre_corto.length, `${a.id}: "${a.nombre_corto}"`).toBeLessThanOrEqual(18)
+      expect(cortos.has(a.nombre_corto), `${a.id}: "${a.nombre_corto}" repetido`).toBe(false)
+      cortos.add(a.nombre_corto)
+    }
   })
 
   it('cumple kcal ≈ 4P + 4HC + 9G con un margen del 15 %', () => {

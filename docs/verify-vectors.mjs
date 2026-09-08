@@ -1,11 +1,14 @@
-// Verificador / implementacion de referencia de docs/SPEC-calculo.md (v1.1, decisiones A-F 2026-09-07).
-// Implementacion LITERAL de la spec: pasos 0-18, tablas 3.x, avisos §4, reglas de supresion.
+// Verificador / implementacion de referencia de docs/SPEC-calculo.md (v1.2, decisiones G-J 2026-09-08).
+// Implementacion LITERAL de la spec: pasos 0-19, tablas 3.x, avisos §4, reglas de supresion.
 // v1.1: prioridad de recomposicion (C), regla (D), preferencias combinables (E), proyeccion (F)
 // y ajuste manual `ajustarMacros` (B, paso 18).
+// v1.2: plazo -> ritmo discreto (paso 6.7ter), peso objetivo y proyeccion de la recomposicion
+// con deficit (pasos 13 y 14), consejos por sintomas de la regla (paso 19) y los tres campos
+// que el motor IGNORA (`menu_sencillo`, `alimentos_excluidos`, `alimentos_favoritos`).
 //
 //   node docs/verify-vectors.mjs            -> vectores §5 + barrido de invariantes
 //   node docs/verify-vectors.mjs --json 1   -> Resultado completo del Caso 1 en JSON
-//   node docs/verify-vectors.mjs --json 4   -> idem para cualquier caso 1..9
+//   node docs/verify-vectors.mjs --json 17  -> idem para cualquier caso 1..19
 
 // ---------------------------------------------------------------- helpers §0.1
 const round1  = (x) => Math.round(x * 10) / 10;
@@ -68,9 +71,10 @@ const CRONO_CORTE = ['INFO_SIN_CRONOGRAMA','INFO_SIN_CRONOGRAMA_SIN_MARGEN','INF
 const TCA_OCULTOS = ['INFO_GRASA_ESTIMADA','INFO_PESO_YA_MINIMO','INFO_IMC_MUSCULADO','INFO_ADAPTACION',
   'WARN_YA_MAGRO','WARN_YA_EN_OBJETIVO','WARN_OBJETIVO_MUY_LEJANO','WARN_CRONOGRAMA_LARGO',
   'INFO_SIN_CRONOGRAMA','INFO_SIN_CRONOGRAMA_SIN_MARGEN','INFO_CRONOGRAMA_NO_ESTIMABLE','INFO_CRONOGRAMA_FUERA_DE_HORIZONTE',
-  'INFO_PROYECCION_PLANA'];
+  'INFO_PROYECCION_PLANA','INFO_PROYECCION_RECOMP','INFO_RITMO_POR_PLAZO','WARN_PLAZO_IRREAL'];
 // familia del cronograma: el paso 18 la retira entera y la vuelve a emitir con las kcal ajustadas
-const CRONO_FAMILIA = ['INFO_ADAPTACION','WARN_CRONOGRAMA_LARGO', ...CRONO_CORTE, 'INFO_PROYECCION_PLANA'];
+const CRONO_FAMILIA = ['INFO_ADAPTACION','WARN_CRONOGRAMA_LARGO', ...CRONO_CORTE,
+  'INFO_PROYECCION_PLANA','INFO_PROYECCION_RECOMP'];
 const SUPRESION = [
   ['WARN_KCAL_AJUSTE_ALTA', ['WARN_DEFICIT_MINIMO']],
   ['INFO_OBJETIVO_IGNORADO', ['WARN_OBJETIVO_INCOHERENTE']],
@@ -81,7 +85,91 @@ const SUPRESION = [
   ['INFO_OBJETIVO_RESUELTO_POR_PESO', ['INFO_OBJETIVO_IGNORADO']],
   ['INFO_AGUA_NO_PRESCRITA', ['WARN_AGUA_ALTA','INFO_AGUA_MAYORES']],
   ...CRONO_CORTE.map((c) => [c, ['INFO_ADAPTACION','WARN_CRONOGRAMA_LARGO']]),
+  // v1.2: las dos proyecciones sin cronograma son excluyentes, y el plazo no promete nada
+  // cuando el plan ya no es de perder/ganar (lo retira el paso 17).
+  ['INFO_PROYECCION_RECOMP', ['INFO_PROYECCION_PLANA']],
+  ['WARN_PLAZO_IRREAL', ['INFO_RITMO_POR_PLAZO']],
 ];
+
+// ---------------------------------------------------------------- Paso 19 — ciclo (v1.2)
+// OJO: como todo este fichero, los textos van SIN ACENTOS (ASCII). El copy normativo, con
+// acentos y tal y como se imprime, es el de la §4 / Paso 19 del documento; aqui solo importa
+// la ESTRUCTURA (que consejo, en que orden, con que fragmentos condicionales y que alimentos).
+// Copy literal de la §4 / Paso 19. `alimentos` va por base dietetica; las dos unicas
+// sustituciones por restriccion son la avena (sin gluten) y el yogur griego (sin lactosa).
+const SINTOMAS_ORDEN = ['dolor','hinchazon','antojos','cansancio','sangrado_abundante'];
+const CONSEJOS_CICLO = {
+  dolor: {
+    titulo: 'Dolor: omega-3, magnesio y calor',
+    texto: 'El dolor de regla lo producen las prostaglandinas, y el omega-3 compite con ellas: en los ensayos, 1-2 g al dia durante dos o tres ciclos reducen el dolor y la necesidad de analgesicos. Es lento, no notaras nada el primer mes. El magnesio tiene evidencia mas floja, pero por comida es barato y seguro. A corto plazo lo que mejor funciona sigue siendo el calor local y el movimiento suave. Si el dolor te impide hacer vida normal, eso no es normal: consultalo.',
+    alimentos: {
+      omnivoro:    ['Pescado azul (salmon, sardinas en lata)', 'Nueces', 'Semillas de lino molidas', 'Cacao puro'],
+      vegetariano: ['Nueces', 'Semillas de lino molidas', 'Semillas de chia', 'Cacao puro'],
+      vegano:      ['Nueces', 'Semillas de lino molidas', 'Semillas de chia', 'Cacao puro'],
+    },
+  },
+  hinchazon: {
+    titulo: 'Hinchazon: es agua, no grasa',
+    texto: 'Ese kilo o dos de mas de la semana antes es agua, y se va solo. No recortes calorias por eso: si bajas el plan cada vez que la bascula sube, acabas comiendo bastante menos de lo que necesitas. Lo que si ayuda es quitar sal de la que viene ya puesta (embutido, conservas, precocinados, pan de molde), beber lo mismo o mas —nunca menos— y llegar bien al potasio. Y pesate siempre el mismo dia de la semana y en la misma fase del ciclo, o estaras comparando dos cosas distintas.',
+    alimentos: {
+      omnivoro:    ['Platano', 'Patata cocida', 'Espinacas', 'Calabacin'],
+      vegetariano: ['Platano', 'Patata cocida', 'Espinacas', 'Calabacin'],
+      vegano:      ['Platano', 'Patata cocida', 'Espinacas', 'Calabacin'],
+    },
+  },
+  antojos: {
+    titulo: 'Mas hambre: cuenta con ella',
+    texto: 'En la segunda mitad del ciclo el hambre sube de verdad: se han medido entre 100 y 300 kcal mas al dia. No es falta de fuerza de voluntad. Tienes dos formas de manejarlo y las dos valen: comer 100-200 kcal mas esos dias y compensarlas en el resto de la semana, o dejar el plan como esta y apoyarte en proteina y fibra, que son lo que mas sacia. Si te pide dulce, el cacao puro o una o dos onzas de chocolate del 85 % cunden mucho mas que una tableta con leche.',
+    alimentos: {
+      omnivoro:    ['Yogur griego 0%', 'Fruta (manzana, platano)', 'Cacao puro', 'Chocolate negro 85%'],
+      vegetariano: ['Yogur griego 0%', 'Fruta (manzana, platano)', 'Cacao puro', 'Chocolate negro 85%'],
+      vegano:      ['Yogur de soja alto en proteina', 'Fruta (manzana, platano)', 'Cacao puro', 'Almendras'],
+    },
+  },
+  cansancio: {
+    titulo: 'Cansancio: duerme y no bajes los hidratos',
+    texto: 'El cansancio de esos dias suele ser una mezcla de dormir peor, hierro justo y menos energia disponible. Lo primero es dormir: es la palanca mas grande y la mas aburrida. Lo segundo, no recortar hidratos justo esa semana: son el combustible del entrenamiento y del animo.{lc} Si el cansancio dura bastante mas que la regla, mira el hierro con tu medico.',
+    lc: ' Como llevas un plan bajo en hidratos, subelos un poco esos dias —una racion mas de fruta o de tuberculo— y vuelve a tu plan despues.',
+    alimentos: {
+      omnivoro:    ['Avena', 'Patata cocida', 'Lentejas o garbanzos', 'Fruta'],
+      vegetariano: ['Avena', 'Patata cocida', 'Lentejas o garbanzos', 'Fruta'],
+      vegano:      ['Avena', 'Patata cocida', 'Lentejas o garbanzos', 'Fruta'],
+    },
+  },
+  sangrado_abundante: {
+    titulo: 'Sangrado abundante: cuida el hierro',
+    texto: 'Un sangrado abundante mes a mes es la causa mas frecuente de falta de hierro en mujeres. No cambiamos tus macros por esto: lo que cambia es que eliges dentro de ellos. Acompana el hierro con algo de vitamina C (naranja, kiwi, pimiento o tomate) y deja el cafe y el te para dos horas antes o despues de esa comida, porque reducen bastante lo que absorbes.{fe} ',
+    fe: ' Si ademas te notas cansada, pide a tu medico una analitica con ferritina: es el dato que dice si tienes las reservas bajas, y un hemograma normal puede no verlo.',
+    alimentos: {
+      omnivoro:    ['Lentejas o garbanzos', 'Carne roja magra (ternera)', 'Mejillones o berberechos al natural', 'Espinacas'],
+      vegetariano: ['Lentejas o garbanzos', 'Espinacas', 'Tofu', 'Almendras'],
+      vegano:      ['Lentejas o garbanzos', 'Espinacas', 'Tofu', 'Almendras'],
+    },
+  },
+};
+/** Las dos unicas sustituciones por restriccion de la lista de alimentos (§4, Paso 19). */
+function alimentosCiclo(clave, pref_base, restr) {
+  const lista = CONSEJOS_CICLO[clave].alimentos[pref_base];
+  return lista
+    .filter((n) => !(n === 'Avena' && restr.includes('sin_gluten')))
+    .map((n) => (n === 'Yogur griego 0%' && restr.includes('sin_lactosa') ? 'Yogur griego 0% sin lactosa' : n));
+}
+
+/** Paso 19: `Resultado.ciclo`, o `undefined`. No cambia ningun numero del plan. */
+function paso19(hayInfoCiclo, sintomas_in, pref_base, restr, low_carb) {
+  if (!hayInfoCiclo) return undefined;
+  const marcados = Array.isArray(sintomas_in) ? sintomas_in : [];
+  const sintomas = SINTOMAS_ORDEN.filter((s) => marcados.includes(s));
+  if (sintomas.length === 0) return undefined;
+  const consejos = sintomas.map((clave) => {
+    const c = CONSEJOS_CICLO[clave];
+    let texto = c.texto;
+    if (clave === 'cansancio') texto = texto.replace('{lc}', low_carb ? c.lc : '');
+    if (clave === 'sangrado_abundante') texto = texto.replace('{fe}', sintomas.includes('cansancio') ? c.fe : '').trim();
+    return { clave, titulo: c.titulo, texto, alimentos: alimentosCiclo(clave, pref_base, restr) };
+  });
+  return { sintomas, consejos };
+}
 
 // ---------------------------------------------------------------- proyeccion (Paso 14, F)
 const SEM_PROYECCION_MAX = 26;      // tope duro de la curva con cronograma
@@ -108,6 +196,29 @@ function proyeccionCurva(PC, gana, delta_kg, ritmo_kg_sem, factor_adapt, diet_br
   return out;
 }
 
+/**
+ * Proyeccion de RECOMPOSICION CON DEFICIT REAL (v1.2, Paso 14). No hay cronograma —en
+ * recomposicion no se promete fecha—, pero si hay deficit, y esconderlo con una banda plana de
+ * +-1 kg era mentir en la direccion contraria: quien pide recomposicion con prioridad perder
+ * lleva un deficit de verdad y ve una raya horizontal.
+ *   borde inferior = la curva del deficit (la misma regla lineal de 7 700 kcal/kg que el
+ *                    `peso_min` de `perder`), acotada por la meta;
+ *   borde superior = el peso actual (todo lo que pierdes de grasa lo compensa el musculo);
+ *   esperado       = el punto medio de los dos.
+ */
+function proyeccionRecomp(PC, delta_kg, ritmo_kg_sem) {
+  const sem_lineal = delta_kg / ritmo_kg_sem;
+  // al menos 12 semanas para que existan los hitos de 4, 8 y 12 de la §2.6b; nunca mas de 26
+  const S = Math.min(Math.max(Math.ceil(sem_lineal), 12), SEM_PROYECCION_MAX);
+  const out = [];
+  for (let s = 0; s <= S; s++) {
+    const rapido = Math.min(ritmo_kg_sem * s, delta_kg);
+    const inf = PC - rapido;
+    out.push({ semana:s, peso_min:round1(inf), peso_esp:round1((inf + PC) / 2), peso_max:round1(PC) });
+  }
+  return out;
+}
+
 /** Proyeccion plana: sin cronograma lo esperable es que el peso no cambie (+-1 kg de agua/sal). */
 function proyeccionPlana(PC) {
   const out = [];
@@ -126,6 +237,15 @@ function paso14(obje, PC, peso_obj_ef, TDEE, kcal, fecha_inicio, w) {
   let proyeccion = null;
   if (obje === 'mantener' || obje === 'recomposicion' || peso_obj_ef === null) {
     w('INFO_SIN_CRONOGRAMA');
+    // v1.2: recomposicion CON deficit real y con una meta por debajo del peso actual.
+    // El cronograma sigue siendo null (no se promete fecha); lo que cambia es la curva.
+    if (obje === 'recomposicion' && peso_obj_ef !== null && TDEE - kcal >= 50 && PC - peso_obj_ef >= 0.5) {
+      const ritmo_kg_sem = (TDEE - kcal) * 7 / 7700;
+      if (ritmo_kg_sem >= 0.05) {
+        proyeccion = proyeccionRecomp(PC, PC - peso_obj_ef, ritmo_kg_sem);
+        w('INFO_PROYECCION_RECOMP');
+      }
+    }
   } else {
     const delta_kcal = obje === 'perder' ? TDEE - kcal : kcal - TDEE;
     const delta_kg   = obje === 'perder' ? PC - peso_obj_ef : peso_obj_ef - PC;
@@ -205,6 +325,8 @@ const DOM = {
   menstruacion: ['regular','irregular','ausente','no_dice'],
   preferencia_base: ['omnivoro','vegetariano','vegano'],
   restriccion: ['sin_lactosa','sin_gluten'],
+  // v1.2
+  sintoma_regla: ['dolor','hinchazon','antojos','cansancio','sangrado_abundante'],
 };
 
 // §1 "regla de traduccion": normaliza el trio base/restricciones/low_carb desde cualquiera de los
@@ -265,6 +387,15 @@ function validar(I) {
   if (I.restricciones !== undefined && I.restricciones !== null
       && (!Array.isArray(I.restricciones) || I.restricciones.some((r) => !DOM.restriccion.includes(r)))) e.push('restricciones');
   if (I.low_carb !== undefined && I.low_carb !== null && typeof I.low_carb !== 'boolean') e.push('low_carb');
+  // --- v1.2: plazo, sintomas y listas de alimentos (el motor ignora las dos ultimas)
+  if (I.plazo_semanas !== undefined && I.plazo_semanas !== null
+      && (!Number.isInteger(I.plazo_semanas) || I.plazo_semanas < 4 || I.plazo_semanas > 52)) e.push('plazo_semanas');
+  if (I.sintomas_regla !== undefined && I.sintomas_regla !== null
+      && (!Array.isArray(I.sintomas_regla) || I.sintomas_regla.some((s) => !DOM.sintoma_regla.includes(s)))) e.push('sintomas_regla');
+  for (const campo of ['alimentos_excluidos','alimentos_favoritos']) {
+    const v = I[campo];
+    if (v !== undefined && v !== null && (!Array.isArray(v) || v.some((x) => typeof x !== 'string'))) e.push(campo);
+  }
   // --- enteros y fecha
   if (!Number.isInteger(I.edad)) e.push('edad');
   if (!Number.isInteger(T0.dias_semana)) e.push('entrenamiento.dias_semana');
@@ -421,6 +552,29 @@ function calcular(I) {
   if ((obj === 'mantener' || obj === 'recomposicion') && pobj !== null && Math.abs(pobj - PC) >= 1) w('INFO_OBJETIVO_IGNORADO');
 
   let ritmo_ef = I.ritmo;
+  // 6.7ter PLAZO (v1.2). Se evalua AQUI, ANTES que cualquier suavizado de seguridad: fija el
+  // ritmo de PARTIDA a partir de la fecha que ha pedido el usuario, y despues los suavizados de
+  // 6.7 (tca, >=65) y 6.7bis (regla) se aplican sobre el resultado y MANDAN.
+  const plazo = (typeof I.plazo_semanas === 'number' && Number.isFinite(I.plazo_semanas)) ? I.plazo_semanas : null;
+  let ritmo_plazo = null, ritmo_req = null;
+  if (plazo !== null && pobj !== null && (obj === 'perder' || obj === 'ganar')) {
+    ritmo_req = Math.abs(pobj - PC) / plazo;                      // kg/semana que exige la fecha
+    const kgSem = (r) => {
+      if (obj === 'perder') {
+        const t = RITMO_T[banda];
+        return t ? t[r] / 100 * PC : null;                        // % del peso corporal por semana
+      }
+      const sup_pct = perfil !== 'fuerza' ? 0.05 : SUP_T[exp][r];
+      return clamp(sup_pct * TDEE, 150, 500) * 7 / 7700;          // el superavit real del paso 7
+    };
+    for (const r of ['suave','moderado','agresivo']) {
+      const v = kgSem(r);
+      if (v !== null && v >= ritmo_req - 1e-9) { ritmo_plazo = r; break; }
+    }
+    if (ritmo_plazo === null) { ritmo_plazo = 'agresivo'; w('WARN_PLAZO_IRREAL'); }
+    else w('INFO_RITMO_POR_PLAZO');
+    ritmo_ef = ritmo_plazo;
+  }
   if (condiciones.includes('tca')) { w('INFO_RITMO_SUAVE'); if (ritmo_ef !== 'suave') ritmo_ef = 'suave'; }
   if (I.edad >= 65 && obj === 'perder') {
     if (ritmo_ef === 'agresivo') ritmo_ef = 'moderado';
@@ -666,7 +820,16 @@ function calcular(I) {
   let peso_obj_ef = null, hito = null, metodo_peso = 'actual';
   let piso_peso = min185;                           // suelo duro del peso objetivo
 
-  if (objetivo_efectivo === 'perder') {
+  // v1.2: la recomposicion CON deficit real (kcal <= TDEE - 50, es decir prioridad `perder` o
+  // `equilibrado` con banda que si resta) valida y propone el peso objetivo exactamente como
+  // `perder`: mismos suelos (IMC minimo y grasa esencial) y mismos avisos. La comprobacion
+  // `PC - meta >= 0,5` va ANTES de ejecutar la rama, para no emitir avisos de una meta que
+  // despues se descarta: si ya estas en (o por debajo de) la meta, no hay meta que dar.
+  const recomp_con_deficit = (objetivo_efectivo === 'recomposicion' && TDEE - kcal >= 50);
+  const meta_cand = recomp_con_deficit ? (pobj === null ? sugerido_central : pobj) : null;
+  const rama_perder = objetivo_efectivo === 'perder'
+    || (recomp_con_deficit && PC - meta_cand >= 0.5);
+  if (rama_perder) {
     metodo_peso = 'grasa';
     if (pobj === null) peso_obj_ef = sugerido_central;
     else {
@@ -787,6 +950,26 @@ function calcular(I) {
   // `recomposicion_prioridad` no se publica y el aviso hablaria de un deficit que ya no existe
   if (objetivo_efectivo !== 'recomposicion')
     avisos = avisos.filter(c => c !== 'INFO_RECOMP_PRIORIDAD_PERDER' && c !== 'INFO_RECOMP_PRIORIDAD_GANAR');
+  // v1.2: en recomposicion con deficit el peso objetivo SI se usa (es la meta de la proyeccion),
+  // asi que decir "no se usa" seria falso. Las calorias siguen saliendo de la tabla 3.9, y eso
+  // lo explica INFO_PROYECCION_RECOMP.
+  if (objetivo_efectivo === 'recomposicion' && peso_obj_ef !== null)
+    avisos = avisos.filter(c => c !== 'INFO_OBJETIVO_IGNORADO');
+  // v1.2 PLAZO: los dos avisos hablan de una fecha para una meta de peso. Si el plan final ya no
+  // es de perder/ganar, se retiran; si un suavizado de seguridad ha bajado el ritmo que el plazo
+  // habia elegido, o si el propio cronograma sale mas largo que el plazo, la promesa deja de ser
+  // cierta y el aviso pasa a ser el de plazo irreal.
+  if (plazo !== null) {
+    if (objetivo_efectivo !== 'perder' && objetivo_efectivo !== 'ganar') {
+      avisos = avisos.filter(c => c !== 'INFO_RITMO_POR_PLAZO' && c !== 'WARN_PLAZO_IRREAL');
+    } else if (ritmo_plazo !== null) {
+      const noLlega = ritmo_ef !== ritmo_plazo || (cronograma !== null && cronograma.semanas[0] > plazo);
+      if (noLlega) {
+        avisos = avisos.filter(c => c !== 'INFO_RITMO_POR_PLAZO');
+        if (!avisos.includes('WARN_PLAZO_IRREAL')) avisos.push('WARN_PLAZO_IRREAL');
+      }
+    }
+  }
 
   // supresion de avisos contradictorios
   for (const [trigger, suprimidos] of SUPRESION) {
@@ -846,6 +1029,8 @@ function calcular(I) {
     preferencia_base: pref_base, restricciones: restr, low_carb: low_carb_ef,
     recomposicion_prioridad: objetivo_efectivo === 'recomposicion' ? recomp_prio : undefined,
     proyeccion, limites_ajuste,
+    // ---- v1.2 (Paso 19): copy por sintomas de la regla. No cambia ningun numero.
+    ciclo: paso19(avisos.includes('INFO_CICLO'), I.sintomas_regla, pref_base, restr, low_carb_ef),
     // ---- campos de diagnostico del verificador (no forman parte de `Resultado`)
     _dbg: { met: MET, kcal_sesion, gkg, P_cap, suelo_g, techo_g, pesoA, cierre_ok, ejercicio_dia, MET },
   };
@@ -1029,6 +1214,30 @@ const CASOS = [
       preferencia_base:'omnivoro', restricciones:[], low_carb:false,
       recomposicion_prioridad:'perder', menstruacion:'regular' },
     ajuste:{ hc_g:120 } },
+
+  // vectores nuevos de la v1.2 (G, H, I)
+  { n:'17', titulo:'recomposicion con prioridad perder y peso objetivo (proyeccion de recomposicion)',
+    in:{ ...B, sexo:'mujer', edad:45, altura_cm:165, peso_kg:68,
+      grasa:{metodo:'medidas',cuello_cm:33,cintura_cm:82,cadera_cm:102},
+      somatotipo:null, actividad_diaria:'ligero',
+      entrenamiento:ent({tipo:'fuerza',dias_semana:3,minutos_sesion:45,intensidad:'media',experiencia:'novato',momento:'tarde'}),
+      objetivo:'recomposicion', ritmo:'moderado', peso_objetivo:63, n_comidas:4,
+      preferencia_base:'omnivoro', restricciones:[], low_carb:false,
+      recomposicion_prioridad:'perder', menstruacion:'regular',
+      sintomas_regla:['sangrado_abundante','cansancio','hinchazon'],
+      // el motor IGNORA estos tres campos: la comprobacion S33 exige el mismo Resultado sin ellos
+      menu_sencillo:true, alimentos_excluidos:['brocoli','coliflor'], alimentos_favoritos:['pechuga_pollo','arroz_blanco_cocido'] } },
+  { n:'18', titulo:'perder con plazo imposible (agresivo + WARN_PLAZO_IRREAL)',
+    in:{ ...B, sexo:'hombre', edad:38, altura_cm:180, peso_kg:95, grasa:{metodo:'desconocido'},
+      somatotipo:null, actividad_diaria:'sedentario', entrenamiento:ent({}),
+      objetivo:'perder', ritmo:'suave', peso_objetivo:80, plazo_semanas:8, n_comidas:3,
+      preferencia_base:'omnivoro', restricciones:[], low_carb:false } },
+  { n:'19', titulo:'perder con plazo holgado (el plazo elige el ritmo mas suave que llega)',
+    in:{ ...B, sexo:'mujer', edad:34, altura_cm:168, peso_kg:78, grasa:{metodo:'desconocido'},
+      somatotipo:null, actividad_diaria:'ligero',
+      entrenamiento:ent({tipo:'fuerza',dias_semana:3,minutos_sesion:50,intensidad:'media',experiencia:'intermedio',momento:'tarde'}),
+      objetivo:'perder', ritmo:'agresivo', peso_objetivo:72, plazo_semanas:24, n_comidas:4,
+      preferencia_base:'omnivoro', restricciones:[], low_carb:false } },
 ];
 
 // ---------------------------------------------------------------- modo --json
@@ -1063,6 +1272,18 @@ chk('0c','excluido', excl({sexo:'mujer', embarazo_lactancia:true, peso_kg:60}).e
 chk('0d','excluido', excl({altura_cm:180, peso_kg:50}).excluido, 'EXCL_IMC_MUY_BAJO');
 chk('0e','excluido', excl({altura_cm:180, peso_kg:58, condiciones:['tca']}).excluido, 'EXCL_TCA_RIESGO');
 chk('0f','excluido', excl({peso_kg:400}).excluido, 'ERR_INPUT_RANGO');
+// dominio de los campos nuevos de la v1.2 (§1 filas 24-27): ausente o null siempre es valido
+chk('0g','errores', excl({plazo_semanas:3}).errores, ['plazo_semanas']);
+chk('0h','errores', excl({sintomas_regla:['migrana']}).errores, ['sintomas_regla']);
+chk('0i','errores', excl({alimentos_excluidos:[7]}).errores, ['alimentos_excluidos']);
+chk('0j','excluido', excl({plazo_semanas:null, sintomas_regla:null, alimentos_favoritos:null}).excluido, undefined);
+// el motor IGNORA `menu_sencillo` y las dos listas de alimentos: mismo Resultado bit a bit
+{
+  const c17 = CASOS.find((c) => c.n === '17').in;
+  const sinRuido = { ...c17 };
+  delete sinRuido.menu_sencillo; delete sinRuido.alimentos_excluidos; delete sinRuido.alimentos_favoritos;
+  chk('17','campos ignorados por el motor', JSON.stringify(calcular(sinRuido)), JSON.stringify(calcular(c17)));
+}
 
 // ---------------------------------------------------------------- salida legible
 const R2 = (x) => x.toFixed(1);
@@ -1086,8 +1307,11 @@ for (const c of CASOS) {
   console.log(' pref base=' + r.preferencia_base + ' restr=' + JSON.stringify(r.restricciones)
     + ' low_carb=' + r.low_carb + ' -> efectiva ' + r.preferencia_efectiva
     + (r.recomposicion_prioridad ? ' | prioridad ' + r.recomposicion_prioridad : ''));
+  if (r.ciclo) console.log(' ciclo ' + JSON.stringify(r.ciclo.sintomas)
+    + ' -> ' + r.ciclo.consejos.map(x => x.clave + ' [' + x.alimentos.join(', ') + ']').join(' | '));
   if (r.proyeccion) {
-    const hitos = r.proyeccion.filter(x => [0,4,8,12,26].includes(x.semana));
+    const ultima = r.proyeccion[r.proyeccion.length-1].semana;
+    const hitos = r.proyeccion.filter(x => [0,4,8,12,26,ultima].includes(x.semana));
     console.log(' proyeccion (' + r.proyeccion.length + ' puntos, hasta la semana ' + r.proyeccion[r.proyeccion.length-1].semana + ')');
     console.log('   ' + hitos.map(x => `s${x.semana}: ${x.peso_min}/${x.peso_esp}/${x.peso_max}`).join(' | '));
   } else console.log(' proyeccion undefined');
@@ -1150,6 +1374,10 @@ const bases=[null,'omnivoro','vegetariano','vegano'];
 const restrs=[[],['sin_lactosa'],['sin_gluten'],['sin_lactosa','sin_gluten']];
 const prios=[null,'perder','equilibrado','ganar'];
 const regla=[null,'regular','irregular','ausente','no_dice'];
+// v1.2
+const plazos=[null,null,4,8,12,16,24,52];
+const sintomas=[null,[],['dolor'],['hinchazon','antojos'],['sangrado_abundante','cansancio'],
+  ['dolor','hinchazon','antojos','cansancio','sangrado_abundante'],['cansancio','dolor']];
 const ajustes=[null,{},{kcal:-9999},{kcal:9999},{hc_g:0},{hc_g:9999},{kcal:1800,hc_g:60},{hc_g:30},{kcal:2000}];
 
 const V = {};
@@ -1180,6 +1408,8 @@ for (let iter = 0; iter < 200000; iter++) {
   }
   I.recomposicion_prioridad = pick(prios);
   I.menstruacion = pick(regla);
+  I.plazo_semanas = pick(plazos);
+  I.sintomas_regla = pick(sintomas);
   let r;
   try { r = calcular(I); } catch (e) { viol('EXCEPCION: ' + e.message, I); continue; }
   if (r.excluido) continue;
@@ -1373,9 +1603,36 @@ for (let iter = 0; iter < 200000; iter++) {
         if (obje === 'perder' && ult.peso_min < round1(po) - 0.051) viol('S26h proyeccion por debajo del objetivo', { ...ctx, ult, po });
         if (obje === 'ganar'  && ult.peso_max > round1(po) + 0.051) viol('S26i proyeccion por encima del objetivo', { ...ctx, ult, po });
       }
-      if (!r.cronograma && !r.avisos.includes('INFO_PROYECCION_PLANA')) viol('S26j proyeccion plana sin aviso', ctx);
+      if (!r.cronograma && !r.avisos.includes('INFO_PROYECCION_PLANA')
+          && !r.avisos.includes('INFO_PROYECCION_RECOMP')) viol('S26j proyeccion sin cronograma y sin aviso', ctx);
+
+      // S31 (v1.2) proyeccion de RECOMPOSICION con deficit: contenida en [curva del deficit, PC],
+      // no creciente, y con el borde superior clavado en el peso actual.
+      if (r.avisos.includes('INFO_PROYECCION_RECOMP')) {
+        if (r.cronograma !== null) viol('S31 proyeccion de recomposicion con cronograma', ctx);
+        if (obje !== 'recomposicion') viol('S31a INFO_PROYECCION_RECOMP sin recomposicion', ctx);
+        const po = r.peso_objetivo.efectivo;
+        if (po === null) viol('S31b proyeccion de recomposicion sin peso objetivo', ctx);
+        const ritmo = (r.tdee.valor - r.kcal) * 7 / 7700;
+        for (let i = 0; i < pr.length; i++) {
+          const q = pr[i];
+          if (q.peso_max !== round1(I.peso_kg)) viol('S31c el borde superior no es el peso actual', { ...ctx, q });
+          const inf = I.peso_kg - Math.min(ritmo * q.semana, I.peso_kg - po);
+          if (Math.abs(q.peso_min - round1(inf)) > 0.051) viol('S31d el borde inferior no es la curva del deficit', { ...ctx, q, inf });
+          if (q.peso_min < round1(po) - 0.051) viol('S31e la proyeccion pasa de la meta', { ...ctx, q, po });
+          if (i > 0 && (q.peso_esp > pr[i-1].peso_esp + 1e-9 || q.peso_min > pr[i-1].peso_min + 1e-9))
+            viol('S31f proyeccion de recomposicion no monotona', { ...ctx, q });
+        }
+        if (pr.length - 1 < 12) viol('S31g proyeccion de recomposicion mas corta de 12 semanas', ctx);
+      }
     }
   }
+  // S31h: recomposicion con deficit real y meta por debajo del peso actual SIEMPRE trae su curva
+  if (obje === 'recomposicion' && !I.condiciones.includes('tca') && r.peso_objetivo.efectivo !== null
+      && r.tdee.valor - r.kcal >= 50 && I.peso_kg - r.peso_objetivo.efectivo >= 0.5
+      && (r.tdee.valor - r.kcal) * 7 / 7700 >= 0.05
+      && !r.avisos.includes('INFO_PROYECCION_RECOMP'))
+    viol('S31h recomposicion con deficit sin curva de recomposicion', ctx);
 
   // S27 ajuste manual (B): la proteina no se toca y la grasa nunca baja de su suelo
   if (r.limites_ajuste) {
@@ -1447,11 +1704,60 @@ for (let iter = 0; iter < 200000; iter++) {
   if (r.low_carb && I.condiciones.includes('diabetes')) viol('S29c low_carb no anulado con diabetes', ctx);
   if (r.preferencia_efectiva !== bancoDe(r.preferencia_base, r.restricciones, r.low_carb))
     viol('S29d preferencia_efectiva no es el banco de la regla inversa', ctx);
+
+  // ---------- v1.2 ----------
+  // S30 plazo (H): con plazo y peso objetivo, el ritmo es el MAS SUAVE de la tabla que llega a
+  // tiempo; si ninguno llega, es 'agresivo' y hay WARN_PLAZO_IRREAL. Los suavizados de seguridad
+  // mandan sobre el plazo, y cuando muerden el aviso pasa a ser el de plazo irreal.
+  const plazo_i = (I.plazo_semanas === undefined || I.plazo_semanas === null) ? null : I.plazo_semanas;
+  const usaPlazo = plazo_i !== null && I.peso_objetivo !== null && (obje === 'perder' || obje === 'ganar');
+  if (usaPlazo && !I.condiciones.includes('tca')) {
+    const req = Math.abs(I.peso_objetivo - I.peso_kg) / plazo_i;
+    const kgSem = (rr) => obje === 'perder'
+      ? (RITMO_T[r.grasa.banda] ? RITMO_T[r.grasa.banda][rr] / 100 * I.peso_kg : null)
+      : clamp((r.tdee.perfil !== 'fuerza' ? 0.05 : SUP_T[I.entrenamiento.experiencia][rr]) * r.tdee.valor, 150, 500) * 7 / 7700;
+    const esperado = ['suave','moderado','agresivo'].find((rr) => { const v = kgSem(rr); return v !== null && v >= req - 1e-9; }) || 'agresivo';
+    const info = r.avisos.includes('INFO_RITMO_POR_PLAZO'), warn = r.avisos.includes('WARN_PLAZO_IRREAL');
+    if (info && warn) viol('S30 los dos avisos de plazo a la vez', ctx);
+    if (!info && !warn) viol('S30a plazo utilizable sin ninguno de sus dos avisos', ctx);
+    if (info && r.ritmo_efectivo !== esperado) viol('S30b el ritmo no es el mas suave que llega', { ...ctx, esperado, ef:r.ritmo_efectivo });
+    if (info && r.cronograma && r.cronograma.semanas[0] > plazo_i)
+      viol('S30c INFO_RITMO_POR_PLAZO con un calendario mas largo que el plazo', { ...ctx, cg:r.cronograma.semanas });
+  }
+  if ((r.avisos.includes('INFO_RITMO_POR_PLAZO') || r.avisos.includes('WARN_PLAZO_IRREAL')) && !usaPlazo)
+    viol('S30d aviso de plazo en un plan que no lo usa', ctx);
+
+  // S32 ciclo (I): `ciclo` es exactamente "INFO_CICLO + al menos un sintoma valido", y sus
+  // consejos van en el orden canonico, uno por sintoma. No toca ningun numero (lo cubre S33).
+  const sint_ok = SINTOMAS_ORDEN.filter((s) => (I.sintomas_regla || []).includes(s));
+  const deberia = r.avisos.includes('INFO_CICLO') && sint_ok.length > 0;
+  if (deberia !== (r.ciclo !== undefined)) viol('S32 `ciclo` no coincide con INFO_CICLO + sintomas', ctx);
+  if (r.ciclo) {
+    if (I.sexo !== 'mujer') viol('S32a ciclo en un hombre', ctx);
+    if (JSON.stringify(r.ciclo.sintomas) !== JSON.stringify(sint_ok)) viol('S32b sintomas fuera del orden canonico', ctx);
+    if (r.ciclo.consejos.length !== sint_ok.length) viol('S32c falta algun consejo', ctx);
+    r.ciclo.consejos.forEach((c, i) => {
+      if (c.clave !== sint_ok[i]) viol('S32d consejo fuera de orden', ctx);
+      if (!c.titulo || !c.texto || !Array.isArray(c.alimentos)) viol('S32e consejo incompleto', ctx);
+      if (c.texto.includes('{')) viol('S32f fragmento condicional sin resolver', { ...ctx, t:c.texto.slice(0,40) });
+      if (r.restricciones.includes('sin_gluten') && c.alimentos.includes('Avena')) viol('S32g avena con sin_gluten', ctx);
+      if (r.restricciones.includes('sin_lactosa') && c.alimentos.includes('Yogur griego 0%')) viol('S32h lacteo con sin_lactosa', ctx);
+    });
+  }
+
+  // S33 campos que el motor IGNORA (G): `menu_sencillo` y las dos listas de alimentos no pueden
+  // cambiar ni un numero. Se comprueba en 1 de cada 16 perfiles para no doblar el barrido.
+  if (n % 16 === 0) {
+    const conRuido = calcular({ ...I, menu_sencillo: !I.menu_sencillo,
+      alimentos_excluidos: ['brocoli','pechuga_pollo'], alimentos_favoritos: ['huevo_entero'] });
+    const limpio = (x) => JSON.stringify({ ...x, avisos: [...x.avisos].sort() });
+    if (limpio(conRuido) !== limpio(r)) viol('S33 el motor ha leido menu_sencillo o alimentos_*', ctx);
+  }
 }
 
 console.log('\n============ BARRIDO DE INVARIANTES (' + n + ' casos aleatorios) ============');
 const ks = Object.keys(V);
-if (!ks.length) console.log('OK: 0 violaciones — las 36 familias de invariantes se cumplen en los ' + n + ' casos.');
+if (!ks.length) console.log('OK: 0 violaciones — las 40 familias de invariantes se cumplen en los ' + n + ' casos.');
 else for (const kk of ks) {
   console.log(`\n!! ${kk}  (${V[kk].length} casos)`);
   console.log('   ejemplo: ' + JSON.stringify(V[kk][0]));

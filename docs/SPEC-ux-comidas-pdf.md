@@ -1,4 +1,4 @@
-# Báscula (RS Agents) — Especificación de UX, comidas y PDF v1.1
+# Báscula (RS Agents) — Especificación de UX, comidas y PDF v1.2
 
 Documento normativo complementario a `SPEC-calculo.md`. Cubre el cuestionario (wizard), la pantalla de resultados, el generador de ejemplos de comidas y la estructura del PDF exportable. Todo el copy está en español de España, tono cercano y honesto, sin paternalismo. Ningún mensaje afirma cosas que la ciencia no respalda (p. ej. nunca se dice que más comidas "aceleran el metabolismo", ni que el somatotipo determina tus macros).
 
@@ -14,7 +14,7 @@ Convención de referencias: `[Paso N]` remite al algoritmo de `SPEC-calculo.md`;
 - **Orden de fácil a difícil**, con las preguntas de corte de seguridad muy pronto (edad, embarazo/lactancia) para no hacer perder el tiempo a quien no puede usar la app.
 - **Nunca bloquear en silencio.** Si una respuesta desvía el flujo (exclusión, aviso, valor por defecto), se explica en la misma pantalla, con un tono de acompañamiento, nunca de rechazo.
 - **Todo paso es editable después** desde la pantalla de resultados ("Editar tus datos"), sin tener que repetir el wizard entero.
-- **Barra de progreso con total dinámico.** El denominador NO es una constante: se calcula con las respuestas ya dadas (`total = pasos_obligatorios + pasos_condicionales_que_aplican`) y se recalcula en cuanto una respuesta cambia la ramificación. Pasos obligatorios: 1, 2, 4, 5, 6, 8, 9, 10, 13 (**9** pantallas). Condicionales: 3 y 3b (solo `sexo = 'mujer'`), 7 (solo si el usuario no lo salta; cuenta como 1 aunque tenga 4 preguntas), 11 (solo si `objetivo ∈ {perder, ganar, no_se}`), 12 (solo si `objetivo ∈ {perder, ganar, no_se}`). El texto accesible es "Paso X de {total}" con el total ya resuelto; mientras el objetivo sea desconocido se asume que 11 y 12 aplican. **La subpregunta de recomposición no es un paso**: vive dentro del paso 10 y aparece en la misma pantalla al elegir esa tarjeta, así que no toca el denominador (v1.1). El antiguo paso 5b ya no existe (decisión A), y con él desaparece el único caso en que el denominador cambiaba a mitad del wizard.
+- **Barra de progreso con total dinámico.** El denominador NO es una constante: se calcula con las respuestas ya dadas (`total = pasos_obligatorios + pasos_condicionales_que_aplican`) y se recalcula en cuanto una respuesta cambia la ramificación. Pasos obligatorios: 1, 2, 4, 5, 6, 8, 9, 10, 13, 14 (**10** pantallas, v1.2: el paso 14 de alimentos se ve siempre aunque no se marque nada). Condicionales: 3 y 3b (solo `sexo = 'mujer'`), 7 (solo si el usuario no lo salta; cuenta como 1 aunque tenga 4 preguntas), 11 —peso objetivo— (`objetivo ∈ {perder, ganar, no_se}` **o** `objetivo === 'recomposicion'` con `recomposicion_prioridad !== 'ganar'`, v1.2) y 12 —ritmo— (solo si `objetivo ∈ {perder, ganar, no_se}`). El texto accesible es "Paso X de {total}" con el total ya resuelto; mientras el objetivo sea desconocido se asume que 11 y 12 aplican. **El selector de plazo no es un paso**: vive dentro del 12, igual que la subpregunta de recomposición vive dentro del 10 y la de síntomas dentro del 3b. **La subpregunta de recomposición no es un paso**: vive dentro del paso 10 y aparece en la misma pantalla al elegir esa tarjeta, así que no toca el denominador (v1.1). El antiguo paso 5b ya no existe (decisión A), y con él desaparece el único caso en que el denominador cambiaba a mitad del wizard.
 - **Botón "Atrás" siempre visible** salvo en el paso 1. El botón "Siguiente" se deshabilita hasta que la pregunta tiene una respuesta válida (o hay un valor por defecto explícito y visible).
 - **Un botón apagado siempre dice qué le falta.** En los pasos con varias subpreguntas en una sola pantalla —entrenamiento (cinco), constitución (cuatro), grasa conocida (dos)— el botón deshabilitado sin mensaje ni campo marcado deja al usuario mirando un botón muerto; en 375 px la subpregunta sin contestar suele estar fuera de la vista. Sobre la barra de navegación va una línea en `aria-live="polite"`: **"Para seguir, falta {qué}."**, con los elementos que faltan enumerados y separados por comas y una "y" final ("la intensidad y si prefieres entrenar en algún momento del día"). Solo aparece cuando no hay ningún error de rango: si lo hay, manda el mensaje del campo. Ojo con las subpreguntas que **se leen como opcionales y no lo son**: "¿Prefieres entrenar en algún momento del día en concreto?" tiene "No tengo preferencia" como respuesta de primera clase, y hasta que no se marca una, el paso está incompleto.
 - **Al volver con un plan ya hecho.** Tras recargar la página, la app aterriza en la última pregunta del cuestionario (el plan no se persiste, solo el ajuste y los pesajes). Si la huella de las respuestas actuales coincide con la del último plan calculado (`bascula:sesion:v1`, campo `firmaPlan`), sobre el botón va la línea **"Tu plan sigue guardado en este móvil, con tu ajuste manual y tus pesajes."** y el botón se rotula **"Volver a mi plan"** en lugar de "Ver mi plan". Sin esa señal, la pantalla se lee como "he perdido mi plan". Si el usuario cambia cualquier respuesta, la huella deja de coincidir y no se promete nada.
@@ -27,7 +27,7 @@ Convención de referencias: `[Paso N]` remite al algoritmo de `SPEC-calculo.md`;
 | 1 | Sexo | `sexo` | No |
 | 2 | Edad | `edad` | Sí: <18 o >75 → `EXCL_EDAD` |
 | 3 | Embarazo o lactancia (solo mujeres, sin filtro de edad) | `embarazo_lactancia` | Sí: true → `EXCL_EMBARAZO_LACTANCIA` |
-| 3b | **Regla** (solo mujeres, justo después del paso 3) | `menstruacion` | No (activa `INFO_CICLO` / `WARN_CICLO_AUSENTE`) |
+| 3b | **Regla** (solo mujeres, justo después del paso 3) + subpregunta de síntomas | `menstruacion`, `sintomas_regla` | No (activa `INFO_CICLO` / `WARN_CICLO_AUSENTE`) |
 | 4 | Altura y peso | `altura_cm`, `peso_kg` | No |
 | 5 | Condiciones médicas | `condiciones` | No (activa avisos) |
 | 6 | Porcentaje de grasa corporal | `grasa.*` | No |
@@ -35,11 +35,29 @@ Convención de referencias: `[Paso N]` remite al algoritmo de `SPEC-calculo.md`;
 | 8 | Actividad diaria | `actividad_diaria` | No |
 | 9 | Entrenamiento | `entrenamiento.*` | No |
 | 10 | Objetivo (+ subpregunta de prioridad si se elige recomposición) | `objetivo`, `recomposicion_prioridad` | No |
-| 11 | Ritmo (si aplica) | `ritmo` | No |
-| 12 | Peso objetivo (si aplica) | `peso_objetivo` | No |
+| 11 | **Peso objetivo** (si aplica) | `peso_objetivo` | No |
+| 12 | **Ritmo** (si aplica) + selector de plazo si hay peso objetivo | `ritmo`, `plazo_semanas` | No |
 | 13 | Preferencias alimentarias (base + restricciones + bajo en hidratos), nº de comidas, clima y comidas sencillas | `preferencia_base`, `restricciones`, `low_carb`, `preferencia`, `n_comidas`, `clima_caluroso`, `menu_sencillo` | No |
+| 14 | **Alimentos**: "no me gusta" y favoritos | `alimentos_excluidos`, `alimentos_favoritos` | No |
 
-Tras el paso 13: pantalla de "Calculando…" (proceso instantáneo, pero se muestra 600-900 ms de transición con un mensaje breve, p. ej. "Ajustando tus macros…") y salto directo a Resultados.
+**Condiciones de visibilidad exactas (v1.2):**
+
+| Paso | Se muestra si |
+|---|---|
+| 3 y 3b | `sexo === 'mujer'` |
+| 7 | siempre (el usuario puede saltarlo desde la propia pantalla) |
+| 11 — peso objetivo | `objetivo ∈ {perder, ganar, no_se}` **o** (`objetivo === 'recomposicion'` y `recomposicion_prioridad !== 'ganar'`) |
+| 12 — ritmo | `objetivo ∈ {perder, ganar, no_se}` |
+| 12, opción "Tengo una fecha en mente" | además, `peso_objetivo !== null` |
+| 14 — alimentos | siempre |
+
+El **orden nuevo es objetivo → peso objetivo → ritmo → preferencias → alimentos**: el ritmo va después
+del peso objetivo porque su cuarta opción (la fecha) no existe sin una meta, y los alimentos van al
+final porque solo se pueden pintar cuando ya se conocen la base y las restricciones del paso 13. Los
+números 11 y 12 se **intercambian** respecto a la v1.1; las entradas del registro de revisión anteriores
+a esta versión usan la numeración vieja (11 = ritmo, 12 = peso objetivo).
+
+Tras el paso 14: pantalla de "Calculando…" (proceso instantáneo, pero se muestra 600-900 ms de transición con un mensaje breve, p. ej. "Ajustando tus macros…") y salto directo a Resultados.
 
 **Cambios de la v1.1 en el mapa (decisiones A, C, D y E):**
 
@@ -47,6 +65,16 @@ Tras el paso 13: pantalla de "Calculando…" (proceso instantáneo, pero se mues
 - **Nuevo paso 3b**, "¿Cómo es tu regla?", justo detrás del de embarazo/lactancia y solo para mujeres.
 - **La subpregunta de recomposición vive dentro del paso 10**, no es una pantalla propia.
 - **El paso 13 pasa de "una preferencia" a base + restricciones + interruptor.**
+
+**Cambios de la v1.2 en el mapa (decisiones G, H y I):**
+
+- **Los pasos 11 y 12 se intercambian** y el 11 (peso objetivo) se muestra también en recomposición
+  salvo con prioridad `ganar`.
+- **El paso 12 gana una cuarta opción**, "Tengo una fecha en mente", con su selector de plazo dentro de
+  la misma pantalla. No es un paso y no toca el denominador.
+- **Nuevo paso 14**, el último: alimentos que no gustan y favoritos.
+- **El paso 3b gana una subpregunta** de síntomas, dentro de la misma pantalla y solo con `regular` o
+  `irregular`. Tampoco es un paso.
 
 ---
 
@@ -129,11 +157,42 @@ No se pregunta a hombres ni se pregunta la edad fértil explícitamente: se mues
 
 > **El copy no puede decir "no cambia ningún número".** El paso 6.7bis sí cambia uno —el ritmo—, y el ritmo se imprime en la cabecera del resultado ("Perder grasa · ritmo agresivo" pasa a "ritmo moderado") y, cuando el suelo de seguridad no recorta el déficit, mueve también las kcal. Prometer que no cambia nada y cambiarlo es exactamente el tipo de mentira pequeña que esta app no se puede permitir. La salvedad va **en los dos sitios**: intro y ayuda.
 
+#### Subpregunta "¿Qué notas esos días?" (v1.2, decisión I)
+
+Al marcar **"Regular"** o **"Irregular"** se despliega **en la misma pantalla**, justo debajo, un grupo de
+casillas de selección múltiple. No es un paso y no toca la barra de progreso. Con "No la tengo" o
+"Prefiero no decirlo" **no aparece**, y si estaba desplegada se cierra y su valor se descarta.
+
+> **"¿Qué notas esos días?"** *(opcional, puedes marcar varias)*
+>
+> | Opción en pantalla | Valor en `sintomas_regla` |
+> |---|---|
+> | "Dolor fuerte" | `dolor` |
+> | "Hinchazón y retención" | `hinchazon` |
+> | "Más hambre o antojos" | `antojos` |
+> | "Cansancio" | `cansancio` |
+> | "Sangrado abundante" | `sangrado_abundante` |
+
+**Nota fija bajo las casillas (copy literal):** "Esto no cambia tus calorías ni tus macros. Te damos
+consejos de alimentos para esos días, que es donde sí se puede hacer algo."
+
+**Ayuda contextual de la subpregunta:** "A los números no les afecta: lo que cambia en esos días son los
+micronutrientes, sobre todo el hierro si sangras mucho. Con lo que marques te preparamos una tarjeta con
+qué priorizar antes y durante la regla, y una sección opcional en la lista de la compra."
+
+**Reglas:** no hay ninguna preseleccionada; se puede seguir sin marcar nada (se envía `null`); el orden
+en que se marcan **no importa** (el motor las ordena, `SPEC-calculo.md` paso 19); y la pantalla **no
+cambia de tono** según lo marcado —ni iconos de alarma, ni colores de alerta, ni preguntas de
+seguimiento—, igual que el resto de este paso. El efecto es `Resultado.ciclo` y solo eso.
+
 **Consecuencias (todas explicadas después, en resultados, nunca en esta pantalla):**
 
 1. `regular` o `irregular` → tarjeta **"Tu ciclo y tu plan"** en resultados y en el PDF (`INFO_CICLO`, §2.2c).
 2. `irregular` o `ausente` **y** (objetivo `perder`, o %grasa en banda baja, o ritmo `agresivo`) → aviso `WARN_CICLO_AUSENTE`. Si además el plan resta calorías (`perder` o `recomposicion`) y el ritmo elegido era `agresivo`, el motor lo suaviza a `moderado` (`[Paso 6.7bis]`). En `ganar` **no** se suaviza: el motivo de la regla es la baja disponibilidad energética, y recortar un superávit iría contra ese mismo motivo.
-3. `ausente` y `no_dice` no producen la tarjeta informativa: hablar de "pesarse en la misma fase del ciclo" a quien está en menopausia o con anticonceptivo continuo no le sirve de nada.
+3. Los síntomas marcados producen los bloques de consejos de la tarjeta (`Resultado.ciclo`, §2.2c), los
+   alimentos sugeridos del menú (§3.8) y, con `sangrado_abundante`, `cansancio` o `dolor`, la sección
+   opcional de la lista de la compra (§3.8).
+4. `ausente` y `no_dice` no producen la tarjeta informativa: hablar de "pesarse en la misma fase del ciclo" a quien está en menopausia o con anticonceptivo continuo no le sirve de nada.
 
 **Nota de diseño:** ningún icono de alarma, ningún color de alerta, ninguna pregunta de seguimiento. La pantalla no cambia de tono según lo que se responda, y "No la tengo" incluye explícitamente la menopausia y el anticonceptivo continuo en el propio texto de la opción para que la respuesta más frecuente no se lea como un problema.
 
@@ -203,7 +262,7 @@ El cribado breve de "relación con la comida" **ya no existe**. Se retira entero
 - La conversión a `InputCalculo` escribe **siempre** `cribado_tca: null`. Ningún camino de la interfaz puede producir `'positivo'` ni `'evitado'`, y por tanto tampoco `'tca'` en `condiciones`.
 - **Desaparecen las ocultaciones.** El %grasa (§2.1), el peso objetivo y el cronograma (§2.6), el bloque de referencias de la metodología (§2.9) y sus equivalentes del PDF (§4.2 y §4.5) se muestran a **todo el mundo**, sin guardas ni excepciones. Los párrafos que describían esas guardas se han eliminado de este documento, no reescrito.
 - **Vuelve el selector visual de siluetas** del paso 6.C para todos los usuarios.
-- **El paso 12 (peso objetivo) deja de tener la condición del cribado**: se muestra siempre que `objetivo ∈ {perder, ganar, no_se}`.
+- **El paso del peso objetivo deja de tener la condición del cribado**: se muestra siempre que el objetivo lo necesite (en la v1.2 pasa a ser el paso 11, ver §1.1).
 - **Lo único que queda** es una línea fija en el disclaimer de la §2.10 y de la última página del PDF: *"Si la comida o el peso te generan ansiedad, puedes hablar gratis con ADANER (adaner.org) o con tu centro de salud."* No es condicional, no depende de ninguna respuesta y se muestra idéntica a todo el mundo.
 
 **Por qué.** Una persona real marcó "sí" y se quedó sin poder llegar a su PDF: la protección, pensada para no hacer daño, acabó siendo el único muro de la aplicación. Báscula es una herramienta para el dueño y sus amigos, no un cribado clínico, y dos ítems no validados no dan para sostener una intervención que bloquea el producto entero.
@@ -370,13 +429,26 @@ Sin pantalla adicional: se usa directamente CUN-BAE. Microcopy de confirmación 
 > - "Las dos por igual" → `recomposicion_prioridad = 'equilibrado'` *(preseleccionada)*
 > - "Ganar músculo" → `recomposicion_prioridad = 'ganar'`
 
+**Nudge bajo la subpregunta (v1.2, decisión H).** Cuando dentro de la subpregunta se marca **"Perder
+grasa"**, aparece debajo, en tono de nota y sin ningún botón ni bloqueo:
+
+> "Si lo que quieres sobre todo es que la báscula baje varios kilos, elige Perder grasa: tendrás ritmo,
+> peso objetivo y fecha."
+
+Solo se muestra con `recomposicion_prioridad === 'perder'`, y no cambia nada por sí mismo: es
+información, no una corrección. Viene del feedback real —*"estoy en el rango normal hacia arriba, por lo
+menos 5 kilos me los bajaría, y la progresión semana a semana es que voy a pesar lo mismo"*—: quien
+quiere perder cinco kilos y elige recomposición está eligiendo el plan más lento sin saberlo. Desde la
+v1.2 esa combinación ya no se queda sin peso objetivo ni sin proyección (`[Paso 13]` y `[Paso 14]` del
+motor), pero sigue sin tener fecha, y eso conviene decirlo antes y no después.
+
 **Ayuda contextual de la subpregunta:** "La recomposición es un equilibrio, y el equilibrio se puede inclinar. Si ahora te importa más perder grasa, bajamos algo más las calorías y te subimos la grasa a costa de los hidratos. Si te importa más ganar músculo, te dejamos comiendo en tu gasto, sin déficit. En los dos casos sigue siendo un proceso lento."
 
 **Por qué existe:** mucha gente elige "recomposición" queriendo decir "perder sin decirlo", y otra tanta queriendo decir justo lo contrario. La subpregunta desambigua sin obligar a nadie a etiquetarse.
 
 **Reglas:**
 - Solo se muestra con `objetivo = 'recomposicion'`. Si el usuario cambia de tarjeta, el valor se descarta y se envía `null`.
-- `'equilibrado'` viene preseleccionada porque es el comportamiento de la v1.0 y no cambia ningún número; a diferencia del ritmo (paso 11), aquí la opción por defecto es la conservadora y no elige el tamaño de ningún déficit por el usuario.
+- `'equilibrado'` viene preseleccionada porque es el comportamiento de la v1.0 y no cambia ningún número; a diferencia del ritmo (paso 12), aquí la opción por defecto es la conservadora y no elige el tamaño de ningún déficit por el usuario.
 - Cuando el objetivo lo resuelve el motor (`objetivo = 'no_se'` → `recomposicion`, o una reconversión de los pasos 6.3/6.4), el usuario **no ha visto** la subpregunta: se envía `null`, que el motor trata como `'equilibrado'`.
 - El efecto exacto (déficit y % de grasa) está en `SPEC-calculo.md` pasos 7 y 9, y se explica en resultados con `INFO_RECOMP_PRIORIDAD_PERDER` / `INFO_RECOMP_PRIORIDAD_GANAR`.
 
@@ -386,28 +458,29 @@ Sin pantalla adicional: se usa directamente CUN-BAE. Microcopy de confirmación 
 
 ---
 
-### Paso 11 — Ritmo (condicional: se omite si `objetivo ∈ {mantener, recomposicion}`)
+### Paso 11 — Peso objetivo (condicional; **v1.2: se muestra también en recomposición**)
 
-**Pregunta:** "¿A qué ritmo quieres avanzar?"
+**Cuándo se muestra (condición exacta):**
 
-**Opciones:**
-- "Suave — el cambio será más lento, pero más fácil de mantener" → `ritmo = 'suave'`
-- "Moderado — un equilibrio entre velocidad y comodidad" → `ritmo = 'moderado'`
-- "Agresivo — más rápido, pero exige más disciplina y hambre" → `ritmo = 'agresivo'`
+```
+objetivo ∈ {perder, ganar, no_se}
+o (objetivo === 'recomposicion' y recomposicion_prioridad !== 'ganar')
+```
 
-**Ninguna opción viene marcada** y "Siguiente" está deshabilitado hasta que se elige una (QA §1). "Moderado" estuvo preseleccionado y no debía estarlo: a diferencia del número de comidas, del clima o de los deslizadores del entrenamiento —valores medios que no cambian el plan de forma sustantiva—, el ritmo elige el tamaño del déficit y con él el cronograma entero, así que dejarlo marcado permitía atravesar el paso sin responderlo y llevarse el plan de otra persona. `moderado` sigue siendo el valor que recibe el motor cuando el paso **no se muestra** (objetivos que no usan ritmo): eso lo resuelve la conversión a `InputCalculo`, no el estado del formulario.
+Con `mantener` no se muestra: el motor descarta el peso objetivo (`[Paso 6.6]`) y pedir un dato para
+después decir "no lo usamos" es pedirlo por nada. Con `objetivo = 'no_se'` **sí se pregunta**, porque el
+objetivo efectivo todavía no está resuelto. **Con `recomposicion` se pregunta desde la v1.2**, salvo con
+prioridad `ganar`: las otras dos prioridades producen un déficit real, y el `[Paso 13]` del motor propone
+y valida la meta exactamente como en `perder` (mismos suelos, mismos avisos). Con prioridad `ganar` no
+hay déficit, así que no hay meta que dar y la pantalla se salta.
 
-**Ayuda contextual:** "El ritmo no es solo una preferencia: cuanta menos grasa tengas de partida, menos margen hay para ir rápido sin perder músculo. Ajustaremos el número final a un rango seguro para tu caso."
+`INFO_OBJETIVO_IGNORADO` queda reservado para el caso en que el objetivo se reconvierte después del
+cuestionario (el usuario dio un peso objetivo con `perder` y el motor lo pasó a `mantener`). En
+recomposición con meta el motor **retira** ese aviso (`SPEC-calculo.md` paso 17), porque ahí el peso
+objetivo sí se usa.
 
-**Nota fija bajo las opciones (se muestra siempre, a todo el mundo):** "Ajustaremos el ritmo final a lo que sea seguro para tu caso; puede que apliquemos el más suave aunque elijas otro." El motor puede recortar el ritmo elegido por varias vías —los suelos de seguridad del `[Paso 7]`, la edad ≥ 65 (`[Paso 6.7]`), una regla irregular o ausente (`[Paso 6.7bis]`, v1.1) o la condición `'tca'`—, y en todas se explica después con su aviso en resultados. El texto es el mismo palabra por palabra para todos los usuarios, así que su presencia no distingue a nadie.
-
----
-
-### Paso 12 — Peso objetivo (condicional: se omite si `objetivo ∈ {mantener, recomposicion}`)
-
-Se omite por la misma razón que el paso 11: con `mantener` o `recomposicion` el motor descarta el peso objetivo (`[Paso 6.6]`, `INFO_OBJETIVO_IGNORADO`), así que pedirlo para después responder "no lo usamos" es pedir un dato por nada. Con `objetivo = 'no_se'` **sí se pregunta**, porque el objetivo efectivo todavía no está resuelto. `INFO_OBJETIVO_IGNORADO` queda reservado para el caso en que el objetivo se reconvierte después del cuestionario (el usuario dio un peso objetivo con `perder` y el motor lo pasó a `mantener` o `recomposicion`).
-
-**v1.1:** la segunda condición (`cribado_tca ∈ {positivo, evitado}`) **queda retirada** con el paso 5b (decisión A). La pantalla se muestra siempre que el objetivo la necesite.
+**v1.1:** la segunda condición (`cribado_tca ∈ {positivo, evitado}`) quedó retirada con el paso 5b
+(decisión A).
 
 **Pregunta:** "¿Tienes un peso objetivo en mente?"
 
@@ -417,9 +490,71 @@ Se omite por la misma razón que el paso 11: con `mantener` o `recomposicion` el
 
 **Ayuda contextual:** "Si no lo tienes claro, no pasa nada: te proponemos un peso saludable según tu altura y tu situación actual, y podrás cambiarlo cuando quieras."
 
+**Intro solo en recomposición (v1.2, copy literal):** "Aunque tu plan sea de recomposición, con este
+déficit la báscula debería bajar algo. Dinos a dónde te gustaría llegar y te dibujamos por dónde debería
+ir el peso. No te vamos a dar una fecha: en recomposición no se puede."
+
 **Microcopy si elige dar un número:** debajo del input, en cuanto hay un valor, texto dinámico de previsualización simple (sin recalcular el motor completo, solo una estimación de IMC): "Eso supondría un IMC aproximado de {imc}." Si ese IMC cae por debajo de 18,5, se añade: "Es un IMC de bajo peso: en resultados te explicaremos por qué te proponemos ajustarlo." (sin bloquear el avance; el ajuste real ocurre en el motor, `[Paso 13]`, y se comunica como aviso en resultados).
 
 **Validación:** si se elige "Sí" pero se deja vacío → no se avanza. Fuera de 30-300 kg → `[ERR_INPUT_RANGO]`.
+
+---
+
+### Paso 12 — Ritmo (condicional: se muestra solo si `objetivo ∈ {perder, ganar, no_se}`)
+
+Va **después** del peso objetivo desde la v1.2, y no por capricho: la cuarta opción de esta pantalla
+—la fecha— solo tiene sentido si ya sabemos a dónde quiere llegar el usuario.
+
+**Pregunta:** "¿A qué ritmo quieres avanzar?"
+
+**Opciones:**
+- "Suave — el cambio será más lento, pero más fácil de mantener" → `ritmo = 'suave'`
+- "Moderado — un equilibrio entre velocidad y comodidad" → `ritmo = 'moderado'`
+- "Agresivo — más rápido, pero exige más disciplina y hambre" → `ritmo = 'agresivo'`
+- **"Tengo una fecha en mente" (v1.2, decisión H)** → despliega el selector de plazo de más abajo.
+  **Solo aparece si `peso_objetivo` es un número**; con "no lo sé, proponédmelo vosotros" no se pinta,
+  porque sin meta no hay nada que fechar.
+
+**Ninguna opción viene marcada** y "Siguiente" está deshabilitado hasta que se elige una (QA §1). "Moderado" estuvo preseleccionado y no debía estarlo: a diferencia del número de comidas, del clima o de los deslizadores del entrenamiento —valores medios que no cambian el plan de forma sustantiva—, el ritmo elige el tamaño del déficit y con él el cronograma entero, así que dejarlo marcado permitía atravesar el paso sin responderlo y llevarse el plan de otra persona. `moderado` sigue siendo el valor que recibe el motor cuando el paso **no se muestra** (objetivos que no usan ritmo): eso lo resuelve la conversión a `InputCalculo`, no el estado del formulario.
+
+**Ayuda contextual:** "El ritmo no es solo una preferencia: cuanta menos grasa tengas de partida, menos margen hay para ir rápido sin perder músculo. Ajustaremos el número final a un rango seguro para tu caso."
+
+**Nota fija bajo las opciones (se muestra siempre, a todo el mundo):** "Ajustaremos el ritmo final a lo que sea seguro para tu caso; puede que apliquemos el más suave aunque elijas otro." El motor puede recortar el ritmo elegido por varias vías —los suelos de seguridad del `[Paso 7]`, la edad ≥ 65 (`[Paso 6.7]`), una regla irregular o ausente (`[Paso 6.7bis]`, v1.1) o la condición `'tca'`—, y en todas se explica después con su aviso en resultados. El texto es el mismo palabra por palabra para todos los usuarios, así que su presencia no distingue a nadie.
+
+#### Selector de plazo (v1.2, dentro de la misma pantalla)
+
+Al marcar "Tengo una fecha en mente" se despliega justo debajo, sin cambiar de pantalla y sin tocar la
+barra de progreso (no es un paso):
+
+- **Título:** "¿En cuánto tiempo?"
+- **Chips de semanas:** `8` · `12` · `16` · `24` semanas, ninguno preseleccionado.
+- **Enlace secundario:** "Prefiero poner una fecha" → abre un `<input type="date">` con `min` = hoy + 28
+  días y `max` = hoy + 364 días. La fecha se convierte a semanas con
+  `plazo_semanas = round((fecha − hoy) / 7)` y se **acota a [4, 52]**; el chip correspondiente queda
+  marcado si coincide. En `InputCalculo` viaja siempre `plazo_semanas`, nunca una fecha.
+- **Previsualización honesta (obligatoria, `aria-live="polite"`).** En cuanto hay plazo, debajo del
+  selector, con el signo correcto según la dirección:
+  > "Son {|peso_objetivo − peso| con un decimal} kg en {plazo_semanas} semanas: unos
+  > {round(|Δkg| / plazo · 1000)} g por semana."
+  Se calcula **en la interfaz** con una resta, no con el motor: es aritmética de una línea, no un plan.
+  Ejemplo del feedback: "Son 5 kg en 12 semanas: unos 400 g por semana."
+- **Segunda línea fija, siempre:** "Elegiremos el ritmo más suave que llegue a esa fecha. Si no hay
+  ninguno seguro que llegue, te lo diremos en el resultado y no te prometeremos la fecha."
+
+**Qué hace el motor con esto (`[Paso 6.7ter]`).** El plazo **sustituye** al ritmo elegido: se calcula el
+ritmo que exige la fecha y se toma el **más suave** de la tabla que llega a tiempo. Si ninguno llega, se
+aplica el agresivo y se emite `WARN_PLAZO_IRREAL`; si sí llega, `INFO_RITMO_POR_PLAZO`. Los suavizados de
+seguridad (edad ≥ 65, regla irregular o ausente, `'tca'`) se aplican **después** y mandan sobre el plazo.
+
+**Por qué el plazo manda sobre el ritmo elegido, y por qué se dice.** Una fecha es una respuesta más
+concreta que "moderado": quien la da ya ha decidido. Pero cambiar en silencio la respuesta anterior del
+usuario es el tipo de cosa que rompe la confianza, así que se dice dos veces: aquí (segunda línea fija) y
+en resultados, con el texto íntegro de `INFO_RITMO_POR_PLAZO`, que nombra el ritmo aplicado.
+
+**Validación:** con "Tengo una fecha en mente" marcada, "Siguiente" está deshabilitado hasta que hay un
+plazo válido; el mensaje de la barra de navegación es "Para seguir, falta el plazo." Si el usuario vuelve
+a marcar uno de los tres ritmos, `plazo_semanas` se descarta y se envía `null`. Si edita el peso objetivo
+en el paso 11 y lo deja vacío, esta opción desaparece y el plazo se descarta igual.
 
 ---
 
@@ -464,9 +599,90 @@ Se omite por la misma razón que el paso 11: con `mantener` o `recomposicion` el
 
 **Validación:** base y nº de comidas obligatorios; restricciones por defecto ninguna; bajo en hidratos por defecto `No`; clima por defecto `No`; comidas sencillas por defecto `No`.
 
-Al pulsar "Ver mi plan" se ejecuta el motor de cálculo y se navega a Resultados.
+Al pulsar "Siguiente" se pasa al paso 14 (alimentos), que es el último.
 
 ---
+
+### Paso 14 — Alimentos: lo que no te gusta y lo que sí (v1.2, decisión G)
+
+**Es el último paso del wizard**, después de las preferencias, y es **opcional de rellenar** (no de
+mostrar: la pantalla se ve siempre, y cuenta en la barra de progreso). Sale del feedback literal de una
+usuaria: *"lo primero que me ha puesto es el brócoli y a mí el brócoli no me gusta"*.
+
+**Pregunta:** "¿Hay alimentos que no quieres ver en tu menú?"
+
+**Intro (copy literal):** "Márcalos y no aparecerán ni en tus menús ni en tu lista de la compra. Y si
+hay alguno que te encanta, márcalo como favorito y lo pondremos primero. Esto no cambia ni una caloría
+de tu plan: solo cambia qué comes."
+
+**Control segmentado, arriba y fijo al hacer scroll (dos opciones, `role="radiogroup"`):**
+
+| Segmento | Valor | Estado inicial |
+|---|---|---|
+| "✕ No me gusta" | modo `excluir` | **seleccionado** |
+| "★ Favorito" | modo `favorito` | — |
+
+**Qué alimentos se ven.** Solo los que pasan **la base dietética y las restricciones ya elegidas en el
+paso 13** (`pasaBase && restricciones.every(pasaRestriccion)`, §3.2). Una vegana no ve pollo, y quien ha
+marcado "sin gluten" no ve pan integral: enseñar un alimento que el generador nunca va a servir es
+ruido, y marcar "no me gusta" sobre él, una decisión inútil. Los alimentos con estado `crudo` del grupo
+`carbohidrato` (arroz y pasta crudos, §3.0) **tampoco se muestran**: no entran nunca en un menú. Los
+alimentos con el tag `extra` (§3.0) **sí** se muestran: no salen en el menú, pero pueden salir en la
+tarjeta del ciclo y en la sección opcional de la compra, así que tienen que poder rechazarse.
+
+**Chips agrupados, en este orden exacto** (encabezado de grupo visible, chips en rejilla que envuelve):
+
+| Grupo en pantalla | Regla de pertenencia (determinista, sobre `foods.json`) |
+|---|---|
+| Carne y pescado | `grupo === 'proteina'` y no cae en ninguna de las dos filas siguientes |
+| Huevos y lácteos | `grupo === 'lacteo'`, o `id ∈ {huevo_entero, clara_huevo}` |
+| Legumbres y soja | `grupo === 'proteina'` y (`tags` incluye `vegano` o `roles` incluye `carbohidrato`) |
+| Arroz, pasta, pan y patata | `grupo === 'carbohidrato'` |
+| Frutas | `grupo === 'fruta'` |
+| Verduras | `grupo === 'verdura'` |
+| Grasas y frutos secos | `grupo === 'grasa'` |
+
+Las tres filas de `grupo === 'proteina'` se evalúan **en el orden de la tabla**: primero huevos, después
+legumbres y soja, y lo que queda es carne y pescado. Así `huevo_entero` (vegetariano pero no vegano) cae
+en "Huevos y lácteos" y `tofu` o `lentejas_cocidas`, en "Legumbres y soja". Un grupo sin ningún alimento
+que pase el filtro **no se pinta** (una vegana no ve el encabezado "Carne y pescado" vacío). Dentro de
+cada grupo, los chips van ordenados por `nombre_corto` con `localeCompare('es')`.
+
+**El texto del chip es `nombre_corto`** (campo nuevo de `foods.json`, §3.0), no `nombre`: "Yogur griego
+0%" y no "Yogur griego 0% (natural, sin azúcar)". El nombre largo se sigue usando en el menú, en las
+equivalencias y en la lista de la compra.
+
+**Interacción (normativa):**
+
+1. Tocar un chip sin marcar le aplica el **modo activo** del control segmentado.
+2. Tocar un chip que ya está marcado **en ese mismo modo** lo desmarca.
+3. Tocar un chip marcado en el **otro** modo lo cambia de lista: **un alimento nunca está en las dos**.
+4. Estado visual: excluido → chip tachado, con la ✕ delante y fondo apagado; favorito → chip con ★
+   delante y el color de acento. `aria-pressed` en los dos casos, y el `aria-label` dice el estado
+   completo ("Brócoli, no me gusta" / "Pollo, favorito").
+5. Sin límite de marcados por arriba. La app **no** avisa de que "te quedan pocos alimentos": lo resuelve
+   la regla de respaldo de §3.2b, que es donde se puede hacer bien.
+
+**Resumen vivo**, justo encima de la barra de navegación, en una región `aria-live="polite"`:
+"{n} que no te gustan · {m} favoritos". Con cero de los dos no se pinta.
+
+**Botón de salida (copy literal):** "Seguir sin marcar nada", como acción secundaria junto a "Ver mi
+plan". Envía las dos listas vacías. El botón primario **nunca** está deshabilitado en este paso.
+
+**Campos:** `alimentos_excluidos: string[]` y `alimentos_favoritos: string[]` (ids de `foods.json`).
+`alimentos_favoritos` viaja **en el orden en que el usuario los marcó** —ese orden es normativo (§3.2b)—;
+`alimentos_excluidos`, en orden de `id` para que el borrador sea estable. Los dos se guardan en el
+borrador (`bascula:inputs:v1`) como el resto de respuestas.
+
+**Lo que estas dos listas NO tocan.** Ni una caloría: el motor las ignora igual que `menu_sencillo`
+(`SPEC-calculo.md` §0.3). Y **`firmaDeInputs` tiene que ignorarlas** (`src/components/resultados/ajuste.ts`):
+si entraran en la huella, marcar "no me gusta" en un alimento tiraría el ajuste manual guardado y el
+"Volver a mi plan" del arranque.
+
+**Al pulsar "Ver mi plan"** se ejecuta el motor y se navega a Resultados, igual que antes.
+
+---
+
 
 ## 2. Pantalla de resultados
 
@@ -567,7 +783,23 @@ Bajo los controles, y actualizándose **en vivo** (llamando a `ajustarMacros` en
 
 **Formato:** tarjeta informativa con estilo `INFO_*` (fondo neutro, sin color de alerta), encabezado **"Tu ciclo y tu plan"** y el texto **íntegro** de `INFO_CICLO` de la tabla §4 de `SPEC-calculo.md`. La pantalla no reescribe ese texto ni lo trocea.
 
-**Lo que la tarjeta NO hace:** no cambia ningún número, y el copy lo dice con todas las letras. No hay "modo ciclo", ni calorías distintas por fase, ni ningún control asociado.
+**Bloques por síntoma (v1.2, decisión I).** Si `resultado.ciclo` existe, **debajo** del texto de
+`INFO_CICLO` y dentro de la misma tarjeta se pintan los consejos, **uno por síntoma y en el orden en que
+vienen en `resultado.ciclo.consejos`** (que ya es el canónico: dolor · hinchazón · antojos · cansancio ·
+sangrado abundante). Cada bloque es:
+
+- `titulo` como encabezado pequeño (`<h4>`), en negrita y sin icono.
+- `texto` íntegro, tal cual. **La pantalla no lo reescribe ni lo trocea**, y los fragmentos condicionales
+  ya vienen resueltos por el motor.
+- `alimentos` como una línea de chips o de texto separado por "·", precedida de la etiqueta fija
+  **"Prioriza:"**. Si `alimentos` viene vacío, la línea entera no se pinta.
+
+Debajo del último bloque, **y solo si `ejemplos.alimentos_ciclo` tiene entradas**, una línea más:
+"En tu lista de la compra te hemos dejado una sección opcional para esos días." (enlace ancla a §2.5b).
+
+**Lo que la tarjeta NO hace:** no cambia ningún número, y el copy lo dice con todas las letras. No hay
+"modo ciclo", ni calorías distintas por fase, ni ningún control asociado. Los consejos por síntoma
+**tampoco** cambian nada: son qué priorizar dentro de los mismos macros.
 
 Si además está `WARN_CICLO_AUSENTE`, ese aviso **no va aquí**: va en §2.8 con el resto de los `WARN_*`, con su estilo de atención y su texto íntegro. Las dos cosas pueden coexistir y dicen cosas distintas: una explica la báscula, la otra es una señal de seguridad.
 
@@ -609,6 +841,34 @@ Ver sección 3 (algoritmo). **No hay conmutador de día de entreno / día de des
 - **Alternativas por comida** (`EjemploComida.alternativas`, 2-3 líneas del tipo "Cambia 120 g de pechuga de pavo por 130 g de pechuga de pollo"). La ración del sustituto se calcula sobre el macro que define el papel del alimento en esa toma y se pasa por `redondearGramos`, que la **recorta** a los límites de ración del alimento (§3.3). Ese recorte puede dejar la sustitución muy lejos del original, así que **es obligatoria la misma guarda de ración que la §2.5 exige en las tablas de equivalencias**: si la desviación real del macro supera el **±15 %**, el candidato se descarta y se prueba el siguiente; si ninguno cuadra, esa comida se queda sin esa alternativa. Sin la guarda se publicaban líneas como "Cambia 7 g de tortitas de arroz por 50 g de arroz blanco" (+147 % de hidratos, porque el mínimo de ración del arroz cocido son 50 g) o "Cambia 220 g de seitán por 300 g de lentejas" (−42 % de proteína, por el tope de 300 g), justo debajo de una nota que promete lo contrario.
 - Si el generador no ha producido menú (ver §3.1, `condiciones` con `renal` o `hepatica`), este bloque se sustituye íntegro por el texto de §3.1 y el bloque de equivalencias tampoco se muestra.
 
+**Acción "No me gusta" por alimento (v1.2, decisión G).** Cada línea de alimento del menú lleva a su
+derecha una acción pequeña y secundaria —icono ✕ más el texto "No me gusta", `aria-label` "Quitar
+{nombre} de mi menú"—, del tamaño de un botón de icono (mínimo 44 × 44 px de área táctil) y sin color de
+alerta. Al pulsarla, **en este orden y sin salir de la pantalla**:
+
+1. Se añade el `id` a `alimentos_excluidos` del borrador y se **guarda** (`bascula:inputs:v1`).
+2. Se **regeneran** el menú, sus alternativas, las equivalencias, la lista de la compra y los datos del
+   PDF llamando otra vez a `generarEjemplos(inputs, resultado, variante)` y a `generarListaCompra`.
+   **No se vuelve a llamar al motor**: `calcular` ignora estas listas (`SPEC-calculo.md` §0.3), así que
+   ni las calorías ni los macros ni la proyección pueden moverse. Tampoco cambia `firmaDeInputs`, así que
+   el ajuste manual guardado y los pesajes siguen en pie.
+3. Aparece un aviso efímero (`role="status"`) durante **6 segundos**, anclado al bloque de menús:
+   **"Fuera {nombre}. Hemos rehecho el menú y la compra."** con un botón **"Deshacer"** que retira el id
+   de la lista y vuelve a regenerar. Pasados los 6 s el aviso desaparece; el cambio, no.
+4. Si al regenerar el generador ha tenido que usar igualmente el alimento en algún rol obligatorio
+   (regla de respaldo de §3.2b), su aviso —"No hemos podido evitar {alimento} en {comida}"— se pinta
+   donde el resto de notas del menú, con el texto que trae `ejemplos.avisos_menu`.
+
+**Resumen bajo el menú (v1.2).** Si hay alguna de las dos listas, una línea en letra pequeña justo debajo
+del menú y encima de las equivalencias:
+
+> "Sin: brócoli, coliflor · Favoritos: pollo, arroz  ·  [Cambiar]"
+
+Los nombres son `nombre_corto` (§3.0), separados por ", " y en el orden de cada lista (los favoritos, en
+el del usuario). Cada mitad se omite si su lista está vacía. **"Cambiar"** es un enlace que lleva al
+**paso 14** del wizard con el borrador cargado; al volver a "Ver mi plan" desde ahí, la huella del plan
+no ha cambiado, así que se recupera el ajuste manual tal cual.
+
 **Bloque "Equivalencias" (plegable, justo debajo de los menús).** Existe porque §2.5 lo prometía sin definirlo. Se genera a partir de `foods.json`, sin datos del usuario:
 - Una tabla por rol (`proteina`, `carbohidrato`, `grasa`), con los alimentos de ese rol que superen el filtro de `preferencia` del usuario.
 - Para el rol `proteina`, la columna de equivalencia es **isoproteica**: gramos que aportan 20 g de proteína, `round5(2000 / alimento.proteina)`, omitiendo el alimento si el resultado supera su máximo de ración (§3.3).
@@ -628,6 +888,12 @@ Va **justo debajo del bloque de ejemplos de menú y de sus equivalencias**, pleg
 - Si `ejemplos.modo_sencillo` es `true`, distintivo encima de la lista: "Modo sencillo: {alimentos_distintos} alimentos para toda la semana."
 - **Una tabla por sección** (`SeccionSuper`, en el orden de §3.7), con el nombre visible de la sección como encabezado y cuatro columnas: **Producto** (`producto`, con el alimento del menú en línea secundaria), **Cantidad** ("{gramos_semana} g en la semana", y debajo "{gramos_dia} g al día"), **Comprar** ("{envases} × {envase_descripcion}") y **Dura** ("{dura_dias} días").
 - El `consejo` de cada línea, si existe, va en letra pequeña bajo el producto; los `fresco` que no llegan a la semana lo llevan siempre (§3.7).
+- **Sección opcional "Para los días de regla" (v1.2, decisión I).** Si `ejemplos.compra.opcional_ciclo`
+  existe, va **al final**, después de la última sección del supermercado y **antes** de las notas fijas,
+  con su `titulo` como encabezado y su `nota` justo debajo, en letra pequeña. Sus 1-3 líneas usan
+  exactamente las mismas cuatro columnas que el resto. Va visualmente separada (un filete o un fondo
+  distinto) y **no** entra en el recuento de "{alimentos_distintos} alimentos": son compras pequeñas y
+  opcionales que no forman parte del plan, y el copy de la nota lo dice.
 - Al pie, las tres notas fijas de `compra.notas`, en el orden en que vienen.
 - Botón secundario "Ver otro ejemplo" (§2.5): al cambiar el menú cambia también la lista, porque se recalcula desde el mismo `Ejemplos`.
 
@@ -679,6 +945,16 @@ Debajo de la proyección, plegado por defecto. Encabezado **"Tu seguimiento en e
 - "Fecha" → `<input type="date">`, por defecto hoy, no admite fechas anteriores a `fecha_inicio` ni posteriores a hoy.
 - "Peso (kg)" → `<input type="number" step="0.1" min="30" max="300">`.
 - Botón primario "Añadir pesaje". Deshabilitado hasta que los dos campos son válidos.
+- **Mensaje de fecha no válida (v1.2, decisión J — obligatorio).** Hasta ahora una fecha fuera de rango
+  se rechazaba **en silencio**: el botón se quedaba apagado y no había ni mensaje ni campo marcado, que
+  es exactamente el defecto que la §1.0 prohíbe en el wizard. Bajo el campo de fecha, en cuanto hay un
+  valor fuera de rango, va el texto correspondiente en un `<p>` con `role="alert"` y el `<input>` con
+  `aria-invalid="true"`:
+  - anterior a `fecha_inicio` → **"Esa fecha es anterior al día en que empezaste el plan ({fecha}).
+    Elige una posterior."**
+  - posterior a hoy → **"Todavía no puedes apuntar un peso de una fecha futura."**
+  - vacía o no interpretable → **"Pon la fecha del día en que te pesaste."**
+  El mensaje del peso sigue las mismas reglas: fuera de 30-300 kg → **"Pon un peso entre 30 y 300 kg."**
 - Si ya existe un pesaje en esa fecha, se **sustituye** (no se duplica) y se avisa con un texto breve: "Ya tenías un pesaje ese día; lo hemos actualizado."
 
 **Lista.** Los pesajes ordenados **del más reciente al más antiguo**, una fila por pesaje: `{fecha en formato d/m/aaaa} · {kg} kg` y un botón de borrar por fila (icono con `aria-label` "Borrar el pesaje del {fecha}"). Debajo, un botón secundario "Borrar todo el seguimiento" con confirmación.
@@ -778,6 +1054,7 @@ Se muestra **siempre**, a todo el mundo, sin depender de ninguna respuesta, y ap
 |---|---|---|
 | `id` | string | Identificador único (validado: no hay duplicados) |
 | `nombre` | string | Nombre en español de España, con el estado entre paréntesis cuando importa ("Arroz blanco (cocido)") |
+| `nombre_corto` | string | **v1.2.** Nombre corto para los chips del paso 14 del wizard y para el resumen de §2.5: **máximo 18 caracteres**, en español, sin el estado entre paréntesis y sin la marca ("Pollo", "Brócoli", "Yogur griego 0%"). Obligatorio en todos los alimentos. El nombre largo se sigue usando en el menú, en las equivalencias, en la compra y en `Ejemplos.alimentos_ciclo` |
 | `grupo` | `'proteina' \| 'lacteo' \| 'carbohidrato' \| 'grasa' \| 'verdura' \| 'fruta'` | Familia alimentaria (se usa para las equivalencias y para el filtro `sin_lactosa`) |
 | `roles` | `('proteina' \| 'carbohidrato' \| 'grasa' \| 'verdura' \| 'fruta' \| 'complemento')[]` | **Rol funcional en el menú, independiente del grupo.** Las legumbres declaran `['proteina','carbohidrato']`; el yogur griego 0 %, `['proteina']`; el salmón, `['proteina','grasa']`. `'complemento'` es el rol de las bebidas de baja densidad que acompañan a un ancla sin ser ellas mismas el ancla (leches, kéfir, bebidas vegetales: 9 alimentos de la base). `FoodQuery` filtra por `roles`, no por `grupo` |
 | `estado` | `'crudo' \| 'cocido' \| 'seco' \| 'listo'` | Estado en que están medidos los macros. Determina los límites de ración (§3.3) |
@@ -787,7 +1064,7 @@ Se muestra **siempre**, a todo el mundo, sin depender de ninguna respuesta, y ap
 | `racionTipica_g` | number | Ración habitual, base de la medida casera |
 | `medidaCasera` | string | Texto de la medida casera correspondiente a `racionTipica_g` |
 | `unidad_g`, `unidad_nombre` | number, string (opcionales) | Solo en alimentos contables (huevo, clara, lata, rebanada, tortita, tarrina, pieza de fruta): peso y nombre de UNA unidad |
-| `tags` | string[] | Enum cerrado: `vegetariano`, `vegano`, `sin_lactosa`, `con_lactosa`, `sin_gluten`, `low_carb`. `con_lactosa` marca los 9 lácteos que el filtro `sin_lactosa` debe excluir |
+| `tags` | string[] | Enum cerrado: `vegetariano`, `vegano`, `sin_lactosa`, `con_lactosa`, `sin_gluten`, `low_carb`, `extra`. `con_lactosa` marca los 9 lácteos que el filtro `sin_lactosa` debe excluir. **`extra` (v1.2)** marca los alimentos que existen para la tarjeta del ciclo (§3.8) y **no pueden entrar en ninguna `FoodQuery` del menú**: ni en la rotación, ni en la reserva, ni en las alternativas, ni en las tablas de equivalencias. Sirve para añadir alimentos a la base sin cambiar ni un menú existente |
 | `fuente` | string | Referencia (BEDCA/USDA) |
 
 **Consecuencias normativas de este contrato:**
@@ -795,7 +1072,7 @@ Se muestra **siempre**, a todo el mundo, sin depender de ninguna respuesta, y ap
 1. **Las kcal de una comida se calculan siempre como `Σ (alimento.kcal · gramos / 100)`**, nunca como `4·P + 4·HC + 9·G`. La diferencia entre ambos métodos llega a 47 kcal por 100 g en alimentos ricos en fibra o en grasa (nueces 654 vs 701; almendras 579 vs 622; avena 389 vs 357), suficiente para hacer fallar por sí sola la validación del ±10 % de §3.3.
 2. Como `carbohidratos` incluye la fibra, el objetivo de HC del motor (que también es hidrato total) y el del menú son directamente comparables. `hc_netos` no entra en ningún cálculo del generador.
 3. `estado` es obligatorio y limita qué alimentos pueden entrar en una plantilla: **los cereales, pastas y arroces con `estado = 'crudo'` están excluidos del banco de plantillas** (solo aparecen en la tabla de equivalencias, etiquetados "en crudo"), porque las reglas de ración de §3.3 están escritas para el alimento tal y como se come.
-4. La validación de la base (test automático) comprueba: ids únicos; presencia de todos los campos obligatorios; `|kcal − (4P + 4HC + 9G)| / kcal ≤ 0,15`; `fibra ≤ carbohidratos`; `hc_netos = carbohidratos − fibra`; que todo alimento con `unidad_g` tenga también `unidad_nombre`; **que `grupo`, `estado`, `roles` y `tags` solo contengan valores del enum declarado en la tabla de arriba**; y **que todo alimento encaje en exactamente una fila de la tabla de `clampRacion` (§3.3): ni cero, ni dos o más**. Las dos últimas comprobaciones son nuevas: sin ellas, nueve alimentos con `roles: ['complemento']` —un valor que no existía en el enum— pasaban la validación entera siendo inalcanzables por rol para el generador, y una plantilla del banco vegano (VGN-DES-2) dependía de uno de ellos (`bebida_soja`). La cota **por arriba** (una sola fila aplicable) es igual de necesaria que la cota por abajo: con la tabla anterior la mantequilla encajaba en dos filas con mínimos de 5 g y de 100 g, y la validación no lo detectaba porque solo exigía "al menos una".
+4. La validación de la base (test automático) comprueba: ids únicos; presencia de todos los campos obligatorios (incluido `nombre_corto`, no vacío y de **18 caracteres o menos**); `|kcal − (4P + 4HC + 9G)| / kcal ≤ 0,15`; `fibra ≤ carbohidratos`; `hc_netos = carbohidratos − fibra`; que todo alimento con `unidad_g` tenga también `unidad_nombre`; **que `grupo`, `estado`, `roles` y `tags` solo contengan valores del enum declarado en la tabla de arriba**; y **que todo alimento encaje en exactamente una fila de la tabla de `clampRacion` (§3.3): ni cero, ni dos o más**. Las dos últimas comprobaciones son nuevas: sin ellas, nueve alimentos con `roles: ['complemento']` —un valor que no existía en el enum— pasaban la validación entera siendo inalcanzables por rol para el generador, y una plantilla del banco vegano (VGN-DES-2) dependía de uno de ellos (`bebida_soja`). La cota **por arriba** (una sola fila aplicable) es igual de necesaria que la cota por abajo: con la tabla anterior la mantequilla encajaba en dos filas con mínimos de 5 g y de 100 g, y la validación no lo detectaba porque solo exigía "al menos una".
 
 **Excepción declarada del tag `sin_lactosa`.** `mantequilla` es `grupo: 'lacteo'` y lleva `sin_lactosa` sin ser una variante declarada sin lactosa ni un queso curado: su lactosa residual (≈0,6 g/100 g) queda por debajo de 0,15 g en la ración máxima de su fila (25 g), muy por debajo del umbral de tolerancia habitual. La regla general sigue siendo la de §3.2 (un lácteo sin el tag lo excluye el filtro); esta es la única excepción y está aquí para que no se lea como un error de datos.
 
@@ -905,6 +1182,118 @@ Sin esta regla escrita, la lectura literal de la versión anterior ("la primera 
 
 Si **ninguna** plantilla del banco es válida (situación que la validación de `foods.json` debe hacer imposible), se cae al banco `omnivoro` filtrado por la preferencia y se anota el fallback en el log; nunca se muestra una comida vacía. Con `preferencia_efectiva === 'low_carb'` ese fallback aplica además la regla propia del ancla de carbohidrato opcional descrita más arriba (`hc_pendiente < 20 g` → sin ancla de carbohidrato, verdura al doble), porque el filtro por tags no elimina nada en low-carb y un desayuno omnívoro entraría con su ancla de carbohidrato tal cual, que es justo lo que la preferencia excluye.
 
+### 3.2b Alimentos excluidos y favoritos (v1.2, decisión G, normativo)
+
+El paso 14 del wizard entrega dos listas de ids de `foods.json`, que el motor **ignora** y este módulo
+**no**: `alimentos_excluidos` (lo que el usuario no quiere ver) y `alimentos_favoritos` (lo que quiere
+ver primero, **en su orden**). Entran en `PerfilDietetico` (`src/meals/filtros.ts`), que gana dos campos:
+
+```ts
+export interface PerfilDietetico {
+  banco: Preferencia
+  base: PreferenciaBase
+  restricciones: readonly Restriccion[]
+  low_carb: boolean
+  excluidos: ReadonlySet<string>       // v1.2, ids; se construye una vez por generación
+  favoritos: readonly string[]         // v1.2, ids EN EL ORDEN DEL USUARIO
+}
+```
+
+**Normalización (una sola vez, al construir el perfil).** Se descartan los ids que no existen en
+`foods.json`; se deduplica; y **un id que esté en las dos listas cuenta solo como excluido** (se retira
+de favoritos). Las dos listas salen de `InputCalculo`, no de `Resultado`: el motor no las publica porque
+no las lee.
+
+#### Orden exacto dentro de `candidatos()`
+
+La función `candidatos(q, perfil, permitidos)` de `src/meals/index.ts` pasa a filtrar y ordenar así, y
+el orden de los pasos es normativo:
+
+```
+1. base + restricciones (§3.2)          ← lo que ya hacía; NUNCA se relaja
+2. filtros de la FoodQuery (rol, grupo, estado, macros, tags)
+3. tag `extra` (§3.0): fuera de toda FoodQuery del menú
+4. EXCLUIDOS: se retira todo id de perfil.excluidos          ← v1.2, ANTES de cualquier otro criterio
+5. variantes `_sl` (§3.2) y lista blanca `permitidos` (§3.7.2)
+6. partición en `preferidos` y `reserva`, con este orden dentro de `preferidos`:
+      a) los FAVORITOS que han sobrevivido a 1-5, en el orden del usuario
+      b) el resto de `ids_preferidos` de la plantilla, en el orden de la plantilla
+      c) (si la consulta no trae `ids_preferidos`) los favoritos primero y el resto por `id`
+   `reserva` = lo que queda, ordenado por `id` como hasta ahora
+```
+
+Los puntos importantes, escritos como reglas y no como intención:
+
+- **Los excluidos se filtran después de la base y las restricciones y antes que nada más.** Da igual que
+  el alimento sea el primero de `ids_preferidos`, que sea el único que cierra las kcal o que venga de la
+  lista blanca del modo sencillo: si está excluido, no entra en `preferidos` **ni en `reserva`**.
+- **Los favoritos no saltan ningún filtro.** Un favorito que no pasa la base, las restricciones o la
+  `FoodQuery` simplemente no aparece en esa consulta; ser favorito solo cambia el **orden**, nunca la
+  validez. Esto es lo que impide que "me encanta el queso" meta queso en la consulta de carbohidrato.
+- **La rotación se aplica sobre la lista ya ordenada.** El desplazamiento por usuario y por comida sigue
+  igual (§3.2): lo único que cambia es qué hay en la posición 0. En modo sencillo y en tomas ligeras,
+  donde la rotación ya arrancaba en 0, el favorito gana directamente.
+- **Determinismo total.** Las dos listas son entradas del generador como cualquier otra: mismos inputs →
+  mismo menú, sin `Math.random` en ninguna parte.
+
+#### Dónde más se aplican los excluidos (lista cerrada)
+
+Un alimento excluido **no puede aparecer en ningún sitio**. En la práctica, eso son cinco:
+
+| Sitio | Regla |
+|---|---|
+| Menú (`EjemploComida.alimentos`) | `candidatos()`, punto 4 |
+| Alternativas por comida (§2.5) | se descartan los candidatos excluidos antes de la guarda del ±15 % |
+| Tablas de equivalencias (§2.5) | `equivalencias()` recibe el `PerfilDietetico` y filtra igual |
+| Lista de la compra (§3.7.3) | sale del menú, así que no puede traerlos; ningún camino la rellena aparte |
+| Alimentos del ciclo y sección opcional de la compra (§3.8) | se filtran también por `excluidos` |
+
+Los favoritos, en cambio, **solo** afectan al menú y al orden de las alternativas: las tablas de
+equivalencias siguen ordenadas como estaban (son una referencia, no una recomendación).
+
+#### Modo sencillo (§3.7.2) con excluidos y favoritos
+
+Las mismas reglas, aplicadas sobre las listas cerradas del banco sencillo y **sin superar nunca el tope
+de 12 alimentos distintos**:
+
+1. Se parte de la lista de candidatos de la preferencia y se le aplican los pasos 2 (variante `_sl`) y 3
+   (filtrado) de §3.7.2 tal cual.
+2. **Se retiran los excluidos**, justo después de ese filtrado.
+3. **Los favoritos que pasan el filtro y el rol se colocan en las primeras posiciones** de la lista
+   corta de su rol, en el orden del usuario, delante de los candidatos de la tabla. Un favorito que no
+   estaba en la lista corta **entra** en ella (es la única forma de que "me encanta el pavo" signifique
+   algo en modo sencillo), y para mantener el tope se descarta el **último** candidato de ese rol que
+   ninguna plantilla del día A ni del día B esté usando; si todos están en uso, el favorito no entra.
+4. El **relleno** del punto 4 de §3.7.2 se evalúa **después** de retirar los excluidos, con los mismos
+   mínimos (2 candidatos en `proteina` y en `carbohidrato`, 1 en `grasa`, `verdura` y `fruta`) y en el
+   mismo orden (fila `omnivoro` → resto de la base por `id` → desactivar el modo sencillo). Ningún
+   relleno puede meter un excluido.
+
+#### Regla de respaldo cuando las exclusiones vacían una consulta (normativa)
+
+```
+si una FoodQuery se queda SIN candidatos por culpa de las exclusiones:
+   1. se aplica el respaldo que ya existía (§3.2 puntos 1-3 y §3.7.2 punto 3), con la lista blanca
+      correspondiente y SIEMPRE con la base y las restricciones puestas
+   2. si aun así no hay ningún candidato y la FoodQuery es OBLIGATORIA (el ancla de proteína de la
+      toma, o el ancla de carbohidrato fuera de low-carb):
+         se usa el MEJOR candidato excluido — el primero de la lista que la consulta habría elegido
+         si el usuario no lo hubiera marcado — y se anota en `Ejemplos.avisos_menu`:
+         "No hemos podido evitar {nombre} en {comida}: sin él no salen los macros de esa toma.
+          Cámbialo por lo que quieras de la tabla de equivalencias."
+   3. si la FoodQuery es OPCIONAL (verdura, fruta, ancla de grasa, segunda proteína), no se usa ningún
+      excluido: se omite la consulta, como ya hacía el punto 4 de §3.2
+```
+
+Un aviso por alimento y por comida, sin duplicados, en el orden en que se generan las tomas. La razón de
+preferir "un alimento que no te gusta con su aviso" a "una comida sin proteína" es la misma que sostiene
+toda la §3.3: el plan tiene que cerrar los macros que la pantalla acaba de imprimir dos bloques más
+arriba. Lo que no es aceptable es hacerlo **en silencio**.
+
+**Lo que NUNCA hace el respaldo:** relajar la base dietética o una restricción. Antes se entrega una
+comida con un ancla menos (§3.2, punto 4). Las exclusiones son una preferencia; `vegano` y `sin_gluten`
+no lo son.
+
 ### 3.3 Algoritmo de escalado de gramajes (por comida)
 
 Dada una comida con objetivo `{proteina_g, grasa_g, hc_g, kcal}` (del reparto del motor) y una plantilla ya resuelta a alimentos concretos. Todas las sumas de macros se hacen sobre los alimentos ya añadidos, incluidas la verdura y la fruta: **no hay ninguna constante de aporte estimado**.
@@ -952,10 +1341,11 @@ función escalarComida(objetivo, alimentos):
 
 **Corrección respecto de la v1.** La v1 declaraba la fruta "libre, no se escala por macro" y nunca la descontaba, mientras usaba una constante `APORTE_HC_VERDURA_FIJO = 5 g` para la verdura. Las dos cosas estaban mal: un plátano de 120 g aporta 27,6 g de HC (el 39 % del objetivo de un desayuno) y la verdura real aporta el doble de la constante (brócoli 175 g = 11,6 g; zanahoria 125 g = 12,5 g; calabaza 175 g = 11,4 g). El resultado era que el ancla de HC se pasaba en todas las comidas principales. **La constante `APORTE_HC_VERDURA_FIJO` queda eliminada**: verdura y fruta se eligen antes que las anclas y se descuentan con sus macros reales de `foods.json`.
 
-**Límites de ración (`clampRacion`).** Cada fila lleva un **predicado formal** sobre los campos de `foods.json`, no un nombre de producto, y los predicados son **mutuamente excluyentes**: todo alimento de la base encaja en exactamente una fila (lo comprueba la validación de §3.0).
+**Límites de ración (`clampRacion`).** Cada fila lleva un **predicado formal** sobre los campos de `foods.json`, no un nombre de producto, y los predicados son **mutuamente excluyentes**: todo alimento de la base encaja en exactamente una fila (lo comprueba la validación de §3.0). **La primera fila, la de los alimentos `extra`, tiene precedencia sobre todas las demás** (v1.2): un alimento con ese tag encaja solo en ella, y la exclusividad mutua del resto se evalúa entre los alimentos **sin** ese tag. Su ración es fija —nunca se escalan, porque nunca entran en una comida—, y la fila existe para que la validación de §3.0 siga siendo una comprobación real y no un caso especial escrito en prosa.
 
 | Fila | Predicado sobre el alimento | Mínimo | Máximo |
 |---|---|---|---|
+| **Alimento `extra` (v1.2)** — tiene precedencia sobre todas las demás | `tags` incluye `extra` | `racionTipica_g` | `racionTipica_g` |
 | Proteína animal o vegetal | `grupo = 'proteina'`, `estado ∈ {crudo, cocido, listo}`, sin rol `carbohidrato` | 50 g | 250 g |
 | Proteína con rol también de carbohidrato (legumbres cocidas) | `grupo = 'proteina'` y `roles` incluye `carbohidrato` | 50 g | 300 g |
 | Proteína deshidratada (soja texturizada, proteína en polvo) | `grupo = 'proteina'` y `estado = 'seco'` | 15 g | 60 g |
@@ -1199,6 +1589,61 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
 
 ---
 
+### 3.8 Alimentos para los días de regla (v1.2, decisión I, normativo)
+
+Cuando `resultado.ciclo` existe (`SPEC-calculo.md` paso 19), el generador produce dos cosas más. Las dos
+son **opcionales, pequeñas y no cambian ni un gramo del plan**: no entran en el menú, no entran en el
+cierre de kcal de §3.3 y no cuentan en `alimentos_distintos`.
+
+#### 3.8.1 `Ejemplos.alimentos_ciclo`
+
+De 2 a 4 alimentos, con esta regla, en este orden:
+
+1. Se recorren los síntomas de `resultado.ciclo.sintomas` **en su orden canónico** y, por cada uno, sus
+   ids candidatos de la tabla de abajo, también en orden.
+2. Cada id se acepta si pasa **la base, todas las restricciones y `alimentos_excluidos`** (§3.2b). El
+   tag `extra` **no** lo descarta aquí: esta es justamente la lista para la que existen esos alimentos.
+3. Se deduplica por `id` y se corta en **4**. Si salen menos de 2, se publica lo que haya (o
+   `undefined` si no hay ninguno). No se rellena con nada que no venga de la tabla.
+
+| Síntoma | Ids candidatos, en orden | `por_que` (copy literal) |
+|---|---|---|
+| `sangrado_abundante` | `lentejas_cocidas`, `ternera_solomillo`, `mejillones_lata`, `espinacas` | "hierro, para reponer lo que pierdes con el sangrado" |
+| `dolor` | `sardinas_lata`, `nueces`, `semillas_lino`, `cacao_puro` | "omega-3 y magnesio, que ayudan con el dolor" |
+| `cansancio` | `lentejas_cocidas`, `avena_copos`, `patata_cocida`, `espinacas` | "hierro e hidratos, para no quedarte sin energía" |
+| `antojos` | `cacao_puro`, `chocolate_85`, `yogur_griego_0`, `manzana` | "cunde más que el dulce típico y sacia más" |
+| `hinchazon` | `platano`, `patata_cocida`, `calabacin` | "potasio, que ayuda a soltar el agua retenida" |
+
+`nombre` es el `nombre` largo de `foods.json`, no `nombre_corto`. Un mismo id que aparezca por dos
+síntomas se publica una vez, con el `por_que` del **primer** síntoma en orden canónico.
+
+#### 3.8.2 Sección opcional de la lista de la compra
+
+`ListaCompra.opcional_ciclo` se rellena **solo si** `resultado.ciclo.sintomas` contiene alguno de
+`sangrado_abundante`, `cansancio` o `dolor`. Con solo `hinchazon` o solo `antojos` no se genera: lo que
+esos dos necesitan (plátano, patata, fruta) ya está en la compra del plan, y añadir una sección para
+repetirlo sería ruido.
+
+```
+titulo = "Para los días de regla (opcional)"
+nota   = "No está contado en las cantidades de tu plan: son compras pequeñas para 2-3 días al mes.
+          Si no te apetece, sáltatela."
+items  = de 1 a 3 líneas
+```
+
+**Qué entra, en este orden y parando en 3:** los `alimentos_ciclo` cuyo `id` **no esté ya** en
+`compra.items` (si ya lo compras para el plan, no hace falta una línea nueva), tomando **uno por
+síntoma** antes de repetir síntoma. Cada línea se calcula con las mismas fórmulas de §3.7.3, con una
+única diferencia: **la cantidad es fija y pequeña**, `gramos_semana = 2 · racionTipica_g` redondeado, en
+vez de salir del menú. `gramos_dia`, `envases`, `dura_dias` y el consejo se derivan de ahí exactamente
+igual, y la línea lleva el mismo formato de cuatro columnas (§2.5b) para que pantalla y PDF no necesiten
+un renderizado aparte.
+
+**Y no cuenta en el plan:** `alimentos_distintos` sigue siendo `items.length`, sin la sección opcional; el
+tope de 12 del modo sencillo (§3.7.2) tampoco la cuenta, y su test tampoco.
+
+---
+
 ## 4. Estructura del PDF exportable
 
 ### 4.0 Principios
@@ -1224,7 +1669,9 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
 - Tabla de datos de entrada: sexo, edad, altura, peso, %grasa (rango + método), actividad diaria, entrenamiento (tipo/días/duración/intensidad), objetivo, ritmo, **preferencias alimentarias** y nº de comidas.
 - **Preferencias alimentarias (v1.1).** Ya no es una sola fila con un valor: se imprime como "{base}{, sin lactosa}{, sin gluten}{ · bajo en hidratos}" a partir de `resultado.preferencia_base`, `resultado.restricciones` y `resultado.low_carb` — nunca de `inputs.preferencia`, que puede no reflejar lo que el usuario marcó. Ejemplo: "Vegano, sin gluten · bajo en hidratos".
 - **Prioridad de recomposición (v1.1).** Con `objetivo_efectivo === 'recomposicion'` y `recomposicion_prioridad !== 'equilibrado'`, la fila de objetivo lleva el matiz: "Recomposición · prioridad: perder grasa" o "· prioridad: ganar músculo".
-- **Regla (v1.1).** `menstruacion` **no se imprime nunca** en la tabla de datos de entrada. Sus consecuencias sí (la tarjeta de §4.3b y los avisos de la última página), pero el dato en sí es innecesario en un documento que el usuario imprime o comparte.
+- **Plazo (v1.2).** Si `inputs.plazo_semanas` es un número, la fila de ritmo lleva el matiz "{ritmo} · fecha pedida: {plazo_semanas} semanas". El ritmo que se imprime es siempre `resultado.ritmo_efectivo`, no el que marcó el usuario: es el del plan. El aviso `INFO_RITMO_POR_PLAZO` o `WARN_PLAZO_IRREAL` explica la diferencia en la última página.
+- **Alimentos (v1.2).** Si hay `alimentos_excluidos` o `alimentos_favoritos`, una fila más: "Alimentos: sin {lista de `nombre_corto`} · favoritos {lista}", con la mitad que no aplique omitida. Es la misma línea que la pantalla imprime bajo el menú (§2.5), y va aquí porque forma parte de lo que el usuario respondió.
+- **Regla (v1.1).** `menstruacion` **no se imprime nunca** en la tabla de datos de entrada. Sus consecuencias sí (la tarjeta de §4.3b y los avisos de la última página), pero el dato en sí es innecesario en un documento que el usuario imprime o comparte. **Lo mismo vale para `sintomas_regla` (v1.2):** los consejos de la tarjeta del ciclo se imprimen, la lista de síntomas marcados **no**.
 - Bloque de resultados clave (igual que la cabecera de la pantalla de resultados, sección 2.1): kcal, IMC + categoría, %grasa rango, TDEE.
 - **v1.1:** la guarda del cribado que omitía el %grasa de esta página **queda retirada** (decisión A). La tabla y el bloque de resultados clave se imprimen completos siempre.
 - Si hay algún aviso de condición médica (`WARN_DIABETES`, `WARN_RENAL`, `WARN_HEPATICA`, `WARN_CARDIACA`, `WARN_HIPERTENSION`, `WARN_TIROIDES`, `WARN_BARIATRICA_GLP1`, `WARN_CONDICION_OTRA`), o `WARN_IMC_35` / `WARN_IMC_40`, o `edad ≥ 65`: sección destacada **"Avisos para tu caso"** en esta misma página, antes de seguir con el plan (según instrucción explícita de la investigación), con el texto completo de cada aviso relevante. Es **la misma condición, palabra por palabra, que la de prioridad visual de §2.8**, para que pantalla y PDF sigan siendo "la misma instantánea" que exige §4.0. `'tca'` **no** activa esta sección ni aparece en la tabla de datos de entrada (regla de serialización, §4.0).
@@ -1244,7 +1691,15 @@ La nota de cierre de kcal dice **"hasta 25 kcal"** en vez de "hasta 10 kcal" cua
 
 ### 4.3b Tarjeta "Tu ciclo y tu plan" (v1.1, decisión D)
 
-Si `INFO_CICLO` está entre los avisos, se imprime la tarjeta de §2.2c **en la página 3, debajo del bloque de hidratación**, con el mismo encabezado y el texto íntegro del aviso. Si no cabe, pasa entera a la página siguiente; nunca se parte ni se resume. `WARN_CICLO_AUSENTE`, si existe, va donde van todos los `WARN_*`: en la sección destacada de la página 2 (es un aviso de seguridad) **y** en el listado íntegro de la última página, como cualquier otro.
+Si `INFO_CICLO` está entre los avisos, se imprime la tarjeta de §2.2c **en la página 3, debajo del bloque de hidratación**, con el mismo encabezado y el texto íntegro del aviso.
+
+**Con síntomas (v1.2).** Si `resultado.ciclo` existe, debajo del texto de `INFO_CICLO` van sus consejos,
+**uno por síntoma y en el orden de `resultado.ciclo.consejos`**, con la misma estructura que la pantalla:
+`titulo` en negrita, `texto` íntegro y la línea "Prioriza: {alimentos separados por ·}" cuando la lista no
+está vacía. La tarjeta **crece**, así que deja de caber junto a la hidratación con tres o más síntomas:
+en ese caso viaja **entera** a la página siguiente (`wrap={false}`, §4.0), nunca se parte y nunca se
+resume. Con cinco síntomas puede ocupar una página propia, y es aceptable: sigue dentro del tope de 10
+páginas porque es una página de texto, sin tablas ni gráficas. Si no cabe, pasa entera a la página siguiente; nunca se parte ni se resume. `WARN_CICLO_AUSENTE`, si existe, va donde van todos los `WARN_*`: en la sección destacada de la página 2 (es un aviso de seguridad) **y** en el listado íntegro de la última página, como cualquier otro.
 
 ### 4.4 Página 4 — Método, reparto por comidas y ejemplos de menú
 
@@ -1253,6 +1708,7 @@ Si `INFO_CICLO` está entre los avisos, se imprime la tarjeta de §2.2c **en la 
 - Tabla de reparto por comidas (idéntica a la de pantalla, sección 2.4), con nota fija sobre la falta de evidencia de "más comidas = más metabolismo".
 - Ejemplo de menú de un día completo (el que estuviera activo en pantalla), con alimento + gramos + medida casera calculada con la regla de §3.5, agrupado por comida — formato de lista, no tabla densa, para que sea legible impreso.
 - Tabla de equivalencias (§2.5), en la misma página o en la siguiente si no cabe, **entera**: partida dejaba la última tabla (grasas) y su nota de cierre solas en una página casi vacía.
+- **Resumen de alimentos (v1.2).** Si hay alguna de las dos listas, la misma línea de §2.5 justo debajo del menú, en letra pequeña: "Sin: {nombre_corto…} · Favoritos: {nombre_corto…}", sin el enlace "Cambiar" (en papel no lleva a ninguna parte). Si `ejemplos.avisos_menu` trae algo, sus textos van a continuación, con el mismo estilo que las notas de desviación de §3.3.
 - Nota: "Son ejemplos para orientarte, no un menú obligatorio. Puedes sustituir cualquier alimento por otro de la misma familia sin descuadrar tus macros de forma relevante: mira la tabla de equivalencias."
 - Si el generador no ha producido menú (`renal` o `hepatica`, §3.1), la página contiene solo la tabla de reparto y el texto de derivación de §3.1; no se imprime ningún gramaje de alimento.
 - La tabla de reparto sale de `resultado.comidas` (un único array; en la v1 no hay reparto de día de entreno y de día de descanso, `[Paso 16]`), y usa el campo `hora` de cada comida como etiqueta de referencia y `peri` para marcar la toma de alrededor del entrenamiento.
@@ -1263,6 +1719,7 @@ Si `INFO_CICLO` está entre los avisos, se imprime la tarjeta de §2.2c **en la 
 - Contenido: `ejemplos.compra` **tal cual**, sin recalcular nada, agrupado por sección en el orden de §3.7 y con las mismas cuatro columnas de §2.5b (producto, cantidad, envases a comprar, duración) más el consejo de cada línea en letra pequeña.
 - **Mismas cuatro columnas quiere decir el mismo texto.** Las dos celdas de cantidad y el rótulo del modo sencillo salen de `textoCantidadSemana`, `textoCantidadDia` y `textoModoSencillo` (en `src/meals/compra.ts`), que usan la pantalla y el PDF. Con una función de formato en cada capa, la pantalla imprimía "1,93 kg en la semana · 82,5 g al día" y el PDF "1.925 g en la semana · 83 g al día" para la misma línea, y el PDF fijaba el plural ("1 alimentos").
 - Si `ejemplos.modo_sencillo` es `true`, línea bajo el subtítulo: "Modo sencillo: {alimentos_distintos} alimentos para toda la semana."
+- **Sección opcional "Para los días de regla" (v1.2).** Si `ejemplos.compra.opcional_ciclo` existe, va al final de la lista y **antes** de las notas fijas, con su `titulo`, su `nota` en letra pequeña y sus 1-3 líneas en las mismas cuatro columnas. Separada con un filete, y sin sumar al recuento del modo sencillo. Si no cabe en la página, viaja entera a la continuación (que ya repite título y subtítulo, ver arriba).
 - Al pie, las tres notas fijas de `compra.notas`, íntegras y en orden.
 - **Nunca lleva precios** (§3.7): un precio impreso en un PDF que el usuario guarda meses envejece mucho peor que un gramaje.
 - Si no hay menú (`renal` o `hepatica`, §3.1) o `ejemplos.compra` es `undefined`, **la página no se imprime**; no se sustituye por ningún texto, porque §4.4 ya explica por qué no hay menú.
@@ -1282,7 +1739,8 @@ Va **justo después** del cronograma de §4.5, en la misma página si cabe y en 
 - **Título:** "Cómo debería ir la cosa". Debajo, el subtítulo de §2.6b.
 - **La gráfica.** El mismo SVG de §2.6b, con la misma banda, la misma curva, los mismos hitos de 4, 8 y 12 semanas y la misma línea de objetivo. `@react-pdf/renderer` no admite SVG arbitrario del DOM, así que se dibuja con sus primitivas (`Svg`, `Path`, `Line`, `Circle`, `Text`) a partir de los mismos `resultado.proyeccion` y las mismas fórmulas de escala: no se recalcula ningún peso.
 - **Tabla equivalente, obligatoria.** Debajo de la gráfica, la tabla de *Semana · Mínimo · Esperado · Máximo* con **una fila por semana**, la misma que la pantalla esconde tras "Ver los números". En el PDF no se esconde: es un documento impreso y la tabla es lo que sobrevive a una fotocopia en blanco y negro.
-- **Copy fijo:** la "Nota proyección" de `SPEC-calculo.md` §4, íntegra; o el texto de `INFO_PROYECCION_PLANA` cuando la proyección es plana.
+- **Copy fijo:** la "Nota proyección" de `SPEC-calculo.md` §4, íntegra; o el texto de `INFO_PROYECCION_PLANA` cuando la proyección es plana; o el de **`INFO_PROYECCION_RECOMP`** cuando es la banda de recomposición (v1.2). Es una de las tres, nunca dos.
+- **Proyección de recomposición (v1.2).** Se dibuja **igual** que las demás: misma banda, misma curva central, mismos hitos de 4, 8 y 12 semanas y misma línea de objetivo (`peso_objetivo.efectivo`, que en recomposición con déficit ya no es `null`). No hace falta ningún caso especial en el dibujo: el borde superior es plano porque los datos lo son. Lo único que cambia es el copy fijo de debajo y que **no hay fechas** (el cronograma es `null`, así que §4.5 imprime `INFO_SIN_CRONOGRAMA` en su lugar).
 - **Seguimiento.** Si `datos.pesajes` existe y tiene **al menos un** pesaje, se imprimen los puntos sobre la gráfica y, debajo, la lista de pesajes (*fecha · kg*) en orden cronológico. Con **dos o más** se imprime además la frase de balance de §2.6c, elegida con la misma tabla de reglas y con su cierre fijo. Con `datos.pesajes` vacío o ausente **no se imprime nada de esto**, ni un hueco ni una nota.
 - **Etiqueta obligatoria del bloque de seguimiento:** "Estos pesajes estaban guardados solo en tu móvil el {fecha de generación}. Este PDF es la única copia que sale de él."
 - Si `resultado.proyeccion` es `undefined`, la sección entera **no se imprime**.
@@ -1323,6 +1781,10 @@ Este documento no redefine ningún número, fórmula, suelo, techo ni tabla del 
 | `excluido: 'ERR_INPUT_RANGO'` con `errores: string[]` | Paso 0 y `Resultado` |
 | `condiciones` y `peso_kg` del generador de menús (§3.1) | **`InputCalculo`, no `Resultado`**: el motor no los republica en su salida. Se pasa la lista **cruda** del usuario (`inputs.condiciones`), no la normalizada del Paso 0, para que `'tca'` no llegue nunca al módulo de menús |
 | `preferencia_efectiva` y `macros.fibra_g` del generador de menús (§3.1) | `Resultado` (Paso 6.8 y Paso 11) |
+| `plazo_semanas` (paso 12 del wizard) | §1 fila 24 y **Paso 6.7ter**; avisos `INFO_RITMO_POR_PLAZO` y `WARN_PLAZO_IRREAL` |
+| `sintomas_regla` (subpregunta del paso 3b) y `Resultado.ciclo` | §1 fila 25 y **Paso 19** (copy completo de los cinco consejos) |
+| `peso_objetivo.efectivo` en recomposición y `INFO_PROYECCION_RECOMP` | **Pasos 13 y 14** (recomposición con déficit real) |
+| `alimentos_excluidos` y `alimentos_favoritos` (paso 14 del wizard) | §1 filas 26-27: **el motor los ignora**; todo el comportamiento vive en §3.2b de este documento |
 
 
 ---
@@ -1399,6 +1861,20 @@ viven en `SPEC-calculo.md` o en `verify-vectors.mjs` se registran en el §7 de a
 
 
 ---
+
+### v1.2 — decisiones G-J del segundo feedback real (2026-09-08)
+
+| Decisión | Dónde se ha escrito |
+|---|---|
+| G — Alimentos favoritos y "no me gusta" | §1.0 (barra de progreso), §1.1 (mapa y condiciones de visibilidad), **paso 14** (pantalla nueva, control segmentado, grupos de chips y reglas de interacción), §2.5 (acción "No me gusta" con deshacer y resumen), **§3.2b** (orden exacto en `candidatos()`, banco sencillo, respaldo y aviso), §3.0 (`nombre_corto`), §4.2 y §4.4 (PDF) |
+| H — Peso objetivo, plazo y recomposición | §1.1 (orden nuevo: 11 peso objetivo, 12 ritmo), **paso 11** (visible también en recomposición), **paso 12** (selector de plazo y previsualización), paso 10 (nudge de recomposición), §2.6b y §4.5b (la banda de recomposición se dibuja igual), §4.2 (fila de plazo) |
+| I — Regla: síntomas y alimentos | **paso 3b** (subpregunta de síntomas), §2.2c y §4.3b (tarjeta ampliada), **§3.8** (alimentos del ciclo y sección opcional de la compra), §2.5b (dónde va), §3.0 (tag `extra`) |
+| J — Arreglos menores | §2.6c (mensajes de fecha y de peso no válidos, que hasta ahora se rechazaban en silencio) |
+
+**Lo que NO cambia con la v1.2:** ninguna plantilla, ningún banco, ningún límite de ración, ninguna
+fórmula de la lista de la compra y ningún menú existente. Los cuatro alimentos nuevos llevan el tag
+`extra` justamente para eso: entran en la base y en `mercadona.json` sin tocar la rotación ni la reserva
+de ninguna `FoodQuery`, así que los vectores de §3.6 siguen siendo los mismos.
 
 ### v1.1 — decisiones A-F del feedback real de usuarios (2026-09-07)
 

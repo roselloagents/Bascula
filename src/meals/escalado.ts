@@ -53,6 +53,10 @@ const TOPE_UNIDADES: Record<string, number> = {
  */
 export function filaRacion(a: Alimento): LimiteRacion {
   const rol = (r: string) => a.roles.includes(r as Alimento['roles'][number])
+  // v1.2: la fila de los alimentos `extra` tiene PRECEDENCIA sobre todas las demás (§3.3). Nunca
+  // entran en una comida, así que su ración es fija; la fila existe para que la validación de §3.0
+  // ("exactamente una fila") siga siendo una comprobación real y no una excepción escrita en prosa.
+  if (a.tags.includes('extra')) return { min: a.racionTipica_g, max: a.racionTipica_g }
   if (a.grupo === 'proteina' && a.estado === 'seco') return { min: 15, max: 60 }
   if (a.grupo === 'proteina' && rol('carbohidrato')) return { min: 50, max: 300 }
   if (a.grupo === 'proteina') return { min: 50, max: 250 }

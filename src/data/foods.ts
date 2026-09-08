@@ -1,17 +1,31 @@
 // Base de alimentos del generador de menús (docs/SPEC-ux-comidas-pdf.md §3.0).
-// `foods.json` es copia literal de `docs/foods.json`: 101 alimentos con macros por 100 g.
+// `foods.json` es copia literal de `docs/foods.json`: 105 alimentos con macros por 100 g
+// (101 del plan + los 4 con tag `extra` de la tarjeta del ciclo, v1.2).
 // Este módulo solo aporta el tipado y los índices; no transforma ningún número.
 import datos from './foods.json'
 
 export type GrupoAlimento = 'proteina' | 'lacteo' | 'carbohidrato' | 'grasa' | 'verdura' | 'fruta'
 export type RolAlimento = 'proteina' | 'carbohidrato' | 'grasa' | 'verdura' | 'fruta' | 'complemento'
 export type EstadoAlimento = 'crudo' | 'cocido' | 'seco' | 'listo'
-export type TagAlimento = 'vegetariano' | 'vegano' | 'sin_lactosa' | 'con_lactosa' | 'sin_gluten' | 'low_carb'
+export type TagAlimento =
+  | 'vegetariano'
+  | 'vegano'
+  | 'sin_lactosa'
+  | 'con_lactosa'
+  | 'sin_gluten'
+  | 'low_carb'
+  /** v1.2: alimento que existe solo para la tarjeta del ciclo (SPEC-ux §3.8). **Nunca** entra en una
+   *  `FoodQuery` del menú: ni en la rotación, ni en la reserva, ni en las alternativas, ni en las
+   *  tablas de equivalencias. Así se pueden añadir alimentos sin cambiar ni un menú existente. */
+  | 'extra'
 
 /** Una entrada de `foods.json`. Todos los macros son g por 100 g; `kcal`, kcal por 100 g. */
 export interface Alimento {
   id: string
   nombre: string
+  /** Nombre corto para los chips del paso 14 del wizard y para el resumen de §2.5 (máx. 18 caracteres).
+   *  El nombre largo se sigue usando en el menú, en las equivalencias y en la lista de la compra. */
+  nombre_corto: string
   grupo: GrupoAlimento
   roles: RolAlimento[]
   estado: EstadoAlimento
@@ -58,6 +72,7 @@ export const TAGS_VALIDOS: readonly TagAlimento[] = [
   'con_lactosa',
   'sin_gluten',
   'low_carb',
+  'extra',
 ]
 
 // El JSON se infiere con `string` donde el contrato declara uniones cerradas; la validación de

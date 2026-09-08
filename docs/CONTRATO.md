@@ -8,11 +8,18 @@ con `docs/SPEC-calculo.md` §0.3 "Tipos TypeScript de referencia" y "Salida (`Re
 
 ```ts
 export type * from './types'
-export function calcular(inputs: Inputs): Resultado                                // SPEC §2, pasos 0-17
+export function calcular(inputs: Inputs): Resultado                                // SPEC §2, pasos 0-17 + 19
 export function textosAvisos(resultado: Resultado, inputs: Inputs): AvisoTexto[]   // SPEC §4, placeholders sustituidos, warn antes que info
 export function textoError(codigo: string, inputs?: Inputs): AvisoTexto            // SPEC §4 (EXCL_* y ERR_INPUT_RANGO)
 export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resultado  // v1.1, SPEC Paso 18
 ```
+
+**v1.2: no se exporta nada nuevo del motor.** Las cuatro firmas de arriba no cambian. Lo único que crece
+es la forma de `InputCalculo` (cuatro campos opcionales) y la de `Resultado` (un campo opcional), y los
+pasos 6.7ter, 13, 14 y 19 viven dentro de `calcular`. `textosAvisos` gana tres códigos
+(`INFO_RITMO_POR_PLAZO`, `WARN_PLAZO_IRREAL`, `INFO_PROYECCION_RECOMP`) con sus placeholders, y
+`ajustarMacros` no necesita ningún dato nuevo: rehace el paso 14 como siempre, y la rama de recomposición
+sale sola de `R.tdee.valor`, `R.peso_objetivo.efectivo` y las kcal ajustadas.
 
 **`ajustarMacros` (v1.1).** Es el panel "Ajusta tus macros" de `SPEC-ux-comidas-pdf.md` §2.2b. Pura, determinista y **sin `Inputs`**: todo lo que necesita viaja en `Resultado.limites_ajuste`, que `calcular` rellena siempre (salvo con `'tca' ∈ condiciones`, donde queda `undefined` y `ajustarMacros` devuelve el `Resultado` tal cual). Nunca toca la proteína ni el peso objetivo; rehace la grasa, la fibra, el reparto por comidas, el cronograma y la proyección. Es **idempotente respecto al origen** —no lee `macros.grasa_g` ni `macros.hc_g` del resultado que recibe, sino los valores recomendados de `limites_ajuste`—, así que `ajustarMacros(ajustarMacros(R, a₁), a₂) === ajustarMacros(R, a₂)` y `ajustarMacros(R, {})` devuelve el plan recomendado bit a bit **en todo lo que son números** (kcal, macros, fibra, agua, peso objetivo, comidas, cronograma, proyección y `limites_ajuste`). La única salvedad es el **orden** de `avisos`: un aviso que un ajuste retira y el siguiente vuelve a emitir queda al final del array. Como la §4 declara que el orden no es significativo, la igualdad de `avisos` se comprueba **como conjunto**, no elemento a elemento. Por eso la UI guarda en `localStorage` **solo el ajuste** (`bascula:ajuste:v1`), no el `Resultado` ajustado.
 
@@ -20,7 +27,7 @@ export function ajustarMacros(resultado: Resultado, ajuste: AjusteMacros): Resul
 - `Inputs` es un alias de `InputCalculo` y `Salida` un alias de `Resultado`: existen para no romper el código
   que ya los importaba, pero el nombre canónico es el de la spec.
 - La **implementación de referencia ejecutable** es `docs/verify-vectors.mjs`. Reproduce la spec paso a paso,
-  imprime los 16 vectores de la §5 y ejecuta un barrido de 115 033 perfiles contra 36 familias de invariantes
+  imprime los 19 vectores de la §5 y ejecuta un barrido de 112 380 perfiles contra 40 familias de invariantes
   de seguridad; debe terminar con 0 violaciones. Los tests del motor (`src/engine/__tests__/vectors.test.ts`)
   comparan contra los números publicados en la §5, y `node docs/verify-vectors.mjs --json 1` devuelve el
   `Resultado` completo del Caso 1 (es exactamente el `RESULTADO_EJEMPLO` del stub actual).
@@ -84,8 +91,8 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
   isolipídica— ya filtradas por `preferencia_efectiva` y con la guarda de ración de §3.3. La
   pantalla y el PDF las pintan tal cual; no las recalculan.
 
-- Usa `src/data/foods.json` (copiado de `docs/foods.json`, 101 alimentos con el esquema de
-  `SPEC-ux-comidas-pdf.md` §3.0) y las plantillas/algoritmo de `docs/SPEC-ux-comidas-pdf.md` §3.
+- Usa `src/data/foods.json` (copiado de `docs/foods.json`, **105** alimentos con el esquema de
+  `SPEC-ux-comidas-pdf.md` §3.0: los 101 del plan más los 4 con tag `extra` de la v1.2, que no entran en ningún menú) y las plantillas/algoritmo de `docs/SPEC-ux-comidas-pdf.md` §3.
 - Recorre `resultado.comidas` (un único array) y devuelve un `EjemploComida` por toma, cuyo campo `comida`
   es el `nombre` de `resultado.comidas[i]`. Tolerancia normativa (la misma que `SPEC-ux-comidas-pdf.md`
   §3.3, y la única que comprueban los tests): `totales.kcal` dentro de ±10 % de `objetivo.kcal`, y
@@ -133,7 +140,7 @@ Campos **nuevos y todos opcionales**: nada de lo anterior cambia de forma y la U
 - `generarListaCompra(ejemplos, inputs)` se exporta desde `src/meals/index.ts` y devuelve exactamente lo que `generarEjemplos` deja en `Ejemplos.compra`. Es pura y determinista (mismo `Ejemplos` e `Inputs` → misma lista, incluido el orden de `items`) y recibe `inputs` porque en modo sencillo reconstruye internamente el día B para ponderar los gramos de los dos días.
 - Fórmulas normativas (§3.7.3): `gramos_semana = round(7 · g_A)` en modo normal y `round(4 · g_A + 3 · g_B)` en modo sencillo —el calendario real de §3.7.2, no la media de los dos días—; `gramos_dia = round1(gramos_semana / 7)`; `envases = ceil(gramos_semana / envase_g)`; `dura_dias = min(floor(envases · envase_g / gramos_dia), conservacion_dias)`. La línea lleva el consejo fijo de compra en dos veces cuando `conservacion === 'fresco'`, la duración bruta pasa de `conservacion_dias` **y además se compran dos envases o más**.
 - Texto de las dos celdas de cantidad y del rótulo del modo sencillo: `textoCantidadSemana`, `textoCantidadDia` y `textoModoSencillo`, exportados desde `src/meals/compra.ts`. **Los usan la pantalla y el PDF**, que así imprimen exactamente la misma cadena (§4.4b: "las mismas cuatro columnas de §2.5b"); `src/components/resultados/compra.ts` los reexporta para la UI.
-- Datos: `src/data/mercadona.json`, **una fila por cada alimento de `foods.json`** (cobertura total validada en `src/data/__tests__/mercadona.test.ts`), con el tipado y el índice en `src/data/mercadona.ts` (`MERCADONA`, `formatoCompra`, `ORDEN_SECCIONES`, `NOMBRE_SECCION`). **Sin precios**, por decisión: varían por tienda y por semana y envejecen mal en un PDF descargado. `envase_g` está expresado **en la misma base en la que `foods.json` mide el alimento** (crudo, cocido, escurrido o peso comestible), para que las fórmulas de arriba se apliquen sin conversiones.
+- Datos: `src/data/mercadona.json`, **una fila por cada alimento de `foods.json`** (las 105, incluidos los `extra`) (cobertura total validada en `src/data/__tests__/mercadona.test.ts`), con el tipado y el índice en `src/data/mercadona.ts` (`MERCADONA`, `formatoCompra`, `ORDEN_SECCIONES`, `NOMBRE_SECCION`). **Sin precios**, por decisión: varían por tienda y por semana y envejecen mal en un PDF descargado. `envase_g` está expresado **en la misma base en la que `foods.json` mide el alimento** (crudo, cocido, escurrido o peso comestible), para que las fórmulas de arriba se apliquen sin conversiones.
 - Presentación: la UI la pinta en §2.5b (tabla por sección, debajo de los menús) y el PDF en su propia página, §4.4b, justo después de los menús. Ninguno de los dos recalcula gramos ni envases.
 
 ## Exportador PDF — `src/pdf/index.ts`
@@ -178,6 +185,59 @@ export function nombreFicheroPdf(datos: DatosPdf): string
   Si se recalculara a hoy en cada visita, la semana 0 de la proyección se movería cada día, los pesajes de
   §2.6c quedarían "antes del principio" y la huella del plan cambiaría sola.
 - Flujo y copy: `docs/SPEC-ux-comidas-pdf.md` §1-2. Diseño: `docs/DESIGN-brief.md`.
+
+## Campos nuevos de la v1.2 (todos opcionales, nada rompe)
+
+`src/engine/types.ts` gana lo siguiente. **Ningún campo existente cambia de forma ni de tipo** y el código
+que no lea los campos nuevos sigue funcionando igual.
+
+| Dónde | Campo | Quién lo escribe | Quién lo lee |
+|---|---|---|---|
+| `InputCalculo` | `plazo_semanas?`, `sintomas_regla?` | la UI (wizard, pasos 12 y 3b) | el motor |
+| `InputCalculo` | `alimentos_excluidos?`, `alimentos_favoritos?` | la UI (wizard, paso 14, y la acción "No me gusta" de §2.5) | **solo `src/meals`** |
+| `Resultado` | `ciclo?: ResultadoCiclo` | el motor (paso 19) | la UI (§2.2c), el PDF (§4.3b) y `src/meals` (§3.8) |
+| `Resultado` | `peso_objetivo.efectivo` **en recomposición** y `proyeccion` de recomposición | el motor (pasos 13 y 14) | la UI (§2.6/§2.6b) y el PDF (§4.5/§4.5b) |
+| `Ejemplos` | `avisos_menu?`, `alimentos_ciclo?` | `src/meals` | la UI (§2.5 y §2.2c) y el PDF (§4.4 y §4.3b) |
+| `ListaCompra` | `opcional_ciclo?: SeccionOpcionalCompra` | `src/meals` (§3.8.2) | la UI (§2.5b) y el PDF (§4.4b) |
+| tipos nuevos | `SintomaRegla`, `ConsejoCiclo`, `ResultadoCiclo`, `AlimentoCiclo`, `SeccionOpcionalCompra` | — | — |
+| `foods.json` | `nombre_corto` (obligatorio en los 105 alimentos) y el tag `extra` | los datos | la UI (chips del paso 14 y resumen de §2.5) y `src/meals` |
+
+**Lo que el motor ignora (y por qué importa fuera de él).** `menu_sencillo`, `alimentos_excluidos` y
+`alimentos_favoritos` **no entran en ningún cálculo** de `calcular`: dos usuarios idénticos salvo esos
+tres campos reciben el mismo `Resultado` bit a bit (invariante S33 del barrido). De ahí salen dos
+obligaciones para la UI:
+
+1. **`firmaDeInputs` (`src/components/resultados/ajuste.ts`) tiene que ignorar exactamente esos tres
+   campos.** Hoy es `JSON.stringify(inputs)`, así que marcar "no me gusta" en un alimento cambiaría la
+   huella y tiraría el ajuste manual guardado (`bascula:ajuste:v1`) y el "Volver a mi plan" del arranque.
+   La forma correcta es serializar el `InputCalculo` **sin** esas tres claves.
+2. **La acción "No me gusta" del menú (§2.5) no vuelve a llamar a `calcular`.** Guarda el borrador y
+   rellama a `generarEjemplos(inputs, resultado, variante)` y a `generarListaCompra(ejemplos, inputs)`
+   con el **mismo** `Resultado`, que no puede haber cambiado.
+
+**Generador de comidas (`src/meals`), v1.2.** No cambia ninguna firma exportada. Lo que cambia por dentro:
+
+- `PerfilDietetico` gana `excluidos: ReadonlySet<string>` y `favoritos: readonly string[]` (en el orden
+  del usuario), y `perfilDeResultado` / `perfilDeInputs` los rellenan desde `InputCalculo` —no desde
+  `Resultado`, que no los publica—. `SPEC-ux-comidas-pdf.md` §3.2b tiene el orden exacto dentro de
+  `candidatos()`: base y restricciones → filtros de la consulta → tag `extra` → **excluidos** →
+  variantes `_sl` y lista blanca → favoritos primero.
+- Los alimentos con tag `extra` **no entran en ninguna `FoodQuery`**, ni en las alternativas, ni en las
+  tablas de equivalencias: solo en `Ejemplos.alimentos_ciclo` y en `ListaCompra.opcional_ciclo` (§3.8).
+  Por eso los cuatro alimentos nuevos no cambian ni un menú de los que ya existen.
+- Cuando una consulta obligatoria se queda sin candidatos por las exclusiones, se aplica el respaldo de
+  siempre y, si aun así no hay nada, se usa el mejor candidato excluido y se avisa en
+  `Ejemplos.avisos_menu`. **Ningún respaldo relaja jamás la base dietética ni una restricción.**
+- Todo sigue siendo puro y determinista, sin `Math.random`.
+
+**Reparto del trabajo (cuatro agentes en paralelo).** Motor: pasos 6.7ter, 13, 14 y 19 en `src/engine/**`,
+más los tres textos nuevos de la §4 y los vectores 2, 16, 17, 18 y 19 de `src/engine/__tests__/`.
+Comidas: `PerfilDietetico` con excluidos y favoritos, el respaldo con aviso, el banco sencillo y la §3.8
+en `src/meals/**`. UI: pasos 11, 12 (con plazo), 14 (alimentos) y la subpregunta de síntomas del 3b, la
+acción "No me gusta" con deshacer y resumen, la tarjeta del ciclo ampliada, la sección opcional de la
+compra, el mensaje de fecha no válida de los pesajes y `firmaDeInputs`. PDF: filas nuevas de §4.2,
+tarjeta §4.3b ampliada, resumen de alimentos en §4.4, sección opcional en §4.4b y el copy de §4.5b.
+Las fronteras de carpeta son las de siempre.
 
 ## Reglas de convivencia (varios agentes en paralelo en el mismo repo)
 

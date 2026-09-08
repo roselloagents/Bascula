@@ -1,4 +1,4 @@
-# Báscula (RS Agents) — Especificación del motor de cálculo v1.1
+# Báscula (RS Agents) — Especificación del motor de cálculo v1.2
 
 Documento normativo para implementar `calcular(input): Resultado` en TypeScript puro (sin backend, sin dependencias). Todo lo que no esté escrito aquí no forma parte del motor. Cualquier número del PDF o de la pantalla de resultados debe poder trazarse a una fórmula o tabla de este documento.
 
@@ -62,8 +62,12 @@ const roundDown05 = (x: number) => Math.floor(x * 2) / 2;     // kg cuando se ha
 → 5 TDEE → 6 objetivo efectivo → 7 kcal objetivo (con suelos) → 8 proteína → 9 grasa
 → 10 hidratos (resto + factibilidad) → 10bis segunda pasada de la regla de margen → 11 fibra
 → 12 agua → 13 peso objetivo → 14 cronograma y proyección → 15 FFMI → 16 reparto por comidas
-→ 17 avisos finales
+→ 17 avisos finales → 19 ciclo (v1.2)
 ```
+
+El **Paso 19 (ciclo)** sí forma parte de `calcular` y va el último porque su única condición de entrada es
+`INFO_CICLO`, que se decide en el paso 17. No toca ningún número: solo publica `Resultado.ciclo`.
+(Se numera 19 y no 18 porque el 18 ya estaba ocupado por el ajuste manual, que no vive dentro de `calcular`.)
 
 El **Paso 18 (ajuste manual)** no forma parte de `calcular`: es una función aparte, `ajustarMacros(resultado,
 ajuste)`, que la interfaz llama **después**, con el `Resultado` ya cerrado, cuando el usuario mueve el panel
@@ -92,6 +96,8 @@ export type PreferenciaBase = 'omnivoro' | 'vegetariano' | 'vegano';          //
 export type Restriccion = 'sin_lactosa' | 'sin_gluten';                        // v1.1
 export type RecomposicionPrioridad = 'perder' | 'equilibrado' | 'ganar';       // v1.1
 export type Menstruacion = 'regular' | 'irregular' | 'ausente' | 'no_dice';    // v1.1
+export type SintomaRegla = 'dolor' | 'hinchazon' | 'antojos'                   // v1.2, ORDEN CANÓNICO
+                         | 'cansancio' | 'sangrado_abundante';
 export type Condicion = 'diabetes' | 'renal' | 'hepatica' | 'tca' | 'cardiaca'
                       | 'hipertension' | 'tiroides' | 'bariatrica' | 'glp1' | 'otra';
 export type CribadoTCA = 'positivo' | 'evitado' | 'negativo';
@@ -149,8 +155,21 @@ export interface InputCalculo {
   preferencia_base?: PreferenciaBase | null;                 // si está, `preferencia` deja de leerse
   restricciones?: Restriccion[] | null;
   low_carb?: boolean | null;
+  // ---- v1.2: todos opcionales; con todos ausentes el motor se comporta exactamente como la v1.1
+  plazo_semanas?: number | null;        // 4–52 enteras; solo se lee con `peso_objetivo !== null` (Paso 6.7ter)
+  sintomas_regla?: SintomaRegla[] | null;  // solo con `menstruacion ∈ {regular, irregular}` (Paso 19)
+  alimentos_excluidos?: string[] | null;   // ids de foods.json — EL MOTOR LO IGNORA
+  alimentos_favoritos?: string[] | null;   // ids de foods.json, en el orden del usuario — EL MOTOR LO IGNORA
 }
 ```
+
+**Los tres campos que el motor ignora.** `menu_sencillo`, `alimentos_excluidos` y `alimentos_favoritos`
+se validan (dominio y tipo) y se paran ahí: **no entran en ningún cálculo**, y dos usuarios idénticos
+salvo esos tres campos reciben el mismo `Resultado` bit a bit (invariante **S33**). Solo los lee
+`src/meals`. La consecuencia práctica, normativa para la UI: `firmaDeInputs`
+(`src/components/resultados/ajuste.ts`) **debe ignorar exactamente esos mismos tres campos** al calcular
+la huella del plan, o marcar un alimento como "no me gusta" tiraría el ajuste manual guardado y el
+botón "Volver a mi plan" del wizard.
 
 ---
 
@@ -194,6 +213,10 @@ Todos los inputs se validan antes de calcular. Un valor fuera de rango produce `
 | 21 | `low_carb` | boolean | — | — | `false` | No | Interruptor "bajo en hidratos". Fija la grasa al 45 % (techo 50 %), baja `HC_min` a 75 g, cambia el suelo de fibra y desactiva el ajuste por somatotipo. `diabetes` lo anula (paso 6.8). Se lee solo si `preferencia_base` está presente. |
 | 22 | `recomposicion_prioridad` | `'perder' \| 'equilibrado' \| 'ganar' \| null` | — | — | `'equilibrado'` | No | Subpregunta "¿Qué te importa más ahora?" del paso de objetivo, solo visible con `objetivo = 'recomposicion'`. Cambia el déficit de recomposición (paso 7) y el % de grasa (paso 9). `null`/ausente ≡ `'equilibrado'`, que es exactamente el comportamiento v1.0. Se ignora si `objetivo_efectivo` acaba siendo otro. |
 | 23 | `menstruacion` | `'regular' \| 'irregular' \| 'ausente' \| 'no_dice' \| null` | — | — | `null` | No | Solo `sexo = 'mujer'`; en hombres el motor lo **ignora** (no es un error de validación). **No cambia macros**: la evidencia dice que el gasto varía poco a lo largo del ciclo. Su único efecto numérico es suavizar el ritmo `agresivo` a `moderado` con `irregular`/`ausente` **en un plan de `perder` o `recomposicion`** (paso 6.7bis) — y con el ritmo cambian las kcal del plan, así que el copy del paso 3b del wizard tiene que decirlo (`SPEC-ux-comidas-pdf.md` §1). Produce `INFO_CICLO` y `WARN_CICLO_AUSENTE`. |
+| 24 | `plazo_semanas` | `number \| null` | semanas | 4–52, entero | `null` | No | **v1.2.** "Tengo una fecha en mente" del paso de ritmo. Solo se lee si `peso_objetivo !== null` **y** el objetivo intermedio del paso 6 es `perder` o `ganar`; en cualquier otro caso se ignora sin error. Elige el ritmo **discreto** más suave de la tabla 3.7/3.8 que llega a tiempo (paso 6.7ter) y produce `INFO_RITMO_POR_PLAZO` o `WARN_PLAZO_IRREAL`. Ausente o `null` ⇒ comportamiento idéntico al de la v1.1. |
+| 25 | `sintomas_regla` | `SintomaRegla[] \| null` | — | — | `null` | No | **v1.2.** Subpregunta "¿Qué notas esos días?", solo visible con `menstruacion ∈ {regular, irregular}`. **No cambia ningún número**: su único efecto es `Resultado.ciclo` (paso 19). Se deduplica y se ordena al orden canónico del tipo. |
+| 26 | `alimentos_excluidos` | `string[] \| null` | ids de `foods.json` | — | `[]` | No | **v1.2. El motor lo IGNORA por completo** (como `menu_sencillo`). Solo lo lee `src/meals`: ningún alimento de esta lista puede aparecer en el menú, en las alternativas, en las equivalencias ni en la lista de la compra (`SPEC-ux-comidas-pdf.md` §3.2b). |
+| 27 | `alimentos_favoritos` | `string[] \| null` | ids de `foods.json` | — | `[]` | No | **v1.2. El motor lo IGNORA por completo.** El **orden es normativo** (es el orden en que los marcó el usuario) y fija la prioridad dentro de cada `FoodQuery` (§3.2b). Un id no puede estar a la vez en las dos listas: si llega en las dos, manda `alimentos_excluidos`. |
 
 † **Excepción de la edad (única).** La edad no produce `ERR_INPUT_RANGO` entre 0 y 120: fuera de 0–120 es un error de formato del formulario; dentro de 0–120 el motor **sí se ejecuta** y es el paso 0 quien devuelve `{ excluido: 'EXCL_EDAD' }` si la edad está fuera de 18–75. Así el usuario recibe el copy compasivo de derivación en vez de un error de validación seco, y los casos 0.1/0.2 de la sección 5 son satisfacibles.
 
@@ -246,7 +269,7 @@ Comprobación de compatibilidad (invariante **S29d** del barrido): con el format
 
 > **Reglas no expuestas (v1.1).** La decisión A retira del wizard el cribado del paso 5b. El motor **conserva sin cambios** las tres reglas que dependían de él, porque `'tca'` sigue siendo una `Condicion` válida y los vectores de la §5 la usan: (1) la normalización de `cribado_tca` a `condiciones` del paso 0; (2) `EXCL_TCA_RIESGO` y el forzado de `ritmo_ef = 'suave'` con `INFO_RITMO_SUAVE` (paso 6.7); (3) el filtro de avisos del paso 17 y la no publicación de `proyeccion` y de `limites_ajuste` (pasos 14 y 18). Lo que desaparece es todo lo que vivía en la capa de presentación: la UI y el PDF **ya no ocultan** el %grasa, el peso objetivo, el cronograma ni el bloque de referencias. En su lugar queda una línea fija en el disclaimer (`SPEC-ux-comidas-pdf.md` §2.10).
 
-**Validación de dominio (obligatoria, produce `ERR_INPUT_RANGO`).** "Se validan antes de calcular" incluye los valores de los enumerados, no solo los rangos numéricos: `sexo`, `grasa.metodo`, `grasa.fuente`, `grasa.categoria`, `actividad_diaria`, `entrenamiento.tipo`, `entrenamiento.intensidad`, `entrenamiento.experiencia`, `entrenamiento.momento`, `objetivo`, `ritmo`, `preferencia`, cada elemento de `condiciones` y `cribado_tca` deben pertenecer al conjunto declarado en esta tabla; `n_comidas ∈ {2,3,4,5,6}`; los cinco campos nuevos de la v1.1 (`recomposicion_prioridad`, `menstruacion`, `preferencia_base`, `restricciones`, `low_carb`) **solo se validan si están presentes y no son `null`** —ausente o `null` es siempre válido— y entonces deben pertenecer a su dominio (`restricciones` debe además ser un array y `low_carb` un boolean); `menstruacion` con `sexo = 'hombre'` **no es un error**: se valida el dominio y después se ignora; `edad`, `entrenamiento.dias_semana` y `entrenamiento.minutos_sesion` deben ser enteros; `fecha_inicio` debe cumplir `/^\d{4}-\d{2}-\d{2}$/` y ser una fecha real. El error devuelve el nombre del campo en `errores`. Sin estas comprobaciones un valor fuera de dominio no producía `ERR_INPUT_RANGO`: o lanzaba una excepción, o —peor— propagaba `NaN` hasta devolver un plan con `kcal = 202 440` y macros `NaN` (`objetivo: 'adelgazar'`). Los campos que el propio §1 declara ignorados con `tipo = 'ninguno'` (`dias_semana`, `minutos_sesion`, `intensidad`, `momento`) siguen sin validarse en ese caso.
+**Validación de dominio (obligatoria, produce `ERR_INPUT_RANGO`).** "Se validan antes de calcular" incluye los valores de los enumerados, no solo los rangos numéricos: `sexo`, `grasa.metodo`, `grasa.fuente`, `grasa.categoria`, `actividad_diaria`, `entrenamiento.tipo`, `entrenamiento.intensidad`, `entrenamiento.experiencia`, `entrenamiento.momento`, `objetivo`, `ritmo`, `preferencia`, cada elemento de `condiciones` y `cribado_tca` deben pertenecer al conjunto declarado en esta tabla; `n_comidas ∈ {2,3,4,5,6}`; los cinco campos nuevos de la v1.1 (`recomposicion_prioridad`, `menstruacion`, `preferencia_base`, `restricciones`, `low_carb`) **solo se validan si están presentes y no son `null`** —ausente o `null` es siempre válido— y entonces deben pertenecer a su dominio (`restricciones` debe además ser un array y `low_carb` un boolean); los cuatro campos nuevos de la v1.2 (`plazo_semanas`, `sintomas_regla`, `alimentos_excluidos`, `alimentos_favoritos`) siguen exactamente la misma regla —ausente o `null` es siempre válido— y, presentes, deben ser: `plazo_semanas` un entero entre 4 y 52; `sintomas_regla` un array cuyos elementos pertenezcan a `SintomaRegla`; `alimentos_excluidos` y `alimentos_favoritos`, arrays de cadenas (el motor **no** comprueba que los ids existan en `foods.json`: eso es cosa de `src/meals`, que simplemente descarta los que no conoce); `menstruacion` con `sexo = 'hombre'` **no es un error**: se valida el dominio y después se ignora; `edad`, `entrenamiento.dias_semana` y `entrenamiento.minutos_sesion` deben ser enteros; `fecha_inicio` debe cumplir `/^\d{4}-\d{2}-\d{2}$/` y ser una fecha real. El error devuelve el nombre del campo en `errores`. Sin estas comprobaciones un valor fuera de dominio no producía `ERR_INPUT_RANGO`: o lanzaba una excepción, o —peor— propagaba `NaN` hasta devolver un plan con `kcal = 202 440` y macros `NaN` (`objetivo: 'adelgazar'`). Los campos que el propio §1 declara ignorados con `tipo = 'ninguno'` (`dias_semana`, `minutos_sesion`, `intensidad`, `momento`) siguen sin validarse en ese caso.
 
 Reglas de validación cruzada (producen `ERR_INPUT_RANGO`):
 - `metodo='medidas'` y `sexo='mujer'` sin `cadera_cm`.
@@ -473,6 +496,32 @@ obj = objetivo; exp = experiencia; pobj = peso_objetivo
 6. si obj ∈ {mantener, recomposicion} y pobj !== null y |pobj − PC| ≥ 1 → INFO_OBJETIVO_IGNORADO
 
 7. ritmo_ef = ritmo
+
+7ter. PLAZO (v1.2, decisión H). **Se evalúa AQUÍ, lo primero del paso 7 y ANTES de cualquier
+   suavizado de seguridad**: fija el ritmo de PARTIDA a partir de la fecha que ha pedido el
+   usuario, y los suavizados de 6.7 (tca, edad ≥ 65) y 6.7bis (regla) se aplican después sobre
+   él y MANDAN. (Se llama 6.7ter porque llegó después, no porque se ejecute después.)
+
+   si plazo_semanas !== null y pobj !== null y obj ∈ {perder, ganar}:
+      ritmo_req = |pobj − PC| / plazo_semanas                       // kg por semana que exige la fecha
+      perder:  kg_sem(r) = tabla 3.7[banda][r] / 100 · PC
+      ganar:   kg_sem(r) = clamp(sup_pct(r) · TDEE, 150, 500) · 7 / 7700
+               con sup_pct(r) = (perfil !== 'fuerza') ? 0.05 : tabla 3.8[experiencia][r]
+      ritmo_plazo = el PRIMER r de [suave, moderado, agresivo] con kg_sem(r) ≥ ritmo_req − 1e-9
+      si existe  → ritmo_ef = ritmo_plazo;  emitir INFO_RITMO_POR_PLAZO
+      si no      → ritmo_ef = ritmo_plazo = 'agresivo';  emitir WARN_PLAZO_IRREAL
+   (el `ritmo` que eligió el usuario se descarta: ha pedido una fecha, y la fecha es más concreta
+    que "moderado". La pantalla lo dice con todas las letras, `SPEC-ux-comidas-pdf.md` §1 paso 11.)
+
+   **Las tres cosas que el plazo NO puede hacer**, y que el paso 17 reevalúa contra el plan final:
+   (a) sobrevivir a un suavizado de seguridad —si `ritmo_efectivo !== ritmo_plazo`, la fecha ya no
+   se alcanza y `INFO_RITMO_POR_PLAZO` se sustituye por `WARN_PLAZO_IRREAL`—; (b) sobrevivir al
+   techo del paso 7 y a los suelos —si el cronograma del paso 14 sale con `semanas[0] > plazo_semanas`,
+   misma sustitución—; (c) sobrevivir a una reconversión del objetivo —si `objetivo_efectivo ∉
+   {perder, ganar}`, los dos avisos se retiran, porque hablan de una meta de peso que ya no existe—.
+   Los tres casos se resuelven en el paso 17, contra los números finales, exactamente como
+   `WARN_PERDIDA_MAYOR_65`.
+
    si 'tca' ∈ condiciones: INFO_RITMO_SUAVE; si ritmo_ef !== 'suave' → ritmo_ef = 'suave'
    // `INFO_RITMO_SUAVE` no menciona la causa: el cuestionario promete que la respuesta del cribado
    // es privada y no aparece en el informe, y el PDF lista todos los avisos con su texto íntegro.
@@ -920,13 +969,37 @@ ganar:
    // y 84 kg: sugerido 86 kg y "objetivo" 61,5 kg en la misma pantalla). En ese caso la meta es el
    // propio sugerido y el usuario recibe WARN_OBJETIVO_IMC_ALTO.
 
-mantener / recomposicion:
+mantener / recomposicion SIN déficit real:
    sugerido_central = round05(PC)                        (metodo 'actual')
    sugerido_rango   = [round05(min(lo, PC)), round05(max(hi, PC))]   // la franja por %grasa se ensancha
                                                                     // hasta contener el peso actual
    mostrar_central  = true
    peso_obj_ef = null
+
+recomposicion CON déficit real (v1.2, decisión H):
+   recomp_con_deficit = (objetivo_efectivo === 'recomposicion' y TDEE − kcal ≥ 50)
+   // se evalúa aquí y no en el paso 7 porque `kcal` no está cerrada hasta el 10bis
+   meta_cand = (pobj === null) ? sugerido_central : pobj
+   si PC − meta_cand < 0.5 → rama `mantener / recomposicion SIN déficit` TAL CUAL (no hay meta que dar)
+   si no                   → rama `perder` LITERAL: mismos suelos (`imc_min`/`min185` y el suelo por
+                             `g_min` de grasa esencial), mismos avisos (WARN_OBJETIVO_IMC_BAJO,
+                             WARN_OBJETIVO_GRASA_MUY_BAJA, WARN_OBJETIVO_MUY_LEJANO), mismo `hito`,
+                             mismo redondeo dirigido y `metodo = 'grasa'`
 ```
+
+**Por qué la recomposición tiene ahora peso objetivo (decisión H).** Una usuaria de 68 kg que pide
+recomposición con prioridad `perder` lleva un déficit real de 250-300 kcal/día y recibía como "peso
+objetivo" su propio peso actual y una proyección plana: el informe le decía a la vez "te hemos apretado
+el déficit" y "no esperes que la báscula se mueva". Las dos cosas no pueden ser verdad. Con la regla de
+arriba, la recomposición **con déficit** propone y valida la meta exactamente igual que `perder` —los
+suelos de seguridad son los mismos, y son los que importan— y el paso 14 dibuja la banda honesta. Lo
+que **no** cambia: el cronograma sigue siendo `null` (en recomposición no se promete fecha,
+`INFO_SIN_CRONOGRAMA`) y las calorías siguen saliendo de la tabla 3.9, no del peso objetivo.
+
+**La comprobación `PC − meta_cand ≥ 0.5` va ANTES de ejecutar la rama**, no después: si se ejecutara
+primero y se descartara luego, el informe se llevaría avisos (`WARN_OBJETIVO_MUY_LEJANO`,
+`WARN_OBJETIVO_GRASA_MUY_BAJA`) sobre una meta que no se le enseña a nadie. Con prioridad `ganar`
+—`recomp_sin_deficit`, `kcal ≈ TDEE`— nunca se llega aquí: `TDEE − kcal < 50`.
 
 **Invariantes del paso 13** (comprobados en los tests para todos los perfiles válidos):
 
@@ -1012,9 +1085,43 @@ para s = 0 .. 12:
 emitir INFO_PROYECCION_PLANA
 ```
 
+**Recomposición con déficit real (v1.2, decisión H).** Sustituye a la proyección plana cuando se
+cumplen las cuatro condiciones: `objetivo_efectivo === 'recomposicion'`, `TDEE − kcal ≥ 50`,
+`peso_obj_ef !== null` y `PC − peso_obj_ef ≥ 0,5`. **El cronograma sigue siendo `null`** y se sigue
+emitiendo `INFO_SIN_CRONOGRAMA`: lo único que cambia es la curva.
+
+```
+delta_kcal   = TDEE − kcal
+delta_kg     = PC − peso_obj_ef
+ritmo_kg_sem = delta_kcal · 7 / 7700
+si ritmo_kg_sem < 0.05 → proyección PLANA (e INFO_PROYECCION_PLANA); parar
+sem_lineal   = delta_kg / ritmo_kg_sem
+S            = clamp(ceil(sem_lineal), 12, 26)      // nunca menos de 12 (los hitos) ni más de 26
+para s = 0 .. S:
+   rapido = min(ritmo_kg_sem · s, delta_kg)         // MISMA regla lineal de 7 700 que el peso_min de `perder`
+   min    = PC − rapido                             // borde inferior: la curva del déficit
+   max    = PC                                      // borde superior: todo lo que pierdes de grasa lo compensa el músculo
+   esp    = (min + max) / 2                         // esperado: el punto medio
+   { semana: s, peso_min: round1(min), peso_esp: round1(esp), peso_max: round1(max) }
+emitir INFO_PROYECCION_RECOMP (y NO INFO_PROYECCION_PLANA: son excluyentes, ver §4)
+```
+
+**Por qué esta banda y no otra.** Los dos bordes son las dos cosas que de verdad pueden pasar, y las dos
+son un buen resultado: por abajo, que todo lo que pierdas sea grasa y la báscula lo marque entero (la
+misma curva lineal que se le promete a quien está en `perder`); por arriba, que ganes en músculo
+exactamente lo que pierdes en grasa y la báscula no se mueva. El punto medio no es un pronóstico
+afinado: es literalmente el centro de esa horquilla, y el copy no lo disfraza de otra cosa. Sin fecha,
+porque no la hay: la recomposición no tiene un día de llegada que podamos calcular con esta aritmética.
+
+**Invariantes de la proyección de recomposición** (familia **S31** del barrido): `peso_max` es
+`round1(PC)` en todos los puntos; `peso_min` es exactamente la curva del déficit acotada por la meta;
+la curva nunca baja de `peso_obj_ef`; `peso_min` y `peso_esp` son monótonas no crecientes; hay al menos
+13 puntos (semanas 0-12) y como mucho 27 (0-26); y `cronograma === null` siempre. **S31h** obliga a la
+inversa: toda recomposición que cumpla las cuatro condiciones tiene su curva.
+
 **Hitos.** Los "hitos a 4, 8 y 12 semanas" que pintan la pantalla y el PDF son literalmente las entradas con `semana ∈ {4, 8, 12}` de este array; no hay ningún campo adicional ni ningún cálculo extra en la capa de presentación.
 
-**Regla no expuesta:** con `'tca' ∈ condiciones`, `proyeccion` queda `undefined` y `INFO_PROYECCION_PLANA` se retira en el filtro del paso 17, por el mismo motivo que se retiran los avisos de cronograma.
+**Regla no expuesta:** con `'tca' ∈ condiciones`, `proyeccion` queda `undefined` y `INFO_PROYECCION_PLANA` (o `INFO_PROYECCION_RECOMP`) se retira en el filtro del paso 17, por el mismo motivo que se retiran los avisos de cronograma.
 
 **Invariantes de la proyección** (familia **S26** del barrido): la semana 0 es siempre `round1(PC)` en los tres valores; `peso_min ≤ peso_esp ≤ peso_max`; las semanas son correlativas desde 0; con cronograma la curva es **monótona hacia el objetivo** (no sube nunca en `perder` ni baja nunca en `ganar`) y no lo sobrepasa; nunca pasa de la semana 26; sin cronograma se emite `INFO_PROYECCION_PLANA`.
 
@@ -1100,6 +1207,19 @@ intermedio, que el paso 7 todavía podía reescribir):
 si objetivo_efectivo !== 'perder'        → eliminar WARN_PERDIDA_MAYOR_65
 si objetivo_efectivo !== 'recomposicion' → eliminar INFO_RECOMP_PRIORIDAD_PERDER
                                                     INFO_RECOMP_PRIORIDAD_GANAR
+
+REGLA (v1.2, recomposición con déficit): en recomposición el peso objetivo puede SÍ usarse
+si objetivo_efectivo === 'recomposicion' y peso_obj_ef !== null → eliminar INFO_OBJETIVO_IGNORADO
+   (el aviso afirma que "el peso objetivo no se usa"; con la proyección del paso 14 sí se usa,
+    como meta de la curva. Las calorías siguen saliendo de la tabla 3.9, y eso lo explica
+    INFO_PROYECCION_RECOMP.)
+
+REGLA (v1.2, PLAZO): los dos avisos del paso 6.7ter se reevalúan contra el plan FINAL
+si plazo_semanas === null o pobj === null o objetivo_efectivo ∉ {perder, ganar}:
+      eliminar INFO_RITMO_POR_PLAZO y WARN_PLAZO_IRREAL
+si no, si ritmo_efectivo !== ritmo_plazo   (un suavizado de seguridad ha bajado el ritmo)
+     o (cronograma !== null y cronograma.semanas[0] > plazo_semanas):
+      eliminar INFO_RITMO_POR_PLAZO; emitir WARN_PLAZO_IRREAL (si no estaba)
 ```
 
 La segunda línea es la misma idea que la primera: el paso 10bis puede reescribir `objetivo_efectivo` a
@@ -1116,8 +1236,16 @@ si 'tca' ∈ condiciones → eliminar de `avisos`, si estuvieran:
    WARN_YA_MAGRO, WARN_YA_EN_OBJETIVO, WARN_OBJETIVO_MUY_LEJANO, WARN_CRONOGRAMA_LARGO,
    INFO_SIN_CRONOGRAMA, INFO_SIN_CRONOGRAMA_SIN_MARGEN,
    INFO_CRONOGRAMA_NO_ESTIMABLE, INFO_CRONOGRAMA_FUERA_DE_HORIZONTE,
-   INFO_PROYECCION_PLANA
+   INFO_PROYECCION_PLANA,
+   INFO_PROYECCION_RECOMP, INFO_RITMO_POR_PLAZO, WARN_PLAZO_IRREAL      // v1.2
 ```
+
+Los tres códigos de la v1.2 entran en la lista por el mismo motivo que el resto: `INFO_PROYECCION_RECOMP`
+describe una curva de peso que con `'tca'` no se publica (`proyeccion` queda `undefined`), y los dos del
+plazo hablan de un ritmo y de una fecha para una meta de peso justo en el informe donde el motor ha
+forzado el ritmo más suave y emite `INFO_RITMO_SUAVE` sin nombrar la causa: "hemos puesto el ritmo más
+rápido de nuestra tabla" al lado de "hemos elegido el planteamiento más sostenible" es una contradicción
+por escrito.
 
 Con `cribado_tca ∈ {positivo, evitado}` el paso 0 añade `'tca'` a `condiciones` y la capa de UX oculta el
 %grasa, el peso objetivo y el cronograma (SPEC-ux §2.1 y §2.6). Pero la §2.8 y la §4.6 obligan a listar
@@ -1245,6 +1373,77 @@ L = limites_ajuste;  P = macros.proteina_g;  TDEE = tdee.valor;  obje = objetivo
 - **Tolerancia del cierre.** En un plan ajustado los hidratos los fija el usuario y **el único macro que se redondea a 5 g es la grasa**: el desajuste máximo es por tanto `9 · 2,5 = 22,5 kcal` (frente a los 10 kcal del plan recomendado). Es una cota medida, no estimada: el barrido exhaustivo del rectángulo (kcal, HC) que el panel puede alcanzar no encuentra ninguna desviación mayor, y el `roundUp5` del suelo de grasa ya no puede añadir nada porque el techo de hidratos del punto 2 se calcula contra ese suelo redondeado. Sigue dentro del 2 % que exige el paso 10 porque `kcal ≥ 1 200` siempre; la pantalla y el PDF dicen "hasta 25 kcal" en un plan ajustado, con **la misma función de copy en las dos capas** (`notaCierreKcal`, `SPEC-ux-comidas-pdf.md` §1226).
 - **El peso objetivo no se mueve.** Cambiar la meta bajo un deslizador de macros sería incomprensible; lo que sí cambia —y es la consecuencia honesta— es el cronograma, que se rehace con el nuevo déficit.
 
+### Paso 19 — Ciclo: consejos por síntomas (v1.2, decisión I, normativo)
+
+Lo ejecuta `calcular` al final, después del paso 17 y sin tocar ni un número del plan. Publica
+`Resultado.ciclo`.
+
+```
+si INFO_CICLO ∉ avisos                         → ciclo = undefined; parar
+sintomas = orden canónico ∩ (sintomas_regla ?? [])      // dedupe + orden, NUNCA el orden de entrada
+si sintomas está vacío                          → ciclo = undefined; parar
+ciclo = { sintomas, consejos: sintomas.map(consejoDe) }
+```
+
+El orden canónico es el del tipo `SintomaRegla`: **dolor · hinchazon · antojos · cansancio ·
+sangrado_abundante**. `consejos[i].clave === sintomas[i]` siempre. `INFO_CICLO` se mantiene tal cual y
+sigue siendo el texto de cabecera de la tarjeta: los consejos van **debajo**, no en su lugar
+(`SPEC-ux-comidas-pdf.md` §2.2c).
+
+**Por qué en el motor y no en la interfaz.** Es copy, sí, pero copy con dos dependencias que solo el
+motor conoce: la base dietética efectiva (recomendarle carne roja a una vegana en su propio plan es
+justo lo que rompe la confianza) y `low_carb` efectivo. Ponerlo en la UI obligaba a duplicar las dos
+reglas en la pantalla y en el PDF, que es como se producen las divergencias que este proyecto ya ha
+pagado dos veces.
+
+**Los cinco consejos (copy literal).** `{…}` marca un fragmento condicional.
+
+| clave | `titulo` | `texto` |
+|---|---|---|
+| `dolor` | Dolor: omega-3, magnesio y calor | El dolor de regla lo producen las prostaglandinas, y el omega-3 compite con ellas: en los ensayos, 1-2 g al día durante dos o tres ciclos reducen el dolor y la necesidad de analgésicos. Es lento, no notarás nada el primer mes. El magnesio tiene evidencia más floja, pero por comida es barato y seguro. A corto plazo lo que mejor funciona sigue siendo el calor local y el movimiento suave. Si el dolor te impide hacer vida normal, eso no es normal: consúltalo. |
+| `hinchazon` | Hinchazón: es agua, no grasa | Ese kilo o dos de más de la semana antes es agua, y se va solo. No recortes calorías por eso: si bajas el plan cada vez que la báscula sube, acabas comiendo bastante menos de lo que necesitas. Lo que sí ayuda es quitar sal de la que viene ya puesta (embutido, conservas, precocinados, pan de molde), beber lo mismo o más —nunca menos— y llegar bien al potasio. Y pésate siempre el mismo día de la semana y en la misma fase del ciclo, o estarás comparando dos cosas distintas. |
+| `antojos` | Más hambre: cuenta con ella | En la segunda mitad del ciclo el hambre sube de verdad: se han medido entre 100 y 300 kcal más al día. No es falta de fuerza de voluntad. Tienes dos formas de manejarlo y las dos valen: comer 100-200 kcal más esos días y compensarlas en el resto de la semana, o dejar el plan como está y apoyarte en proteína y fibra, que son lo que más sacia. Si te pide dulce, el cacao puro o una o dos onzas de chocolate del 85 % cunden mucho más que una tableta con leche. |
+| `cansancio` | Cansancio: duerme y no bajes los hidratos | El cansancio de esos días suele ser una mezcla de dormir peor, hierro justo y menos energía disponible. Lo primero es dormir: es la palanca más grande y la más aburrida. Lo segundo, no recortar hidratos justo esa semana: son el combustible del entrenamiento y del ánimo.{ Como llevas un plan bajo en hidratos, súbelos un poco esos días —una ración más de fruta o de tubérculo— y vuelve a tu plan después.} Si el cansancio dura bastante más que la regla, mira el hierro con tu médico. |
+| `sangrado_abundante` | Sangrado abundante: cuida el hierro | Un sangrado abundante mes a mes es la causa más frecuente de falta de hierro en mujeres. No cambiamos tus macros por esto: lo que cambia es qué eliges dentro de ellos. Acompaña el hierro con algo de vitamina C (naranja, kiwi, pimiento o tomate) y deja el café y el té para dos horas antes o después de esa comida, porque reducen bastante lo que absorbes.{ Si además te notas cansada, pide a tu médico una analítica con ferritina: es el dato que dice si tienes las reservas bajas, y un hemograma normal puede no verlo.} |
+
+**Fragmentos condicionales (los dos únicos):**
+
+- `cansancio`: el fragmento de los hidratos se incluye **solo si `low_carb` efectivo es `true`**. Sin la
+  guarda, a quien no lleva low-carb se le dice que suba unos hidratos que ya son normales.
+- `sangrado_abundante`: el fragmento de la ferritina se incluye **solo si `cansancio` también está
+  marcado**. Es la única combinación en la que la analítica es una recomendación y no una alarma
+  gratuita; y es exactamente la que describía el audio de la usuaria.
+
+**`alimentos` de cada consejo (nombres legibles, no ids), por base dietética:**
+
+| clave | omnívoro | vegetariano | vegano |
+|---|---|---|---|
+| `dolor` | Pescado azul (salmón, sardinas en lata) · Nueces · Semillas de lino molidas · Cacao puro | Nueces · Semillas de lino molidas · Semillas de chía · Cacao puro | Nueces · Semillas de lino molidas · Semillas de chía · Cacao puro |
+| `hinchazon` | Plátano · Patata cocida · Espinacas · Calabacín | *(igual)* | *(igual)* |
+| `antojos` | Yogur griego 0% · Fruta (manzana, plátano) · Cacao puro · Chocolate negro 85% | *(igual que omnívoro)* | Yogur de soja alto en proteína · Fruta (manzana, plátano) · Cacao puro · Almendras |
+| `cansancio` | Avena · Patata cocida · Lentejas o garbanzos · Fruta | *(igual)* | *(igual)* |
+| `sangrado_abundante` | Lentejas o garbanzos · Carne roja magra (ternera) · Mejillones o berberechos al natural · Espinacas | Lentejas o garbanzos · Espinacas · Tofu · Almendras | *(igual que vegetariano)* |
+
+**Las dos únicas sustituciones por restricción** (se aplican después de elegir la fila por base):
+
+1. `'sin_gluten' ∈ restricciones` → se **retira** "Avena" (no lleva el tag `sin_gluten` en `foods.json`).
+2. `'sin_lactosa' ∈ restricciones` → "Yogur griego 0%" pasa a "Yogur griego 0% sin lactosa".
+
+Ninguna otra entrada de la tabla depende de una restricción. Si la lista se quedara vacía, el consejo se
+publica igual con `alimentos: []`: su texto vale por sí solo.
+
+**Lo que el paso 19 NO hace:** no cambia kcal, macros, agua, peso objetivo, cronograma ni proyección; no
+emite ningún aviso nuevo; y no sustituye a `INFO_CICLO` ni a `WARN_CICLO_AUSENTE`. El invariante **S32**
+comprueba la equivalencia `ciclo !== undefined ⟺ INFO_CICLO ∈ avisos ∧ hay al menos un síntoma válido`,
+el orden canónico, la correspondencia una-a-una con `sintomas` y que no queda ningún `{` sin resolver;
+**S33** comprueba que el resto del `Resultado` es idéntico con y sin síntomas.
+
+**Quién pinta esto:** la tarjeta de `SPEC-ux-comidas-pdf.md` §2.2c (pantalla) y §4.3b (PDF). El
+generador de menús lee `Resultado.ciclo.sintomas` para `Ejemplos.alimentos_ciclo` y para la sección
+opcional de la lista de la compra (§3.8), y ahí sí aplica además `alimentos_excluidos`.
+
+---
+
 ### Salida (`Resultado`)
 
 ```ts
@@ -1285,7 +1484,12 @@ export interface Resultado {
   proyeccion?: PuntoProyeccion[];                              // paso 14b; undefined con 'tca'
   limites_ajuste?: LimitesAjuste;                              // paso 18; undefined con 'tca'
   ajuste?: { kcal: boolean; hc: boolean };                     // SOLO en la salida de `ajustarMacros`
+  // ---- v1.2
+  ciclo?: ResultadoCiclo;      // paso 19; undefined sin INFO_CICLO o sin síntomas marcados
 }
+
+export interface ConsejoCiclo { clave: SintomaRegla; titulo: string; texto: string; alimentos: string[] }
+export interface ResultadoCiclo { sintomas: SintomaRegla[]; consejos: ConsejoCiclo[] }
 
 export interface PuntoProyeccion { semana: number; peso_min: number; peso_esp: number; peso_max: number }
 
@@ -1575,6 +1779,9 @@ Devine, Robinson, Miller, Hamwi (paso 13). Fórmulas clínicas de los años 60�
 | `INFO_RECOMP_PRIORIDAD_GANAR` | info | `objetivo_efectivo === 'recomposicion'` y `recomposicion_prioridad === 'ganar'` (emitido en el paso 7, **reevaluado en el paso 17** igual que el anterior) | Nos has dicho que ahora te importa más ganar músculo, así que no te ponemos déficit: comerás en tu gasto estimado. Con la proteína alta y entrenamiento de fuerza 3-4 días por semana es donde más músculo se gana sin engordar. Si dentro de un par de meses la cintura sube, vuelve a calcular pidiendo prioridad a perder grasa. |
 | `INFO_CICLO` | info | `sexo === 'mujer'` y `menstruacion ∈ {regular, irregular}` (paso 17) | Tu gasto energético cambia poco a lo largo del ciclo, así que no ajustamos tus calorías por eso. Lo que sí cambia es lo que marca la báscula: la semana antes de la regla es normal retener 1-2 kg de agua y tener más hambre (unas 100-300 kcal). Pésate siempre en la misma fase del ciclo si quieres comparar, no te asustes con el peso de esa semana, y si comes 100-200 kcal más esos días, compénsalo en el resto de la semana sin cambiar el total. En los días de regla, cuida el hierro: {carne roja, legumbre o verdura de hoja / legumbre, verdura de hoja y frutos secos} acompañados de algo de vitamina C. |
 | `WARN_CICLO_AUSENTE` | aviso | `sexo === 'mujer'`, `menstruacion ∈ {irregular, ausente}` y (`objetivo_efectivo === 'perder'` o `banda ∈ {muy_bajo, bajo}` o `ritmo === 'agresivo'`) (paso 17) | Nos has dicho que tu regla es irregular o que no la tienes, y a la vez {tu plan lleva déficit, poca grasa corporal o un ritmo rápido / tienes poca grasa corporal o has pedido un ritmo rápido}. Esa combinación puede indicar baja disponibilidad energética (lo que se llama RED-S): comer por debajo de lo que gastas durante meses altera las hormonas, el hueso y el propio ciclo.{ Hemos suavizado el ritmo a moderado.} Si llevas tres meses o más sin regla y no es por anticonceptivos ni por la menopausia, pide cita con tu médico{ antes de seguir con el déficit}. |
+| `INFO_RITMO_POR_PLAZO` | info | `plazo_semanas !== null`, `pobj !== null`, `objetivo_efectivo ∈ {perder, ganar}` y el paso 6.7ter encontró un ritmo de la tabla que llega a tiempo (reevaluado en el paso 17: se retira si un suavizado lo bajó o si el cronograma pasa del plazo) | Nos has dicho que quieres llegar a {peso_objetivo} kg en {plazo_semanas} semanas: son unos {ritmo_req_g} g por semana. Hemos puesto el ritmo {suave/moderado/agresivo}, el más suave de los nuestros que llega a esa fecha, y hemos ignorado el que habías elegido antes. Si la fecha no es tan importante, un ritmo más suave se sostiene mejor y cuesta menos músculo. |
+| `WARN_PLAZO_IRREAL` | aviso | Paso 6.7ter: ningún ritmo de la tabla alcanza `ritmo_req`; o, desde el paso 17, un suavizado de seguridad bajó el ritmo del plazo, o `cronograma.semanas[0] > plazo_semanas` | Para llegar a {peso_objetivo} kg en {plazo_semanas} semanas harían falta unos {ritmo_req_g} g por semana, y ese no es un ritmo que podamos proponerte con seguridad. {Hemos puesto el más rápido de nuestra tabla. / Hemos aplicado el ritmo que tu caso permite.} No te prometemos esa fecha: la buena es la que sale de tu plan real.{ Con este plan el cálculo da entre {semanas_min} y {semanas_max} semanas.} Perder más rápido no es perder mejor: por debajo de cierto ritmo lo que se va es músculo. |
+| `INFO_PROYECCION_RECOMP` | info | Paso 14: proyección de recomposición con déficit real (las cuatro condiciones de ese paso) | En recomposición la báscula baja mucho más despacio de lo que cambia tu cuerpo: puedes perder grasa y ganar músculo a la vez y quedarte casi en el mismo peso. Por eso no te damos una fecha, sino una banda: por abajo, lo que bajarías si todo lo que pierdes fuese grasa; por arriba, quedarte en el peso de hoy porque el músculo lo compensa. Las dos cosas serían un buen resultado. Mídete también la cintura y hazte fotos cada cuatro semanas: ahí se ve lo que la báscula no enseña. |
 | `INFO_PROYECCION_PLANA` | info | `cronograma === null` (paso 14b) | Con este objetivo no proyectamos una curva de peso: lo que esperamos es que tu peso se mantenga, con la oscilación normal de un kilo arriba o abajo por agua, sal e intestino. Lo que sí debería cambiar es cómo te queda la ropa, las medidas y las cargas del entrenamiento. |
 | `INFO_AJUSTE_MANUAL` | info | Paso 18 con `ajuste.kcal === true` o `ajuste.hc === true` | Has ajustado a mano las calorías o los hidratos, así que estos ya no son los números que te propusimos. Hemos recalculado con tu ajuste la grasa, el reparto por comidas, el menú, la lista de la compra y el calendario. La proteína no la tocamos: es la que protege tu músculo cuando comes menos. Puedes volver a lo recomendado cuando quieras. |
 | `WARN_HC_BAJO_MINIMO` | aviso | Paso 18 y `HC < HC_min` (`{130/75}` según `low_carb`) | Has bajado los hidratos por debajo de los {130/75} g que usamos como mínimo de referencia. No es peligroso a corto plazo y hay gente que se encuentra mejor así, pero cuenta con dos cosas: entrenar fuerte cuesta más y la fibra es más difícil de cubrir. Si te notas sin energía, con mal descanso o con estreñimiento, súbelos otra vez. |
@@ -1593,6 +1800,11 @@ Devine, Robinson, Miller, Hamwi (paso 13). Fórmulas clínicas de los años 60�
 - Las dos alternativas del déficit en `WARN_CICLO_AUSENTE` —`{tu plan lleva déficit, poca grasa corporal o un ritmo rápido}` al abrir y `{ antes de seguir con el déficit}` al cerrar— se eligen por `objetivo_efectivo ∈ {perder, recomposicion}`. La condición del aviso también se dispara con `banda ∈ {muy_bajo, bajo}` o `ritmo === 'agresivo'` sin mirar el objetivo, así que puede caer sobre un plan de superávit: ahí la frase del déficit era literalmente falsa.
 - `{carne roja, legumbre o verdura de hoja / legumbre, verdura de hoja y frutos secos}` en `INFO_CICLO`: la segunda alternativa se usa con `preferencia_base ∈ {vegetariano, vegano}`. Recomendarle carne roja a una vegetariana **en su propio plan** es justo lo que rompe la confianza en una versión cuyo argumento es que las preferencias por fin se combinan de verdad.
 - `{130/75}` en `WARN_HC_BAJO_MINIMO`: se resuelve a `limites_ajuste.hc_min_motor_g`, que es 75 con `low_carb` y 130 en el resto. La interfaz y el PDF deben resolverlo, no escribir el 130 fijo.
+- `{ritmo_req_g}` en `INFO_RITMO_POR_PLAZO` y `WARN_PLAZO_IRREAL`: `round(|peso_objetivo − PC| / plazo_semanas · 1000)` gramos por semana, con separador de miles español si pasa de 999. Es el ritmo que **exige la fecha**, no el del plan: por eso en `WARN_PLAZO_IRREAL` es siempre mayor que el que se acaba aplicando.
+- `{suave/moderado/agresivo}` en `INFO_RITMO_POR_PLAZO`: es `ritmo_efectivo`, que en ese aviso coincide siempre con el que eligió el plazo (si no coincidiera, el paso 17 ya habría cambiado el aviso por `WARN_PLAZO_IRREAL`).
+- `{Hemos puesto el más rápido de nuestra tabla. / Hemos aplicado el ritmo que tu caso permite.}` en `WARN_PLAZO_IRREAL`: la primera con `ritmo_efectivo === 'agresivo'`, la segunda en el resto. El aviso lo emiten dos situaciones distintas —ningún ritmo llega, o un suavizado de seguridad ha bajado el que llegaba— y la primera frase sería literalmente falsa en la segunda.
+- `{ Con este plan el cálculo da entre {semanas_min} y {semanas_max} semanas.}` en `WARN_PLAZO_IRREAL`: se **omite** cuando `cronograma === null` (misma regla que los `WARN_SUELO_CALORICO_*`). Con cronograma, los dos números son `cronograma.semanas`.
+- Los dos fragmentos de los consejos del paso 19 (`cansancio` → low-carb; `sangrado_abundante` → ferritina) los resuelve **el motor**, no la presentación: `Resultado.ciclo.consejos[i].texto` llega ya cerrado y sin ninguna llave (invariante S32f).
 
 **Reglas de supresión añadidas en la v1.1** (se suman a la tabla del paso 6):
 
@@ -1600,11 +1812,19 @@ Devine, Robinson, Miller, Hamwi (paso 13). Fórmulas clínicas de los años 60�
 |---|---|
 | `WARN_KCAL_AJUSTE_ALTA` | `WARN_DEFICIT_MINIMO` (la condición del segundo está contenida en la del primero, y el texto del primero ya dice qué hacer) |
 
+**Reglas de supresión añadidas en la v1.2:**
+
+| Si se emite | Se suprime |
+|---|---|
+| `INFO_PROYECCION_RECOMP` | `INFO_PROYECCION_PLANA` (son las dos formas de la proyección sin cronograma y son excluyentes: la plana afirma "esperamos que tu peso se mantenga", que es justo lo que la de recomposición contradice) |
+| `WARN_PLAZO_IRREAL` | `INFO_RITMO_POR_PLAZO` (uno dice que llegamos a la fecha y el otro que no) |
+
 **Avisos retirados con `'tca' ∈ condiciones`** (filtro del paso 17, ver allí la lista cerrada y el motivo):
 `INFO_GRASA_ESTIMADA`, `INFO_PESO_YA_MINIMO`, `INFO_IMC_MUSCULADO`, `INFO_ADAPTACION`, `WARN_YA_MAGRO`,
 `WARN_YA_EN_OBJETIVO`, `WARN_OBJETIVO_MUY_LEJANO`, `WARN_CRONOGRAMA_LARGO`, `INFO_SIN_CRONOGRAMA`,
-`INFO_SIN_CRONOGRAMA_SIN_MARGEN`, `INFO_CRONOGRAMA_NO_ESTIMABLE`, `INFO_CRONOGRAMA_FUERA_DE_HORIZONTE`
-e `INFO_PROYECCION_PLANA`.
+`INFO_SIN_CRONOGRAMA_SIN_MARGEN`, `INFO_CRONOGRAMA_NO_ESTIMABLE`, `INFO_CRONOGRAMA_FUERA_DE_HORIZONTE`,
+`INFO_PROYECCION_PLANA` y, desde la v1.2, `INFO_PROYECCION_RECOMP`, `INFO_RITMO_POR_PLAZO` y
+`WARN_PLAZO_IRREAL`.
 El motor no los emite, así que la regla de la SPEC-ux "se listan todos los avisos con su texto íntegro"
 sigue siendo cierta sin excepciones de maquetación. Desde la v1.1 esta lista es una **regla no expuesta**
 (§1.1): la UI ya no puede producir `'tca'`, pero los vectores de la §5 sí.
@@ -1624,7 +1844,7 @@ Copy fijo del informe (no depende de condiciones):
 
 ## 5. Vectores de prueba
 
-Los dieciséis casos de esta sección están **generados por `docs/verify-vectors.mjs`**, la implementación de referencia de este documento, y se regeneran con `node docs/verify-vectors.mjs` cada vez que cambia una regla. Los nueve primeros son los vectores originales; del 10 al 14, los que pidió la revisión adversaria (bucle de factibilidad, regla de margen del paso 7, borde de la banda `medio`, cap renal con IMC ≥ 30 y usuario de más de 65 años); el 15 y el 16 son los de la v1.1 (proyección + regla + preferencias combinables, y recomposición con prioridad + ajuste manual). Todos los números de aquí son normativos: un motor que no los reproduzca no cumple la especificación.
+Los diecinueve casos de esta sección están **generados por `docs/verify-vectors.mjs`**, la implementación de referencia de este documento, y se regeneran con `node docs/verify-vectors.mjs` cada vez que cambia una regla. Los nueve primeros son los vectores originales; del 10 al 14, los que pidió la revisión adversaria (bucle de factibilidad, regla de margen del paso 7, borde de la banda `medio`, cap renal con IMC ≥ 30 y usuario de más de 65 años); el 15 y el 16 son los de la v1.1 (proyección + regla + preferencias combinables, y recomposición con prioridad + ajuste manual); el 17, 18 y 19 son los de la v1.2 (recomposición con déficit real —peso objetivo y proyección—, plazo imposible y plazo holgado). Todos los números de aquí son normativos: un motor que no los reproduzca no cumple la especificación.
 
 Convenciones: `fecha_inicio = 2026-09-07` en todos; los intermedios se muestran con 1 decimal (tolerancia ±0,15 en tests: con ±0,1 los valores que caen justo en el medio unidad quedaban en el borde exacto de la tolerancia) y las salidas redondeadas se comparan con igualdad exacta. Los avisos se comparan como conjunto, ya aplicadas las reglas de supresión del paso 6.
 
@@ -1683,7 +1903,7 @@ Input: mujer, 28, 165 cm, 60 kg; grasa `medidas` cuello 32 / cintura 72 / cadera
 10. **HC = 205 g** (3,42 g/kg PC; 47,1 % de kcal). Cierre 4·120 + 4·205 + 9·50 = **1750** (Δ +10).
 11. Fibra = **25 g**; azúcares libres máx. 43,5 g.
 12. Agua: **2150 ml** (rango 1900–2400; unos 9 vasos de 250 ml).
-13. Peso objetivo: método `actual`; sugerido **60,0 kg** (rango 53,0–61,0; `mostrar_central = true`); efectivo **`null`**; hito `null`. Referencia IMC-22 = 59,9 (54,4–67,8); clásicas Devine 56,9 / Robinson 57,4 / Miller 59,8 / Hamwi 56,4.
+13. Peso objetivo (**cambia en la v1.2**): recomposición con déficit real (1 879,2 − 1 740 = 139,2 kcal ≥ 50), así que la meta se calcula como en `perder`: método **`grasa`**; sugerido **57,5 kg** (rango 53,0–61,0; `mostrar_central = true`); efectivo **57,5 kg**; hito `null`. Referencia IMC-22 = 59,9 (54,4–67,8); clásicas Devine 56,9 / Robinson 57,4 / Miller 59,8 / Hamwi 56,4. *(Hasta la v1.1: método `actual`, sugerido 60,0 kg y efectivo `null`.)*
 14. Cronograma: **`null`**.
 15. FFMI = 16,2; normalizado = **16,5** (`medio`).
 16. Reparto (3 comidas, peri = Desayuno):
@@ -1694,7 +1914,7 @@ Input: mujer, 28, 165 cm, 60 kg; grasa `medidas` cuello 32 / cintura 72 / cadera
 | Comida | 14:00 | 35 | 45 | 15 | 65 | 575 | no |
 | Cena | 21:00 | 35 | 40 | 20 | 70 | 620 | no |
 
-17. Avisos: `INFO_RITMO_SUAVE`, `INFO_SOMATOTIPO`, `WARN_PROTEINA_TOMA_ALTA`, `WARN_RECOMPOSICION_SIN_FUERZA`. (`INFO_SIN_CRONOGRAMA` lo retira el filtro de protección del cribado TCA del paso 17.)
+17. Avisos: `INFO_RITMO_SUAVE`, `INFO_SOMATOTIPO`, `WARN_PROTEINA_TOMA_ALTA`, `WARN_RECOMPOSICION_SIN_FUERZA`. (`INFO_SIN_CRONOGRAMA` e `INFO_PROYECCION_RECOMP` los retira el filtro de protección del cribado TCA del paso 17, igual que `proyeccion`, que queda `undefined`.)
 
 ### Caso 3 — Hombre 45 años, obesidad grado II, sedentario, ritmo agresivo, peso objetivo 85 kg
 
@@ -2107,11 +2327,11 @@ Input: mujer, 31 años, 165 cm, 64 kg; grasa `conocido` 27 % `fiable`; sin somat
 10. **HC = 180 g** (2,81 g/kg PC; 39,3 % de kcal). Cierre 4·130 + 4·180 + 9·65 = **1825** (Δ −5).
 11. Fibra = **26 g**; azúcares libres máx. 45,8 g.
 12. Agua: **2500 ml** (rango 2250–2750; unos 10 vasos).
-13. Peso objetivo: método `actual`; sugerido 64,0 kg (rango 57,0–64,0; `mostrar_central = true`); efectivo `null`.
-14. Sin cronograma (`INFO_SIN_CRONOGRAMA`) ⇒ **proyección plana**: 13 puntos, semana 0 = 64,0/64,0/64,0 y semanas 1-12 = 63,0/64,0/65,0 (`INFO_PROYECCION_PLANA`).
+13. Peso objetivo (**cambia en la v1.2**): recomposición con déficit real (2 092,7 − 1 830 = 262,7 kcal ≥ 50) ⇒ meta como en `perder`: método **`grasa`**; sugerido **60,5 kg** (rango 57,5–63,5; `mostrar_central = true`, fiabilidad `alta`); efectivo **60,5 kg**; hito `null`. *(Hasta la v1.1: método `actual`, sugerido 64,0 kg, rango 57,0–64,0 y efectivo `null`.)*
+14. Sin cronograma (`INFO_SIN_CRONOGRAMA`, y sigue siendo `null`) ⇒ **proyección de recomposición** (**cambia en la v1.2**): `ritmo_kg_sem` = 262,7 · 7/7 700 = **0,2388 kg/sem**, `delta_kg` = 3,5, `sem_lineal` = 14,66 ⇒ **S = 15**, 16 puntos. Semana 0 = 64,0/64,0/64,0 · s4 = 63,0/63,5/64,0 · s8 = 62,1/63,0/64,0 · s12 = 61,1/62,6/64,0 · s15 = 60,5/62,3/64,0. Aviso `INFO_PROYECCION_RECOMP` (sustituye a `INFO_PROYECCION_PLANA`). *(Hasta la v1.1: proyección plana de 13 puntos, 63,0/64,0/65,0.)*
 15. FFMI = 17,2; normalizado = **17,5** (`bueno`).
 16. Reparto (4 comidas, peri = Merienda): Desayuno 25 % P35 G15 HC45 455 kcal · Comida 30 % P35 G20 HC45 500 kcal · Merienda 15 % P20 G10 HC35 310 kcal (peri) · Cena 30 % P40 G20 HC55 560 kcal.
-17. Avisos: `INFO_BMR_ATLETA`, `INFO_CICLO`, `INFO_PROYECCION_PLANA`, `INFO_RECOMP_PRIORIDAD_PERDER`, `INFO_SIN_CRONOGRAMA`, `WARN_PROTEINA_TOMA_ALTA`.
+17. Avisos: `INFO_BMR_ATLETA`, `INFO_CICLO`, `INFO_PROYECCION_RECOMP`, `INFO_RECOMP_PRIORIDAD_PERDER`, `INFO_SIN_CRONOGRAMA`, `WARN_PROTEINA_TOMA_ALTA`. (`sintomas_regla` va vacío, así que `ciclo` queda `undefined`.)
 18. Límites de ajuste: kcal [1540, 2200], paso 50; HC 30 g (interfaz) / 130 g (motor); suelo de grasa absoluto 51,2 g.
 
 **Ajuste manual (normativo):** `ajustarMacros(resultado, { hc_g: 120 })`.
@@ -2132,12 +2352,67 @@ Avisos del plan ajustado: los seis de arriba más `INFO_AJUSTE_MANUAL` y `WARN_H
 
 Comprobaciones obligatorias sobre este caso: `ajustarMacros(ajustado, { hc_g: 120 })` devuelve exactamente el mismo objeto (idempotencia, **S27l**) y `ajustarMacros(ajustado, {})` restituye el plan recomendado bit a bit y sin campo `ajuste` (**S27m**).
 
+### Caso 17 — Mujer 45 años, recomposición con prioridad `perder` y peso objetivo 63 kg (v1.2: H, I, G)
+
+Input: mujer, 45 años, 165 cm, 68 kg; grasa `medidas` cuello 33 / cintura 82 / cadera 102; sin somatotipo; actividad `ligero`; fuerza 3 d × 45 min, intensidad media, novata, entrena por la tarde; objetivo `recomposicion`, `recomposicion_prioridad: 'perder'`, ritmo `moderado`; **`peso_objetivo: 63`**; `preferencia_base: 'omnivoro'`, `restricciones: []`, `low_carb: false`; `menstruacion: 'regular'`, **`sintomas_regla: ['sangrado_abundante','cansancio','hinchazon']`**; 4 comidas. Además, y **para comprobar que el motor los ignora**: `menu_sencillo: true`, `alimentos_excluidos: ['brocoli','coliflor']`, `alimentos_favoritos: ['pechuga_pollo','arroz_blanco_cocido']`.
+
+1. IMC = **25,0** → `normal`.
+2. CUN-BAE = 36,2 %; Deurenberg = 34,9 %; US Navy = 33,8 %; método efectivo `medidas` → **33,8 %** (fiabilidad `media`, banda `muy_alto`).
+3. MLG = **45,01 kg**.
+4. Mifflin = 1325,3; Katch = 1342,2; Harris = 1392,7 → BMR = **1325,3** (`mifflin`).
+5. Perfil `fuerza`; PAL 1,50; MET 5,0 → kcal/sesión = 204,0; ejercicio/día = 87,4; bruto = 2075,3; TDEE = **1971,5**.
+6. Objetivo efectivo **`recomposicion`**, prioridad **`perder`**, ritmo `moderado`. Sin `plazo_semanas`.
+7. **kcal = 1680**: tabla 3.9[`muy_alto`] 10 % **+ 5 puntos = 15 %** del TDEE (tope duro), `INFO_RECOMP_PRIORIDAD_PERDER`.
+8. Proteína: base 68,00 kg (`peso_corporal`), g/kg efectivo 2,000 → **P = 135 g**.
+9. Grasa: `pct_grasa` 0,33 (28 % + 5 puntos por la prioridad) → **G = 60 g**.
+10. **HC = 150 g**. Cierre 4·135 + 4·150 + 9·60 = **1680** (Δ 0).
+11. Fibra = **24 g** (`INFO_FIBRA_AJUSTADA`); azúcares libres máx. 42,0 g.
+12. Agua: **2400 ml** (rango 2150–2650; unos 10 vasos).
+13. Peso objetivo: **déficit real de 291,5 kcal ≥ 50 ⇒ rama `perder`**. `meta_cand` = 63 y 68 − 63 = 5 ≥ 0,5, así que se ejecuta entera: grasa implícita en 63 kg = (1 − 45,01/63) = 28,6 % > 20 % (sin aviso) y (68 − 63)/68 = 7,4 % (sin `WARN_OBJETIVO_MUY_LEJANO`). Método `grasa`; sugerido **58,5 kg** (rango 54,0–62,5; `mostrar_central = true`); **efectivo 63,0 kg**; hito `null`.
+14. Cronograma **`null`** (`INFO_SIN_CRONOGRAMA`: en recomposición no se promete fecha). **Proyección de recomposición**: `ritmo_kg_sem` = 291,5 · 7/7 700 = **0,265 kg/sem**, `delta_kg` = 5,0, `sem_lineal` = 18,86 ⇒ **S = 19**, 20 puntos. Semana 0 = 68,0/68,0/68,0 · s4 = 66,9/67,5/68,0 · s8 = 65,9/66,9/68,0 · s12 = 64,8/66,4/68,0 · s19 = 63,0/65,5/68,0. Aviso `INFO_PROYECCION_RECOMP`.
+15. FFMI = 16,5; normalizado = **16,8**; categoría `null` (banda `muy_alto`).
+16. Reparto (4 comidas, peri = Merienda): Desayuno 25 % P35 G15 HC40 435 kcal · Comida 30 % P40 G15 HC35 435 kcal · Merienda 15 % P20 G10 HC30 290 kcal (peri) · Cena 30 % P40 G20 HC45 520 kcal.
+17. Avisos: `INFO_CICLO`, `INFO_FIBRA_AJUSTADA`, `INFO_PROYECCION_RECOMP`, `INFO_RECOMP_PRIORIDAD_PERDER`, `INFO_SIN_CRONOGRAMA`, `WARN_PROTEINA_TOMA_ALTA`. **`INFO_OBJETIVO_IGNORADO` no se emite**: lo retira la regla del paso 17, porque aquí el peso objetivo sí se usa (es la meta de la curva).
+19. `ciclo.sintomas = ['hinchazon','cansancio','sangrado_abundante']` (orden canónico, **no** el de entrada) y tres consejos en ese mismo orden. `cansancio` va **sin** el fragmento de low-carb (`low_carb = false`) y `sangrado_abundante` **con** el de la ferritina (porque `cansancio` está marcado). Alimentos: hinchazón → Plátano · Patata cocida · Espinacas · Calabacín; cansancio → Avena · Patata cocida · Lentejas o garbanzos · Fruta; sangrado abundante → Lentejas o garbanzos · Carne roja magra (ternera) · Mejillones o berberechos al natural · Espinacas.
+
+**Comprobación obligatoria sobre este caso (S33):** `calcular` con y sin `menu_sencillo`, `alimentos_excluidos` y `alimentos_favoritos` devuelve el **mismo `Resultado` bit a bit**.
+
+### Caso 18 — Hombre 38 años con plazo imposible: 15 kg en 8 semanas (v1.2, H)
+
+Input: hombre, 38 años, 180 cm, 95 kg; grasa `desconocido`; sin somatotipo; actividad `sedentario`; sin entrenamiento; objetivo `perder`, ritmo **`suave`**; `peso_objetivo: 80`, **`plazo_semanas: 8`**; `preferencia_base: 'omnivoro'`; 3 comidas.
+
+1. IMC = **29,3** → `sobrepeso`. 2. CUN-BAE = 29,4 % (fiabilidad `baja`, banda `muy_alto`). 3. MLG = **67,11 kg**. 4. BMR = **1890,0** (`mifflin`; Katch 1819,6). 5. PAL 1,40; TDEE = **2513,7**.
+6. **Paso 6.7ter**: `ritmo_req` = |80 − 95| / 8 = **1,875 kg/sem**. Tabla 3.7[`muy_alto`]: suave 0,50 % → 0,475 kg/sem; moderado 0,75 % → 0,7125; agresivo 1,00 % → 0,95. **Ninguno llega** ⇒ `ritmo_ef = 'agresivo'` y **`WARN_PLAZO_IRREAL`** (el ritmo `suave` que había elegido el usuario se descarta). Ningún suavizado posterior aplica (edad < 65, sin `tca`, hombre).
+7. Déficit por ritmo = 1,00 % · 95 · 1 100 = 1 045 kcal/día; techo = 30 % · TDEE = 754,1 ⇒ `INFO_DEFICIT_CAPADO_TDEE`; kcal_calc = 1759,6 < suelo BMR 1890 ⇒ **kcal = 1890** con `WARN_SUELO_CALORICO_BMR`.
+8-11. **P = 160 g** (1,700 g/kg), **G = 70 g**, **HC = 155 g**, cierre **1890** (Δ 0); fibra **26 g**; azúcares libres máx. 47,3 g.
+12. Agua: **2850 ml** (rango 2600–3100; 11 vasos).
+13. Peso objetivo: método `grasa`; sugerido 79,0 kg (rango 72,5–85,0; **`mostrar_central = false`**, fiabilidad `baja`); efectivo **80,0 kg**; hito **85,5 kg** ((95 − 80)/95 = 15,8 % > 15 %).
+14. Cronograma: `ritmo_kg_sem` = **0,5670** (0,60 %/sem), `delta_kg` = 15,0, `factor_adapt` = 1,2544, `diet_breaks` = 3, **semanas [30, 37]**, fechas 2027-04-05 … 2027-05-24, `precision_fecha = 'mes'`, `tramo_12sem` = [5,5; 7,0]. Proyección con cronograma, 27 puntos (tope de 26 semanas): s4 = 92,7/92,8/93,2 · s12 = 88,8/89,4/90,0 · s26 = 81,4/83,9/84,2.
+15. FFMI = 20,7; normalizado **20,7**; categoría `null` (banda `muy_alto`).
+16. Reparto (3 comidas, sin peri): Desayuno 30 % P50 G20 HC45 560 kcal · Comida 35 % P55 G25 HC55 665 kcal · Cena 35 % P55 G25 HC55 665 kcal.
+17. Avisos: `INFO_ADAPTACION`, `INFO_DEFICIT_CAPADO_TDEE`, `INFO_GRASA_ESTIMADA`, **`WARN_PLAZO_IRREAL`**, `WARN_PROTEINA_TOMA_ALTA`, `WARN_SUELO_CALORICO_BMR`. El aviso se imprime con la variante "Hemos puesto el más rápido de nuestra tabla" (`ritmo_efectivo === 'agresivo'`) y con el fragmento del calendario relleno: **entre 30 y 37 semanas**, frente a las 8 pedidas.
+
+### Caso 19 — Mujer 34 años con plazo holgado: 6 kg en 24 semanas (v1.2, H)
+
+Input: mujer, 34 años, 168 cm, 78 kg; grasa `desconocido`; sin somatotipo; actividad `ligero`; fuerza 3 d × 50 min, intensidad media, intermedia, entrena por la tarde; objetivo `perder`, ritmo **`agresivo`**; `peso_objetivo: 72`, **`plazo_semanas: 24`**; `preferencia_base: 'omnivoro'`; 4 comidas; sin `menstruacion`.
+
+1. IMC = **27,6** → `sobrepeso`. 2. CUN-BAE = 38,5 % (fiabilidad `baja`, banda `muy_alto`). 3. MLG = **48,01 kg**. 4. BMR = **1499,0** (`mifflin`). 5. Perfil `fuerza`; PAL 1,50; MET 5,0 → ejercicio/día 111,4; TDEE = **2241,9**.
+6. **Paso 6.7ter**: `ritmo_req` = 6 / 24 = **0,25 kg/sem**. Tabla 3.7[`muy_alto`]: suave 0,50 % · 78 = **0,39 kg/sem ≥ 0,25** ⇒ gana el **primero** de la lista: `ritmo_ef = 'suave'` e **`INFO_RITMO_POR_PLAZO`**. El `agresivo` que había elegido la usuaria se descarta, y el aviso se lo dice.
+7. Déficit = 0,50 % · 78 · 1 100 = 429 kcal (techo 25 % · TDEE = 560,5, no muerde) ⇒ kcal_calc = 1812,9; suelos: sexo 1200, BMR 1499, EA 30 · 48,01 + 111,4 = 1551,7, ninguno muerde. **kcal = 1810**.
+8-11. **P = 155 g** (2,200 g/kg de base, `INFO_PROTEINA_CAPADA`), **G = 65 g**, **HC = 150 g**, cierre **1805** (Δ −5); fibra **25 g**; azúcares libres máx. 45,3 g.
+12. Agua: **2750 ml** (rango 2500–3000; 11 vasos).
+13. Peso objetivo: método `grasa`; sugerido 62,5 kg (rango 57,0–67,0; `mostrar_central = false`); efectivo **72,0 kg**; hito `null`.
+14. Cronograma: `ritmo_kg_sem` = **0,3927** (0,50 %/sem), `delta_kg` = 6,0, `diet_breaks` = 1, **semanas [17, 19]** ⇒ **llega dentro de las 24 pedidas**, así que `INFO_RITMO_POR_PLAZO` se mantiene (si `semanas[0]` hubiera pasado de 24, el paso 17 lo habría cambiado por `WARN_PLAZO_IRREAL`). Fechas 2027-01-04 … 2027-01-18, `precision_fecha = 'mes'`, `tramo_12sem` = [4,0; 4,5]. Proyección de 20 puntos: s4 = 76,4/76,5/76,6 · s8 = 74,9/75,1/75,3 · s12 = 73,7/74,1/74,2.
+15. FFMI = 17,0; normalizado **17,1**; categoría `null`.
+16. Reparto (4 comidas, peri = Merienda): Desayuno 25 % P40 G15 HC40 455 kcal · Comida 30 % P45 G20 HC35 500 kcal · Merienda 15 % P25 G10 HC30 310 kcal (peri) · Cena 30 % P45 G20 HC45 540 kcal.
+17. Avisos: `INFO_ADAPTACION`, `INFO_GRASA_ESTIMADA`, `INFO_PROTEINA_CAPADA`, **`INFO_RITMO_POR_PLAZO`**, `WARN_PROTEINA_TOMA_ALTA`.
+
 ### Resumen de salidas (para tests de regresión)
 
 | Caso | kcal | P g | G g | HC g | Fibra | Agua ml | Peso obj. ef. | Semanas | BMR ecuación |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | 2190 | 185 | 70 | 205 | 31 | 3250 | 74,5 | 21–25 | mifflin |
-| 2 | 1740 | 120 | 50 | 205 | 25 | 2150 | — | — | mifflin |
+| 2 | 1740 | 120 | 50 | 205 | 25 | 2150 | 57,5 | — | mifflin |
 | 3 | 1910 | 160 | 80 | 140 | 27 | 3150 | 85,0 | 40–52 | mifflin |
 | 4 | 1730 | 135 | 65 | 150 | 24 | 2800 | 69,0 | 37–46 | mifflin |
 | 5 | 2410 | 150 | 85 | 260 | 34 | 2750 | — | — | katch_mcardle |
@@ -2151,9 +2426,14 @@ Comprobaciones obligatorias sobre este caso: `ajustarMacros(ajustado, { hc_g: 12
 | 13 | 1780 | 95 | 65 | 205 | 25 | `null` | 72,0 | 37–48 | mifflin |
 | 14 | 1580 | 120 | 60 | 140 | 22 | 2550 | 56,0 | — | mifflin |
 | 15 | 1600 | 120 | 65 | 135 | 22 | 2750 | 68,0 | 20–22 | mifflin |
-| 16 | 1830 | 130 | 65 | 180 | 26 | 2500 | — | — | katch_mcardle |
+| 16 | 1830 | 130 | 65 | 180 | 26 | 2500 | 60,5 | — | katch_mcardle |
+| 17 | 1680 | 135 | 60 | 150 | 24 | 2400 | 63,0 | — | mifflin |
+| 18 | 1890 | 160 | 70 | 155 | 26 | 2850 | 80,0 | 30–37 | mifflin |
+| 19 | 1810 | 155 | 65 | 150 | 25 | 2750 | 72,0 | 17–19 | mifflin |
 
-Regenerar con `node docs/verify-vectors.mjs` (la tabla se imprime al final, bajo "RESUMEN DE SALIDAS"). El mismo script ejecuta un barrido aleatorio de 115 033 perfiles válidos —sobre la rejilla completa del dominio de la §1: alturas 130-230 cm y pesos 35-300 kg, y ahora también los dos formatos de preferencia, las cuatro prioridades de recomposición, las cinco respuestas de la regla y nueve ajustes manuales distintos— contra 36 familias de invariantes de seguridad y debe terminar con **0 violaciones**.
+Regenerar con `node docs/verify-vectors.mjs` (la tabla se imprime al final, bajo "RESUMEN DE SALIDAS"). El mismo script ejecuta un barrido aleatorio de 112 380 perfiles válidos —sobre la rejilla completa del dominio de la §1: alturas 130-230 cm y pesos 35-300 kg, y ahora también los dos formatos de preferencia, las cuatro prioridades de recomposición, las cinco respuestas de la regla, nueve ajustes manuales distintos y, desde la v1.2, ocho plazos y siete combinaciones de síntomas— contra **40 familias** de invariantes de seguridad y debe terminar con **0 violaciones**.
+
+**Qué cambia y qué no con la v1.2.** Solo dos vectores anteriores se mueven, y solo en el bloque del peso objetivo y de la proyección: el **2** y el **16**, los dos de recomposición **con déficit real** (decisión H). Ningún otro número de ningún otro caso cambia: `plazo_semanas` y `sintomas_regla` por defecto son `null`, y `alimentos_excluidos`, `alimentos_favoritos` y `menu_sencillo` el motor no los lee (invariante S33). Lo único que crece en el resto de casos es la salida, que ahora puede traer `ciclo`.
 
 **Los catorce vectores originales no cambian ni un número con la v1.1.** Es una consecuencia buscada del diseño: `recomposicion_prioridad` por defecto es `equilibrado` (tabla 3.9 tal cual), `menstruacion` por defecto es `null`, y la regla de traducción de la §1.1 aplicada al campo antiguo `preferencia` devuelve exactamente el mismo trío efectivo que leía la v1.0. Lo único que crece en esos catorce casos es la salida: ahora traen `proyeccion`, `limites_ajuste`, `preferencia_base`, `restricciones`, `low_carb` y `macros.pct_cap`.
 
@@ -2361,6 +2641,29 @@ avisos de los casos 10 y 14.
 
 
 ---
+
+### v1.2 — decisiones G-J del feedback real de una usuaria (2026-09-08)
+
+Segunda tanda de feedback real (audios de una usuaria de 68 kg en recomposición con prioridad `perder`).
+Cuatro decisiones; el motor solo se toca en tres.
+
+| # | Decisión | Qué cambia en este documento |
+|---|---|---|
+| G | Alimentos favoritos y "no me gusta" | **Nada del motor.** `alimentos_excluidos` y `alimentos_favoritos` entran en la §1 como inputs que el motor **ignora** (como `menu_sencillo`), con su validación de dominio y el invariante **S33**. Todo el comportamiento vive en `SPEC-ux-comidas-pdf.md` §3.2b. La consecuencia para la UI es que `firmaDeInputs` tiene que ignorar los tres campos. |
+| H | Peso objetivo, plazo y recomposición | Paso **6.7ter** (el plazo elige el ritmo discreto más suave que llega, y los suavizados de seguridad mandan sobre él), pasos **13** y **14** (la recomposición con déficit real propone y valida el peso objetivo como `perder` y dibuja su banda honesta, sin fecha), tres avisos nuevos y las reevaluaciones del paso 17. |
+| I | Regla: síntomas y alimentos | `sintomas_regla` en la §1 y el paso **19** completo. Ni un número cambia. |
+| J | Arreglos menores | Fuera del motor (`SPEC-ux-comidas-pdf.md` §2.6c y README). |
+
+**Por qué el plazo elige un ritmo discreto y no uno continuo.** Un ritmo calculado a medida
+(`ritmo_req` tal cual) rompería las tres cosas que sostienen la seguridad del motor: la tabla 3.7 está
+acotada por banda de grasa, el techo del paso 7 está expresado como porcentaje del TDEE y los vectores
+de la §5 comparan contra ritmos con nombre. Con la regla discreta, el plazo solo puede **elegir entre lo
+que ya era seguro**, y cuando ni lo más rápido llega, lo dice en vez de inventarse una fecha.
+
+**Los dos vectores que se mueven.** El 2 y el 16, y solo en el peso objetivo y en la proyección. Es la
+consecuencia buscada de la decisión H: los dos son recomposiciones con déficit real, y hasta la v1.1
+recibían como "peso objetivo" su propio peso actual y una raya horizontal mientras el informe les decía
+que llevaban déficit.
 
 ### v1.1 — decisiones A-F del feedback real de usuarios (2026-09-07)
 

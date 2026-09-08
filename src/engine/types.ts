@@ -29,6 +29,13 @@ export type Restriccion = 'sin_lactosa' | 'sin_gluten'
 export type RecomposicionPrioridad = 'perder' | 'equilibrado' | 'ganar'
 /** Respuesta del paso "¿Cómo es tu regla?", solo mujeres (SPEC §1 fila 23). */
 export type Menstruacion = 'regular' | 'irregular' | 'ausente' | 'no_dice'
+/**
+ * Subpregunta "¿Qué notas esos días?" del paso de la regla (v1.2, SPEC §1 fila 25).
+ * El array llega en el orden que elija la interfaz; el motor lo normaliza al orden canónico
+ * de este tipo (dolor · hinchazon · antojos · cansancio · sangrado_abundante), que es el que
+ * fija el orden de `Resultado.ciclo.consejos` (SPEC Paso 19).
+ */
+export type SintomaRegla = 'dolor' | 'hinchazon' | 'antojos' | 'cansancio' | 'sangrado_abundante'
 export type Condicion =
   | 'diabetes'
   | 'renal'
@@ -120,6 +127,26 @@ export interface InputCalculo {
   /** Interruptor "bajo en hidratos" del paso 13. Solo se lee si `preferencia_base` está presente;
    *  si no, el paso 0 lo deduce de `preferencia === 'low_carb'`. */
   low_carb?: boolean | null
+  // ---------- v1.2: campos nuevos, TODOS opcionales (ningún vector anterior cambia por ellos) ----------
+  /** "Tengo una fecha en mente" del paso de ritmo (SPEC §1 fila 24). Semanas enteras, 4–52.
+   *  **Solo se lee con `peso_objetivo !== null`** y con un objetivo efectivo `perder` o `ganar`:
+   *  el paso 6.7ter elige con él el ritmo DISCRETO más suave que llega a tiempo (SPEC Paso 6.7ter).
+   *  Ausente o `null` ⇒ comportamiento idéntico al de la v1.1. */
+  plazo_semanas?: number | null
+  /** Subpregunta "¿Qué notas esos días?" del paso de la regla (SPEC §1 fila 25). Solo se lee con
+   *  `sexo === 'mujer'` y `menstruacion ∈ {regular, irregular}`. **No cambia ningún número**:
+   *  su único efecto es `Resultado.ciclo` (SPEC Paso 19). Se deduplica y se ordena al orden
+   *  canónico de `SintomaRegla`. */
+  sintomas_regla?: SintomaRegla[] | null
+  /** Ids de `src/data/foods.json` que el usuario no quiere ver en su menú (paso de alimentos del
+   *  wizard, v1.2). **El motor lo ignora por completo**, igual que `menu_sencillo`: dos usuarios
+   *  idénticos salvo este campo reciben el mismo `Resultado`. Solo lo lee `src/meals`
+   *  (`SPEC-ux-comidas-pdf.md` §3.2b). */
+  alimentos_excluidos?: string[] | null
+  /** Ids de `src/data/foods.json` marcados como favoritos, **en el orden en que los marcó el
+   *  usuario** (ese orden es normativo: fija la prioridad dentro de cada `FoodQuery`).
+   *  **El motor lo ignora por completo**; solo lo lee `src/meals` (§3.2b). */
+  alimentos_favoritos?: string[] | null
 }
 
 /** Alias histórico usado por la UI, el generador de comidas y el PDF. */
@@ -286,6 +313,32 @@ export interface Resultado {
   /** Presente **solo** en un `Resultado` devuelto por `ajustarMacros` (SPEC Paso 18): dice qué
    *  palanca movió el usuario. Ausente ⇒ el plan es el recomendado por el motor. */
   ajuste?: { kcal: boolean; hc: boolean }
+  // ---------- v1.2 ----------
+  /** Consejos por síntoma de la regla (SPEC Paso 19). `undefined` salvo que `INFO_CICLO` esté
+   *  entre los avisos **y** `inputs.sintomas_regla` traiga al menos un síntoma válido.
+   *  **No cambia ningún número del plan**: es copy, y así lo dice su propio texto. */
+  ciclo?: ResultadoCiclo
+}
+
+/** Un consejo de la tarjeta "Tu ciclo y tu plan" (SPEC Paso 19). */
+export interface ConsejoCiclo {
+  clave: SintomaRegla
+  /** Encabezado corto del bloque ("Dolor: omega-3, magnesio y calor"). */
+  titulo: string
+  /** Texto completo, con los fragmentos condicionales ya resueltos por el motor. */
+  texto: string
+  /** Nombres legibles (no ids) ya filtrados por la base dietética y por las restricciones.
+   *  Puede quedar vacío si las restricciones se llevan todos los candidatos; el consejo se
+   *  publica igual, porque su texto vale por sí solo. */
+  alimentos: string[]
+}
+
+/** `Resultado.ciclo` (SPEC Paso 19). */
+export interface ResultadoCiclo {
+  /** Los síntomas marcados, deduplicados y en el orden canónico de `SintomaRegla`. */
+  sintomas: SintomaRegla[]
+  /** Un consejo por síntoma, en el mismo orden que `sintomas`. */
+  consejos: ConsejoCiclo[]
 }
 
 /** Un punto de la curva de proyección de peso (SPEC Paso 14). Pesos en kg con 1 decimal. */
@@ -441,6 +494,30 @@ export interface Ejemplos {
    * Opcional: un `Ejemplos` construido a mano puede no traerla.
    */
   preferencia_efectiva?: Preferencia
+  // ---------- v1.2 ----------
+  /**
+   * Avisos propios del generador que no están en la tabla §4 del motor y que la pantalla y el PDF
+   * listan junto al resto (`SPEC-ux-comidas-pdf.md` §2.8). Hoy los emite: la regla de respaldo de
+   * exclusiones de §3.2b ("No hemos podido evitar {alimento} en {comida}"). `undefined` o vacío
+   * ⇒ no hay ninguno.
+   */
+  avisos_menu?: string[]
+  /**
+   * 2-4 alimentos sugeridos para los días de regla (§2.2c y §3.8), elegidos según
+   * `resultado.ciclo.sintomas` y filtrados por base, restricciones **y `alimentos_excluidos`**.
+   * `undefined` cuando no hay `resultado.ciclo` o cuando no hay menú (`renal`/`hepatica`).
+   */
+  alimentos_ciclo?: AlimentoCiclo[]
+}
+
+/** Un alimento sugerido para los días de regla (`Ejemplos.alimentos_ciclo`, §3.8). */
+export interface AlimentoCiclo {
+  /** `id` de `src/data/foods.json`. */
+  id: string
+  /** `nombre` del alimento (el largo, no `nombre_corto`). */
+  nombre: string
+  /** Una línea corta que dice por qué está aquí ("hierro, para el sangrado abundante"). */
+  por_que: string
 }
 
 // ---------- Lista de la compra semanal (docs/SPEC-ux-comidas-pdf.md §3.7) ----------
@@ -490,10 +567,24 @@ export interface ListaCompra {
   dias: 7
   /** Ordenados por sección (orden de `SeccionSuper`) y, dentro de cada sección, por `nombre`. */
   items: ItemCompra[]
-  /** Número de alimentos distintos del menú semanal (`items.length`). */
+  /** Número de alimentos distintos del menú semanal (`items.length`). **No cuenta los de
+   *  `opcional_ciclo`**: esos no son del plan. */
   alimentos_distintos: number
   /** Notas fijas al pie de la lista (formatos aproximados, compra fraccionada, pesar en crudo). */
   notas: string[]
+  /** Sección opcional "Para los días de regla" (v1.2, §3.8). `undefined` salvo que
+   *  `resultado.ciclo` traiga `sangrado_abundante`, `cansancio` o `dolor`. */
+  opcional_ciclo?: SeccionOpcionalCompra
+}
+
+/** Una sección opcional de la lista de la compra: no entra en las cantidades del plan (§3.8). */
+export interface SeccionOpcionalCompra {
+  /** Encabezado literal de la sección. */
+  titulo: string
+  /** Nota fija que deja claro que es opcional y que no está contada en el plan. */
+  nota: string
+  /** 1-3 líneas, con el mismo formato que el resto de la lista y cantidades pequeñas. */
+  items: ItemCompra[]
 }
 
 // ---------- Datos para el PDF ----------
