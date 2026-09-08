@@ -27,7 +27,12 @@ import { notaCierreKcal } from '../components/utiles/copy'
 import { NOMBRE_SECCION, ORDEN_SECCIONES } from '../data/secciones'
 // Las celdas de cantidad y el rótulo del modo sencillo salen del mismo helper que usa la
 // pantalla (§4.4b: "las mismas cuatro columnas de §2.5b"). Aquí no se recalcula ningún número.
-import { textoCantidadDia, textoCantidadSemana, textoModoSencillo } from '../meals/compra'
+import {
+  textoCantidadCiclo,
+  textoCantidadDia,
+  textoCantidadSemana,
+  textoModoSencillo,
+} from '../meals/compra'
 import {
   etiqueta,
   formaDeComer,
@@ -481,6 +486,31 @@ function textoCantidadSeguro(texto: string): string {
   return /NaN|undefined/.test(limpio) ? SIN_DATO : limpio
 }
 
+/**
+ * Línea de la sección opcional del ciclo (§4.4b, v1.2). Tres columnas y no cuatro: esa sección no
+ * es del plan —son dos raciones para dos o tres días al mes—, así que ni "17,1 g al día" ni "te
+ * dura 10 días", que es el vocabulario de la compra semanal y contradecía su propia nota.
+ */
+function LineaCompraCiclo({ item, compacta }: { item: ItemCompra; compacta: boolean }) {
+  const consejo = winAnsi(item.consejo ?? '').trim()
+  const menudo = compacta ? [s.compraSmall, { lineHeight: 1.1 }] : [s.compraSmall]
+  return (
+    <View style={compacta ? [s.filaCompra, { paddingVertical: 0 }] : s.filaCompra} wrap={false}>
+      <View style={{ flex: 2.3, paddingRight: 6 }}>
+        <Text style={[s.celdaCompra, { fontFamily: 'Helvetica-Bold' }]}>{winAnsi(item.producto) || SIN_DATO}</Text>
+        <Text style={menudo}>
+          {winAnsi(item.nombre) || SIN_DATO}
+          {consejo.length > 0 ? ` · ${consejo}` : ''}
+        </Text>
+      </View>
+      <Text style={[s.celdaCompraNum, { flex: 1.9, paddingRight: 6 }]}>
+        {textoCantidadSeguro(textoCantidadCiclo(item))}
+      </Text>
+      <Text style={[s.celdaCompraNum, { flex: 1.9 }]}>{comprarTexto(item)}</Text>
+    </View>
+  )
+}
+
 function LineaCompra({ item, compacta }: { item: ItemCompra; compacta: boolean }) {
   const consejo = winAnsi(item.consejo ?? '').trim()
   // Con la lista apretada se recorta el aire de la fila y el interlineado de la letra pequeña:
@@ -514,7 +544,7 @@ function BloqueSintomaCiclo({ consejo }: { consejo: ConsejoCiclo }) {
   const alimentos = (consejo?.alimentos ?? []).filter((a) => typeof a === 'string' && a.trim().length > 0)
   const texto = typeof consejo?.texto === 'string' ? consejo.texto.trim() : ''
   return (
-    <View style={{ marginTop: 6 }}>
+    <View style={{ marginTop: 6 }} wrap={false}>
       <Text style={s.h3}>{consejo?.titulo?.trim() || SIN_DATO}</Text>
       {texto.length > 0 ? <Text>{texto}</Text> : null}
       {alimentos.length > 0 ? (
@@ -524,27 +554,45 @@ function BloqueSintomaCiclo({ consejo }: { consejo: ConsejoCiclo }) {
   )
 }
 
-/** Alimentos sugeridos para esos días (§3.8.1), en una línea: "mejillones al natural (hierro...)". */
+/**
+ * Alimentos sugeridos para esos días (§3.8.1). Se agrupan por su `por_que` —que es uno por
+ * síntoma— y el motivo se imprime UNA vez por grupo: repetir el mismo paréntesis cuatro veces en
+ * la misma frase, además de atribuirle a cada alimento las propiedades de todo el grupo, se leía
+ * fatal ("cacao puro (omega-3 y magnesio, que ayudan con el dolor)").
+ *
+ * La coletilla de la compra solo promete lo que de verdad está en la lista: la sección opcional
+ * corta en tres y salta los que ya están en la compra del plan.
+ */
 function LineaAlimentosCiclo({
   alimentos,
-  haySeccionCompra,
+  idsEnLaCompra,
 }: {
   alimentos: readonly AlimentoCiclo[]
-  haySeccionCompra: boolean
+  idsEnLaCompra: readonly string[]
 }) {
-  const textos = alimentos
-    .filter((a) => a && typeof a.nombre === 'string' && a.nombre.trim().length > 0)
-    .map((a) => {
-      const porQue = typeof a.por_que === 'string' ? sinPuntoFinal(a.por_que).trim() : ''
-      return porQue.length > 0 ? `${a.nombre} (${porQue})` : a.nombre
-    })
-  if (textos.length === 0) return null
+  const validos = alimentos.filter((a) => a && typeof a.nombre === 'string' && a.nombre.trim().length > 0)
+  if (validos.length === 0) return null
+  const grupos: { por_que: string; nombres: string[] }[] = []
+  for (const a of validos) {
+    const porQue = typeof a.por_que === 'string' ? sinPuntoFinal(a.por_que).trim() : ''
+    const previo = grupos.find((g) => g.por_que === porQue)
+    if (previo) previo.nombres.push(a.nombre)
+    else grupos.push({ por_que: porQue, nombres: [a.nombre] })
+  }
+  const textos = grupos.map((g) =>
+    g.por_que.length > 0 ? `${lista(g.nombres)} (${g.por_que})` : lista(g.nombres),
+  )
+  const enLaCompra = new Set(idsEnLaCompra)
+  const todos = validos.every((a) => enLaCompra.has(a.id))
+  const coletilla =
+    idsEnLaCompra.length === 0
+      ? ''
+      : todos
+        ? ' Los tienes al final de tu lista de la compra, en una sección opcional que no cuenta en el plan.'
+        : ' Los que hemos podido, los tienes al final de tu lista de la compra, en una sección opcional que no cuenta en el plan.'
   return (
     <Text style={[s.small, { marginTop: 6 }]}>
-      Para esos días: {lista(textos)}.
-      {haySeccionCompra
-        ? ' Los tienes al final de tu lista de la compra, en una sección opcional que no cuenta en el plan.'
-        : ''}
+      Para esos días: {textos.join('; ')}.{coletilla}
     </Text>
   )
 }
@@ -597,15 +645,14 @@ function BloqueOpcionalCompra({
         <Text style={[s.h3, { color: C.acento, flex: 2.3, marginBottom: 0 }]}>
           {winAnsi(seccion.titulo) || SIN_DATO}
         </Text>
-        <Text style={[s.cabeceraCelda, { flex: 1.25, textAlign: 'right' }]}>CANTIDAD</Text>
+        <Text style={[s.cabeceraCelda, { flex: 1.9, textAlign: 'right' }]}>CANTIDAD</Text>
         <Text style={[s.cabeceraCelda, { flex: 1.9, textAlign: 'right' }]}>COMPRAR</Text>
-        <Text style={[s.cabeceraCelda, { flex: 0.75, textAlign: 'right' }]}>DURA</Text>
       </View>
       {typeof seccion.nota === 'string' && seccion.nota.trim().length > 0 ? (
         <Text style={[s.compraSmall, { marginBottom: 2 }]}>{winAnsi(seccion.nota)}</Text>
       ) : null}
       {items.map((item, i) => (
-        <LineaCompra key={`opc-${item.alimento_id}-${i}`} item={item} compacta={compacta} />
+        <LineaCompraCiclo key={`opc-${item.alimento_id}-${i}`} item={item} compacta={compacta} />
       ))}
     </View>
   )
@@ -927,8 +974,12 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
 
   // §4.2 y §4.4 (v1.2): resumen de lo que el usuario no quiere ver y de sus favoritos. Los ids que
   // no estén en `foods.json` se descartan: en el PDF no puede aparecer un identificador técnico.
-  const resumenAlimentosLargo = resumenAlimentos(inputs.alimentos_excluidos, inputs.alimentos_favoritos)
-  const resumenAlimentosBreve = resumenAlimentos(inputs.alimentos_excluidos, inputs.alimentos_favoritos, true)
+  // De los favoritos se nombran los que de verdad han llegado a la semana (§3.2b): el tope de 12
+  // del modo sencillo puede dejar alguno fuera, y prometer en el informe un favorito que no está
+  // ni en el menú ni en la compra es justo lo que la decisión G venía a evitar.
+  const favoritosServidos = ejemplos?.favoritos_aplicados ?? inputs.alimentos_favoritos
+  const resumenAlimentosLargo = resumenAlimentos(inputs.alimentos_excluidos, favoritosServidos)
+  const resumenAlimentosBreve = resumenAlimentos(inputs.alimentos_excluidos, favoritosServidos, true)
   const avisosMenu = (ejemplos?.avisos_menu ?? []).filter((t) => typeof t === 'string' && t.trim().length > 0)
 
   // §4.2 (v1.2): el plazo pedido es un matiz de la fila de ritmo, nunca el ritmo que se imprime.
@@ -1057,7 +1108,10 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
                 (resultado.objetivo_efectivo === 'perder' || resultado.objetivo_efectivo === 'ganar'
                   ? etiqueta.ritmo(resultado.ritmo_efectivo)
                   : 'no aplica con este objetivo') +
-                (plazo === null ? '' : ` · fecha pedida: ${num(plazo)} semanas`)
+                (plazo === null ||
+                (resultado.objetivo_efectivo !== 'perder' && resultado.objetivo_efectivo !== 'ganar')
+                  ? ''
+                  : ` · fecha pedida: ${num(plazo)} semanas`)
               }
             />
             {/* §4.2 (v1.1): base + restricciones + bajo en hidratos, nunca `inputs.preferencia`. */}
@@ -1207,8 +1261,11 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
 
         {/* §4.3b (v1.1, decisión D): tarjeta del ciclo, debajo de la hidratación. Nunca se parte
             ni se resume, y el dato `menstruacion` no se imprime en ninguna parte. */}
+        {/* La tarjeta SÍ se parte entre páginas desde la v1.2: con cuatro o cinco síntomas mide
+            más que una página A4 entera, y `wrap={false}` la dejaba sobresalir del papel, es
+            decir, recortada e invisible. Lo que no se parte es cada bloque de síntoma. */}
         {avisoCiclo ? (
-          <View style={[s.nota, { marginBottom: 7 }]} wrap={false}>
+          <View style={[s.nota, { marginBottom: 7 }]}>
             <Text style={s.h3}>Tu ciclo y tu plan</Text>
             <Text>{avisoCiclo.texto}</Text>
             {/* v1.2: un bloque por síntoma marcado, en el orden que trae el motor. Ninguno cambia
@@ -1219,7 +1276,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
             {alimentosCiclo.length > 0 ? (
               <LineaAlimentosCiclo
                 alimentos={alimentosCiclo}
-                haySeccionCompra={(compra?.opcional_ciclo?.items ?? []).length > 0}
+                idsEnLaCompra={(compra?.opcional_ciclo?.items ?? []).map((i) => i.alimento_id)}
               />
             ) : null}
           </View>

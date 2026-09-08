@@ -8,6 +8,7 @@ import { IconoMarca } from '../ui/Iconos'
 import { entero } from '../utiles/formato'
 import {
   agruparPorSeccion,
+  textoCantidadCiclo,
   textoCantidadDia,
   textoCantidadSemana,
   textoComprar,
@@ -104,12 +105,13 @@ export function BloqueCompra({ ejemplos }: { ejemplos: Ejemplos }) {
             <p className="nota">{compra.opcional_ciclo.nota}</p>
             <div className="tabla-envoltorio">
               <table className="tabla-compra">
+                {/* Tres columnas y no cuatro: esto no es compra de la semana, son dos raciones
+                    para dos o tres días al mes, así que ni "al día" ni "te dura N días". */}
                 <thead>
                   <tr>
                     <th scope="col">Producto</th>
                     <th scope="col">Cantidad</th>
                     <th scope="col">Comprar</th>
-                    <th scope="col">Dura</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -121,14 +123,10 @@ export function BloqueCompra({ ejemplos }: { ejemplos: Ejemplos }) {
                         {item.consejo ? <span className="compra-consejo">{item.consejo}</span> : null}
                       </th>
                       <td data-etiqueta="Cantidad">
-                        <span className="cifra compra-dato">{textoCantidadSemana(item)}</span>
-                        <span className="compra-secundario">{textoCantidadDia(item)}</span>
+                        <span className="cifra compra-dato">{textoCantidadCiclo(item)}</span>
                       </td>
                       <td data-etiqueta="Comprar">
                         <span className="compra-dato">{textoComprar(item)}</span>
-                      </td>
-                      <td data-etiqueta="Dura">
-                        <span className="compra-dato">{textoDura(item)}</span>
                       </td>
                     </tr>
                   ))}

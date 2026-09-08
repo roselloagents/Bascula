@@ -12,6 +12,7 @@ import {
   MUESTRA_MINIMA,
   MUESTRA_RECOMPOSICION,
 } from '../__fixtures__/muestra'
+import type { SintomaRegla } from '../../engine/types'
 import { textoDelPdf } from './utiles'
 
 const SALIDA =
@@ -165,7 +166,7 @@ describe('exportador PDF', () => {
     expect(texto).toContain('Sin: Brócoli, Coliflor')
     expect(texto).toContain('Favoritos: Pechuga de pollo, Arroz blanco')
     // §4.2: fila de datos con la variante breve y el matiz del plazo sobre el ritmo del plan.
-    expect(texto).toContain('sin Brócoli, Coliflor')
+    expect(texto).toContain('sin brócoli, coliflor')
     expect(texto).toContain('fecha pedida: 8 semanas')
     expect(texto).toContain('agresivo')
     // El aviso del generador (§3.2b) se lista donde el resto de notas del menú.
@@ -173,6 +174,34 @@ describe('exportador PDF', () => {
     expect(texto).not.toContain('undefined')
     expect(texto).not.toMatch(/NaN/)
   }, 90_000)
+
+  it('la tarjeta del ciclo con cinco síntomas se parte y no pierde páginas', async () => {
+    // Con `wrap={false}` la tarjeta medía más que una página A4 a partir de cuatro síntomas:
+    // @react-pdf la dejaba entera en la página en curso y todo lo que sobresalía se imprimía
+    // fuera del papel. La firma del fallo era que el documento ENCOGÍA al añadir contenido.
+    const paginas = async (datos: typeof MUESTRA_CICLO_SINTOMAS) => {
+      const buffer = await renderToBuffer(elementoPlan(datos))
+      return (buffer.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length
+    }
+    const consejos = MUESTRA_CICLO_SINTOMAS.resultado.ciclo?.consejos ?? []
+    const cinco = {
+      ...MUESTRA_CICLO_SINTOMAS,
+      resultado: {
+        ...MUESTRA_CICLO_SINTOMAS.resultado,
+        ciclo: {
+          sintomas: ['dolor', 'hinchazon', 'antojos', 'cansancio', 'sangrado_abundante'] as SintomaRegla[],
+          consejos: [
+            ...consejos,
+            { ...consejos[0], clave: 'hinchazon' as const, titulo: 'Hinchazón: es agua, no grasa' },
+            { ...consejos[1], clave: 'antojos' as const, titulo: 'Más hambre: cuenta con ella' },
+          ],
+        },
+      },
+    }
+    const conTres = await paginas(MUESTRA_CICLO_SINTOMAS)
+    const conCinco = await paginas(cinco)
+    expect(conCinco).toBeGreaterThanOrEqual(conTres)
+  }, 120_000)
 
   it('la tarjeta del ciclo lleva un bloque por síntoma y la compra su sección opcional', async () => {
     const buffer = await renderToBuffer(elementoPlan(MUESTRA_CICLO_SINTOMAS))

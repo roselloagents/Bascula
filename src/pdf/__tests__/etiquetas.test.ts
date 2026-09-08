@@ -30,8 +30,9 @@ describe('resumenAlimentos', () => {
   })
 
   it('da la variante en minúscula para la fila de datos de §4.2', () => {
+    // Minúscula entera: la etiqueta y los nombres. Mezclarlas dejaba la fila en "sin Brócoli".
     expect(resumenAlimentos(['brocoli'], ['pechuga_pollo'], true)).toBe(
-      'sin Brócoli · favoritos Pechuga de pollo',
+      'sin brócoli · favoritos pechuga de pollo',
     )
   })
 })

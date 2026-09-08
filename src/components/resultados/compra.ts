@@ -9,7 +9,12 @@ import { entero } from '../utiles/formato'
 
 // Las dos celdas de cantidad y el rótulo del modo sencillo se escriben con el mismo helper que
 // usa el PDF (§4.4b: "las mismas cuatro columnas de §2.5b"), no con una copia paralela.
-export { textoCantidadDia, textoCantidadSemana, textoModoSencillo } from '../../meals/compra'
+export {
+  textoCantidadCiclo,
+  textoCantidadDia,
+  textoCantidadSemana,
+  textoModoSencillo,
+} from '../../meals/compra'
 
 export interface GrupoCompra {
   seccion: SeccionSuper

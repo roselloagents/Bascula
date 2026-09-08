@@ -281,8 +281,11 @@ export function resumenAlimentos(
   favoritos: readonly string[] | null | undefined,
   breve = false,
 ): string {
-  const sin = nombresCortos(excluidos)
-  const fav = nombresCortos(favoritos)
+  // La variante breve va en minúscula entera —etiqueta y nombres—: mezclarlas dejaba la fila de
+  // datos en "sin Brócoli, Coliflor · favoritos Pechuga de pollo", que es lo peor de las dos.
+  const minuscula = (n: string): string => (breve ? n.charAt(0).toLowerCase() + n.slice(1) : n)
+  const sin = nombresCortos(excluidos).map(minuscula)
+  const fav = nombresCortos(favoritos).map(minuscula)
   const partes: string[] = []
   if (sin.length > 0) partes.push(`${breve ? 'sin' : 'Sin:'} ${sin.join(', ')}`)
   if (fav.length > 0) partes.push(`${breve ? 'favoritos' : 'Favoritos:'} ${fav.join(', ')}`)
