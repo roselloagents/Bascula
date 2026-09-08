@@ -15,6 +15,7 @@ import {
   marcadosDelGrupo,
   marcasDeGrupo,
   normalizarTexto,
+  SIN_RESULTADOS,
 } from '../alimentos'
 
 const TODOS = gruposDeAlimentos({ base: 'omnivoro', restricciones: [] })
@@ -113,8 +114,12 @@ describe('lineaBusqueda', () => {
     expect(lineaBusqueda(2, '  pollo  ')).toBe('2 alimentos para «pollo»')
   })
 
-  it('[SPEC] sin resultados da el mensaje literal de §1 paso 14', () => {
-    expect(lineaBusqueda(0, 'unicornio')).toBe(
+  it('sin resultados lo dice en corto: la línea vive en la barra fija y tiene que caber', () => {
+    expect(lineaBusqueda(0, 'unicornio')).toBe('Ningún alimento para «unicornio»')
+  })
+
+  it('[SPEC] el mensaje largo del vacío es el literal de §1 paso 14', () => {
+    expect(SIN_RESULTADOS).toBe(
       'Ningún alimento se llama así. Prueba con otro nombre o mira los grupos.',
     )
   })

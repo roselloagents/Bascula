@@ -184,13 +184,22 @@ export function cuentaAlimentos(grupos: readonly GrupoChips[]): number {
   return grupos.reduce((suma, grupo) => suma + grupo.alimentos.length, 0)
 }
 
-/** [SPEC] SPEC-ux §1 paso 14, línea de resultados del buscador (copy literal). */
+/**
+ * [SPEC] SPEC-ux §1 paso 14, línea de resultados del buscador (copy literal).
+ *
+ * Vive dentro de la barra fija, que no puede pasar de 130 px: tiene que caber en **una línea**
+ * (v1.2.1, revisión). Por eso el caso sin resultados se dice aquí en corto y la frase larga que
+ * explica qué hacer es `SIN_RESULTADOS`, que se pinta donde estarían los grupos.
+ */
 export function lineaBusqueda(cuantos: number, consulta: string): string {
-  if (cuantos === 0) {
-    return 'Ningún alimento se llama así. Prueba con otro nombre o mira los grupos.'
-  }
-  return `${cuantos} ${cuantos === 1 ? 'alimento' : 'alimentos'} para «${consulta.trim()}»`
+  const texto = consulta.trim()
+  if (cuantos === 0) return `Ningún alimento para «${texto}»`
+  return `${cuantos} ${cuantos === 1 ? 'alimento' : 'alimentos'} para «${texto}»`
 }
+
+/** [SPEC] SPEC-ux §1 paso 14: el vacío del buscador, donde estarían los grupos (copy literal). */
+export const SIN_RESULTADOS =
+  'Ningún alimento se llama así. Prueba con otro nombre o mira los grupos.'
 
 /** Los ids marcados que caen dentro de un grupo, separados por lista (cabecera plegable). */
 export function marcadosDelGrupo(

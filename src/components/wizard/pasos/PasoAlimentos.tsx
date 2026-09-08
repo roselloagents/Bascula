@@ -15,9 +15,11 @@ import {
   marcasDeGrupo,
   normalizarTexto,
   resumenMarcados,
+  SIN_RESULTADOS,
   type ClaveGrupoChips,
   type GrupoChips,
 } from '../../utiles/alimentos'
+import { teclaEnBuscador } from '../../utiles/teclado'
 import { Pantalla, type PropsPaso } from './comun'
 
 type Modo = 'excluir' | 'favorito'
@@ -34,6 +36,9 @@ const MODOS: { valor: Modo; icono: string; titulo: string }[] = [
 export function PasoAlimentos({ b, set }: PropsPaso) {
   const [modo, setModo] = useState<Modo>('excluir')
   const botones = useRef<(HTMLButtonElement | null)[]>([])
+  // "Borrar" se desmonta al pulsarlo (solo se pinta con algo escrito) y el foco caía al <body>:
+  // quien va con teclado o con lector volvía a empezar por la barra de progreso (v1.2.1, revisión).
+  const campo = useRef<HTMLInputElement>(null)
   const grupos = gruposDeAlimentos({
     base: b.preferencia_base,
     restricciones: b.restricciones,
@@ -105,6 +110,8 @@ export function PasoAlimentos({ b, set }: PropsPaso) {
   // de "Mostrar todos" sobra.
   const buscando = normalizarTexto(busqueda) !== ''
   const todosAbiertos = grupos.every((grupo) => abiertos.includes(grupo.clave))
+  // Cuántos alimentos responden a lo escrito, para la línea de resultados de la barra fija.
+  const cuantosSalen = cuentaAlimentos(filtrarGrupos(grupos, busqueda))
 
   return (
     <Pantalla
@@ -144,13 +151,23 @@ export function PasoAlimentos({ b, set }: PropsPaso) {
             id="buscador-alimentos"
             className="buscador-campo"
             type="search"
+            ref={campo}
             value={busqueda}
             placeholder="Busca un alimento (p. ej. brócoli)"
             autoComplete="off"
+            enterKeyHint="search"
             onChange={(evento) => setBusqueda(evento.target.value)}
+            onKeyDown={teclaEnBuscador}
           />
           {buscando ? (
-            <button type="button" className="buscador-borrar" onClick={() => setBusqueda('')}>
+            <button
+              type="button"
+              className="buscador-borrar"
+              onClick={() => {
+                setBusqueda('')
+                campo.current?.focus()
+              }}
+            >
               Borrar
             </button>
           ) : null}
@@ -158,9 +175,17 @@ export function PasoAlimentos({ b, set }: PropsPaso) {
 
         {/* El mismo resumen vivo que hay al final, aquí arriba: la pantalla mide cuatro pantallas
             de móvil y el recuento quedaba fuera de la vista todo el rato (§1 paso 14). El botón de
-            plegado comparte fila con él para que la barra fija no pase de 130 px en 375 px. */}
+            plegado comparte fila con él para que la barra fija no pase de 130 px en 375 px.
+            Buscando, esta misma fila la ocupa el recuento de resultados: fuera de la barra quedaba
+            tapado por ella en cuanto se bajaba un poco (v1.2.1, revisión). */}
         <div className="segmentado-pie">
-          <p className="segmentado-resumen">{resumen}</p>
+          {buscando ? null : <p className="segmentado-resumen">{resumen}</p>}
+          {/* La región vive siempre en el DOM aunque esté vacía —un `aria-live` que aparece con el
+              texto ya dentro no se anuncia— y cabe en una línea: la frase larga del vacío se pinta
+              donde estarían los grupos. */}
+          <p className="busqueda-resultados" role="status" aria-live="polite">
+            {buscando ? lineaBusqueda(cuantosSalen, busqueda) : ''}
+          </p>
           {buscando ? null : (
             <button
               type="button"
@@ -219,14 +244,14 @@ export function GruposPlegables({
   const buscando = normalizarTexto(busqueda) !== ''
   const visibles = filtrarGrupos(grupos, busqueda)
 
+  // El recuento vive en la barra fija; aquí queda el vacío, que es donde el usuario mira cuando no
+  // le sale nada: justo en el hueco de los grupos (§1 paso 14, v1.2.1, revisión).
+  if (buscando && visibles.length === 0) {
+    return <p className="busqueda-vacia">{SIN_RESULTADOS}</p>
+  }
+
   return (
     <>
-      {/* La región vive siempre en el DOM aunque esté vacía: un `aria-live` que aparece con el
-        texto ya dentro no se anuncia. */}
-      <p className="busqueda-resultados" role="status" aria-live="polite">
-        {buscando ? lineaBusqueda(cuentaAlimentos(visibles), busqueda) : ''}
-      </p>
-
       <div className="grupos-alimentos">
         {visibles.map((grupo) => {
           const marcados = marcadosDelGrupo(grupo, excluidos, favoritos)
@@ -245,7 +270,14 @@ export function GruposPlegables({
                 {buscando ? (
                   <span className="grupo-chips-fija">
                     <span className="grupo-chips-nombre">{grupo.nombre}</span>
-                    <span className="grupo-chips-datos">{cuenta}</span>
+                    {/* Las mismas dos versiones que la cabecera-botón: buscando también se marcan
+                        chips y esta es la única señal por grupo (v1.2.1, revisión). */}
+                    <span className="grupo-chips-datos" aria-hidden="true">
+                      {marcas === '' ? cuantos : `${cuantos} · ${marcas}`}
+                    </span>
+                    <span className="etiqueta-oculta">
+                      {hablado === '' ? cuenta : `${cuenta}, ${hablado}`}
+                    </span>
                   </span>
                 ) : (
                   <button

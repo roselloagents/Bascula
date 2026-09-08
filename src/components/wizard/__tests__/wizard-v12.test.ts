@@ -22,6 +22,7 @@ import { GruposPlegables, PasoAlimentos } from '../pasos/PasoAlimentos'
 import { PasoRegla } from '../pasos/PasosPerfil'
 import { PasoRitmo } from '../pasos/PasosVida'
 import { cuentaAlimentos, gruposDeAlimentos, resumenMarcados } from '../../utiles/alimentos'
+import { teclaEnBuscador } from '../../utiles/teclado'
 import { firmaDeInputs } from '../../resultados/ajuste'
 
 const almacen = new Map<string, string>()
@@ -240,6 +241,17 @@ describe('paso de alimentos: buscador y grupos plegables (v1.2.1)', () => {
     )
   }
 
+  /** Un evento de teclado de mentira: `teclaEnBuscador` es puro y no necesita jsdom. */
+  function teclaFalsa(key: string) {
+    const marcas = { prevenido: false, cerrado: false }
+    const evento = {
+      key,
+      preventDefault: () => void (marcas.prevenido = true),
+      currentTarget: { blur: () => void (marcas.cerrado = true) },
+    }
+    return { evento, marcas }
+  }
+
   it('el buscador está en la barra fija, sin autofocus y sin texto', () => {
     const html = pinta(PasoAlimentos, completo())
     expect(html).toContain('type="search"')
@@ -281,7 +293,6 @@ describe('paso de alimentos: buscador y grupos plegables (v1.2.1)', () => {
 
   it('con texto solo se pintan los grupos que coinciden, abiertos y sin cabecera-botón', () => {
     const html = pintaGrupos({ busqueda: 'brocoli' })
-    expect(html).toContain('1 alimento para «brocoli»')
     expect(html).toContain('Verduras')
     expect(html).toContain('Brócoli')
     expect(html).not.toContain('Carne y pescado')
@@ -307,17 +318,43 @@ describe('paso de alimentos: buscador y grupos plegables (v1.2.1)', () => {
     expect(html).not.toContain('grupo-chips')
   })
 
-  it('la línea de resultados vive siempre en el DOM para que se pueda anunciar', () => {
-    const sinBuscar = pintaGrupos({})
-    expect(sinBuscar).toContain('class="busqueda-resultados" role="status" aria-live="polite"')
-    expect(sinBuscar).not.toContain('alimentos para «')
+  it('la línea de resultados vive dentro de la barra fija y siempre en el DOM', () => {
+    const html = pinta(PasoAlimentos, completo())
+    // Vacía pero presente: un `aria-live` que aparece con el texto ya dentro no se anuncia.
+    expect(html).toContain('class="busqueda-resultados" role="status" aria-live="polite"')
+    expect(html).not.toContain('alimentos para «')
+    // Y dentro de la barra: fuera quedaba tapada por ella en cuanto se bajaba un poco.
+    const desdeElPie = html.slice(html.indexOf('class="segmentado-pie"'))
+    expect(desdeElPie.indexOf('busqueda-resultados')).toBeGreaterThan(-1)
+    expect(desdeElPie.indexOf('busqueda-resultados')).toBeLessThan(
+      desdeElPie.indexOf('grupos-alimentos'),
+    )
     expect(cuentaAlimentos(TODOS)).toBeGreaterThan(0)
   })
 
-  it('buscando se pintan los chips marcados con su estado, sin perder la búsqueda', () => {
+  it('buscando se pintan los chips marcados con su estado y el grupo enseña sus marcas', () => {
     const html = pintaGrupos({ busqueda: 'brocoli', excluidos: ['brocoli'] })
     expect(html).toContain('aria-label="Brócoli, no me gusta"')
-    expect(html).toContain('1 alimento para «brocoli»')
+    // La cabecera fija dice lo mismo que la cabecera-botón: recuento, marcas y versión hablada.
+    expect(html).toContain('1 · ✕ 1')
+    expect(html).toContain('1 alimento, 1 que no te gusta')
+  })
+
+  it('Intro en el buscador no envía el cuestionario: filtra y cierra el teclado', () => {
+    // El campo vive dentro del `<form onSubmit={avanzar}>` del wizard y es el único de texto del
+    // paso: sin este guard, la submisión implícita generaba el plan y se llevaba al usuario.
+    const intro = teclaFalsa('Enter')
+    teclaEnBuscador(intro.evento as never)
+    expect(intro.marcas).toEqual({ prevenido: true, cerrado: true })
+
+    // Cualquier otra tecla sigue escribiendo con normalidad.
+    const letra = teclaFalsa('b')
+    teclaEnBuscador(letra.evento as never)
+    expect(letra.marcas).toEqual({ prevenido: false, cerrado: false })
+  })
+
+  it('el buscador anuncia al teclado del móvil que su tecla busca, no navega', () => {
+    expect(pinta(PasoAlimentos, completo())).toContain('enterKeyHint="search"')
   })
 })
 

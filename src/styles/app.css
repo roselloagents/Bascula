@@ -619,17 +619,22 @@
   z-index: 4;
   display: grid;
   gap: var(--e-2);
-  padding-bottom: var(--e-2);
   background: var(--hueso);
 }
 
 /* Resumen vivo y "Mostrar todos" comparten fila: la barra fija no puede pasar de 130 px en
-   375 px y con el buscador dentro ya no cabía una fila por cosa (§1 paso 14, v1.2.1). */
+   375 px y con el buscador dentro ya no cabía una fila por cosa (§1 paso 14, v1.2.1). Buscando,
+   esta misma fila la ocupa el recuento de resultados. */
 .segmentado-pie {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--e-4);
+  /* 4 px más de separación con el campo de búsqueda, que está justo encima y también se toca:
+     con los 4 px del `gap` a secas, un pulgar que apuntara al borde de abajo del buscador caía en
+     "Mostrar todos" y desplegaba los siete grupos de golpe (v1.2.1, revisión). Los 4 px salen del
+     `padding-bottom` que tenía la barra: el presupuesto de 130 px no se mueve. */
+  margin-top: var(--e-2);
   /* Altura fija: sin ella la barra encogía 24 px al escribir la primera letra (el botón se va) y
      la lista entera daba un salto justo cuando el usuario está leyendo resultados. */
   min-height: 24px;
@@ -646,7 +651,9 @@
 .plegar-todos {
   flex: none;
   min-height: 24px;
-  padding: 0 var(--e-2);
+  /* Ancho de sobra a los lados: es el objetivo táctil más pequeño de la pantalla y el que está
+     más pegado a otro (el campo de búsqueda, justo encima). */
+  padding: 0 var(--e-4);
   border: none;
   background: none;
   color: var(--verde);
@@ -690,16 +697,38 @@
   font-size: var(--t-sm);
 }
 
-/* Cuántos alimentos responden a lo escrito. Vacía no ocupa sitio, pero la región sigue en el DOM
-   para que un lector de pantalla anuncie el cambio. */
+/* Cuántos alimentos responden a lo escrito. Va dentro de la barra fija, en la fila del resumen:
+   debajo de la barra quedaba tapada por ella en cuanto se bajaba un poco (v1.2.1, revisión). Una
+   línea y nunca más: la barra no puede pasar de 130 px, así que lo que no cabe se recorta —la
+   frase larga del vacío se pinta abajo, en `.busqueda-vacia`. */
 .busqueda-resultados {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--tinta-media);
+  font-size: var(--t-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Vacía sale del flujo —si no, se comería el hueco de la fila— pero sigue en el árbol de
+   accesibilidad: con `display: none` la región viva no está registrada mientras no hay búsqueda y
+   aparecer con el texto ya dentro es justo lo que los lectores no anuncian (v1.2.1, revisión). */
+.busqueda-resultados:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* El vacío del buscador, donde estarían los grupos. */
+.busqueda-vacia {
   margin: 0;
   color: var(--tinta-media);
   font-size: var(--t-sm);
-}
-
-.busqueda-resultados:empty {
-  display: none;
+  line-height: 1.5;
 }
 
 .segmentado {
