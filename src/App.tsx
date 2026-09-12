@@ -48,12 +48,29 @@ import {
   borrarBorradorDieta,
   borrarDieta,
   cargarDieta,
+  claveHuecos,
   guardarDieta,
+  guardarPropuesta,
   retirarGustos,
+  RESPUESTAS_MAX,
   sumarGustos,
+  VARIANTE_MAX,
   VERSION_DIETA,
   type DietaGuardada,
+  type PropuestaGuardada,
 } from './dieta/almacen'
+import {
+  capacidades,
+  ErrorApi,
+  esCancelado,
+  mensajeDeError,
+  proponerHuecos,
+  sinModelo,
+  TEXTO_MAX,
+  type Capacidades,
+  type HuecoPropuesta,
+} from './dieta/api'
+import { contextoParaProponer } from './dieta/contexto'
 import { Logotipo } from './components/ui/Iconos'
 import { CLAIM, MARCA, PIE } from './components/utiles/copy'
 import { hoyIso } from './components/utiles/formato'
@@ -82,6 +99,68 @@ type Fase =
   | FaseResultados
   | { nombre: 'excluido'; codigo: CodigoExclusion; aviso: AvisoTexto; errores?: string[] }
 
+/** El módulo diferido de menús, para tipar los helpers que lo reciben ya cargado. */
+type ModuloMenus = typeof import('./meals')
+
+/** Cuánto vale lo que sabemos de `/api/capacidades` antes de volver a preguntarlo (§2.2). */
+const MS_CAPACIDADES = 5 * 60 * 1000
+/** Cuánto esperan las peticiones automáticas después de que la IA falle por red o por 5xx. */
+const MS_REPOSO_IA = 60 * 1000
+
+/** El día compuesto más lo que hace falta para decidir si se pide una propuesta (§4bis.4). */
+interface DiaConPropuesta {
+  compuesto: DiaCompuesto
+  /** Los huecos que montaría la IA; vacío en modo `completa`. */
+  huecos: HuecoPropuesta[]
+  /** `claveHuecos` de esos huecos: es lo que decide si la propuesta guardada sigue valiendo. */
+  clave: string
+  /** La propuesta guardada vale para estos huecos y es la que se está pintando. */
+  vale: boolean
+}
+
+/**
+ * Compone el día reutilizando la propuesta guardada **solo si su clave de huecos sigue siendo la
+ * de ahora** (§4bis.4); si no, el día sale con plantillas y quien llama pide otra propuesta.
+ *
+ * Se compone una sola vez en el caso normal: un día montado con propuesta y el mismo día montado
+ * con plantillas tienen exactamente los mismos huecos —nombre, hora y objetivo salen del plan y de
+ * lo dictado, no de quién los monte—, así que la clave se puede leer del primer montaje.
+ */
+function componerConPropuesta(
+  menus: ModuloMenus,
+  dieta: DietaGuardada,
+  inputs: InputCalculo,
+  resultado: Resultado,
+  v: number,
+): DiaConPropuesta {
+  const guardada = dieta.propuesta
+  const primero = menus.componerDia(dieta.interpretada, inputs, resultado, v, guardada?.propuesta)
+  const huecos = menus.huecosParaProponer(primero)
+  const clave = claveHuecos(huecos)
+  if (guardada === undefined) return { compuesto: primero, huecos, clave, vale: false }
+  if (guardada.huecos_clave === clave) return { compuesto: primero, huecos, clave, vale: true }
+  // La propuesta guardada era para otro reparto: se enseñan las plantillas mientras llega otra.
+  const plantillas = menus.componerDia(dieta.interpretada, inputs, resultado, v)
+  return { compuesto: plantillas, huecos, clave, vale: false }
+}
+
+/**
+ * ¿El fallo deja a la IA fuera de juego (§4bis.5: fallo de red o 5xx) o es solo este intento? Un
+ * `429` o un `422` no son "la IA no está disponible": lo dicen sus propios textos de §5.3, y la
+ * línea pequeña mentiría al decir que no la hay.
+ */
+function iaFueraDeJuego(fallo: unknown): boolean {
+  if (!(fallo instanceof ErrorApi)) return true
+  return fallo.estado === 0 || fallo.estado >= 500
+}
+
+/** ¿Algún hueco del día lo ha montado el modelo? (§4bis.3) */
+function conHuecosDeIa(compuesto: DiaCompuesto | null): boolean {
+  return (
+    compuesto !== null && (compuesto.origen_huecos === 'ia' || compuesto.origen_huecos === 'mixto')
+  )
+}
+
 export default function App() {
   const [borrador, setBorrador] = useState<Borrador>(() => cargarBorrador())
   const [fase, setFase] = useState<Fase>({ nombre: 'wizard' })
@@ -100,6 +179,22 @@ export default function App() {
   // Clave del wizard: cambia en cada "Empezar de cero" para volver a montarlo desde la primera pregunta.
   const [generacion, setGeneracion] = useState(0)
   const temporizador = useRef<number | undefined>(undefined)
+
+  // ---- decisión L (§4bis): la propuesta de la IA ----
+  /** Hay una petición de propuesta viajando: el bloque lo dice y entra en `aria-busy` (§4bis.4). */
+  const [iaPidiendo, setIaPidiendo] = useState(false)
+  /** El texto de §5.3 cuando la petición falla; lo que había en pantalla no se toca. */
+  const [iaError, setIaError] = useState('')
+  /** En esta sesión hubo propuesta de IA y ahora no la hay: línea pequeña de §4bis.5. */
+  const [sinIa, setSinIa] = useState(false)
+  /** Si en esta sesión se ha llegado a pintar algún hueco montado por el modelo. */
+  const huboPropuesta = useRef(false)
+  /** Como mucho UNA propuesta en vuelo: la nueva cancela la anterior (§4bis.4). */
+  const enVuelo = useRef<AbortController | null>(null)
+  /** `/api/capacidades` se pide una vez por sesión (y se refresca cada 5 min por el token). */
+  const capacidadesIa = useRef<{ momento: number; promesa: Promise<Capacidades> } | null>(null)
+  /** Cuándo se cayó la IA, para no volver a intentarlo sola cada vez que cambia el plan. */
+  const iaFuera = useRef(0)
 
   useEffect(() => {
     guardarBorrador(borrador)
@@ -137,9 +232,123 @@ export default function App() {
     guardarPesajes(nuevos)
   }
 
+  // ---- v1.3, decisión L: pedir, guardar y aplicar la propuesta de la IA (§4bis.4) ----
+
+  /** Corta la propuesta que estuviera viajando: cualquier cambio de plan la deja obsoleta. */
+  const cancelarPropuesta = () => {
+    enVuelo.current?.abort()
+    enVuelo.current = null
+    setIaPidiendo(false)
+  }
+
+  /**
+   * `/api/capacidades` (§2.2). Se pide perezosamente —solo cuando hay un hueco que proponer— y se
+   * reutiliza cinco minutos: el token efímero vale diez, y un `401` lo renueva solo (§2.3).
+   */
+  const pedirCapacidades = (): Promise<Capacidades> => {
+    const ahora = Date.now()
+    const previas = capacidadesIa.current
+    if (previas !== null && ahora - previas.momento < MS_CAPACIDADES) return previas.promesa
+    const promesa = capacidades()
+    capacidadesIa.current = { momento: ahora, promesa }
+    return promesa
+  }
+
+  /** Escribe en la fase el día compuesto (o su ausencia) y la compra que le corresponde (§5.5). */
+  const aplicarDia = (
+    menus: ModuloMenus,
+    inputs: InputCalculo,
+    resultado: Resultado,
+    dieta: DietaGuardada | null,
+    ejemplos: Ejemplos,
+    compuesto: DiaCompuesto | null,
+    extra: Partial<FaseResultados> = {},
+  ) => {
+    const compraDieta =
+      compuesto !== null ? menus.compraDeDia(compuesto, ejemplos.compra?.opcional_ciclo) : null
+    setFase((previa) =>
+      previa.nombre === 'resultados'
+        ? { ...previa, ...extra, inputs, resultado, ejemplos, dieta, compuesto, compraDieta }
+        : previa,
+    )
+  }
+
+  /**
+   * Una llamada a `POST /api/dieta/proponer` (§4bis.4). Mientras viaja se sigue viendo lo que
+   * había —la propuesta anterior o las plantillas— con `aria-busy`; al llegar, el día se vuelve a
+   * componer con ella y se guarda con su clave de huecos. Un error no borra nada: enseña el texto
+   * de §5.3 y deja la pantalla como estaba.
+   *
+   * `forzado` son las dos peticiones que pide la persona a propósito ("Otra propuesta" y responder
+   * a una pregunta): esas se intentan siempre. Las automáticas descansan un minuto después de que
+   * la IA se caiga, para no dejar el bloque esperando en cada corrección de fila mientras el
+   * servicio no responde.
+   */
+  const pedirPropuesta = (
+    menus: ModuloMenus,
+    inputs: InputCalculo,
+    resultado: Resultado,
+    dieta: DietaGuardada,
+    v: number,
+    dia: DiaConPropuesta,
+    ejemplos: Ejemplos,
+    forzado = false,
+  ) => {
+    if (dia.huecos.length === 0) return
+    if (!forzado && iaFuera.current > 0 && Date.now() - iaFuera.current < MS_REPOSO_IA) return
+    cancelarPropuesta()
+    const control = new AbortController()
+    enVuelo.current = control
+    setIaPidiendo(true)
+    setIaError('')
+    void (async () => {
+      try {
+        const caps = await pedirCapacidades()
+        if (control.signal.aborted) return
+        if (!caps.interpretar) {
+          // Sin IA todo sigue funcionando con plantillas (§4bis.5); solo se dice si antes la hubo.
+          iaFuera.current = Date.now()
+          setSinIa(huboPropuesta.current)
+          return
+        }
+        const contexto = contextoParaProponer(dieta, inputs, dia.compuesto, v)
+        const respuesta = await proponerHuecos(dia.huecos, contexto, caps.token, control.signal)
+        if (control.signal.aborted) return
+        const propuesta = sinModelo(respuesta)
+        const guardada: PropuestaGuardada = {
+          variante: Math.min(Math.max(v, 0), VARIANTE_MAX),
+          huecos_clave: dia.clave,
+          propuesta,
+          respuestas: dieta.propuesta?.respuestas ?? [],
+        }
+        const conPropuesta = guardarPropuesta(guardada, dieta) ?? { ...dieta, propuesta: guardada }
+        const compuesto = menus.componerDia(dieta.interpretada, inputs, resultado, v, propuesta)
+        if (conHuecosDeIa(compuesto)) huboPropuesta.current = true
+        iaFuera.current = 0
+        setSinIa(false)
+        setIaError('')
+        aplicarDia(menus, inputs, resultado, conPropuesta, ejemplos, compuesto)
+      } catch (fallo) {
+        if (esCancelado(fallo)) return
+        setIaError(mensajeDeError(fallo))
+        if (iaFueraDeJuego(fallo)) {
+          iaFuera.current = Date.now()
+          setSinIa(huboPropuesta.current)
+        }
+      } finally {
+        if (enVuelo.current === control) {
+          enVuelo.current = null
+          setIaPidiendo(false)
+        }
+      }
+    })()
+  }
+
   const irAResultados = (inputs: InputCalculo) => {
     setFase({ nombre: 'calculando' })
     setVariante(0)
+    cancelarPropuesta()
+    setIaError('')
     // Transición corta: el cálculo es instantáneo, pero un salto seco desorienta. El módulo de
     // menús (y su base de alimentos) se descarga aquí, no en el arranque: solo hace falta ahora.
     const menus = import('./meals')
@@ -164,17 +373,24 @@ export default function App() {
           if (!ajuste) borrarAjuste()
           const ajustado = aplicarAjuste(resultado, ajuste)
 
-          const { generarEjemplos, componerDia, compraDeDia } = await menus
-          const ejemplos = generarEjemplos(inputs, ajustado)
+          const modulo = await menus
+          const ejemplos = modulo.generarEjemplos(inputs, ajustado)
           const avisos = textosAvisos(ajustado, inputs)
           // v1.3 (§5.5): lo que la persona contó vive en este móvil y no depende de `firmaPlan`;
           // con otro plan simplemente se vuelve a componer, porque `componerDia` es puro.
           const dieta = cargarDieta()
           const compone = dieta !== null && dieta.activa && ofreceDietaPropia(inputs, ejemplos)
-          const compuesto = compone ? componerDia(dieta.interpretada, inputs, ajustado, 0) : null
+          // §4bis.4: con la composición activa se reutiliza la propuesta guardada si su clave de
+          // huecos sigue valiendo; si no, se enseñan las plantillas y se pide otra.
+          const dia =
+            compone && dieta !== null
+              ? componerConPropuesta(modulo, dieta, inputs, ajustado, 0)
+              : null
+          const compuesto = dia?.compuesto ?? null
           const compraDieta = compuesto
-            ? compraDeDia(compuesto, ejemplos.compra?.opcional_ciclo)
+            ? modulo.compraDeDia(compuesto, ejemplos.compra?.opcional_ciclo)
             : null
+          if (conHuecosDeIa(compuesto)) huboPropuesta.current = true
           setCamposMarcados([])
           guardarSesion({ paso: null, planGenerado: true, firmaPlan: firma })
           setFase({
@@ -189,6 +405,9 @@ export default function App() {
             compuesto,
             compraDieta,
           })
+          if (dia !== null && dieta !== null && !dia.vale) {
+            pedirPropuesta(modulo, inputs, ajustado, dieta, 0, dia, ejemplos)
+          }
         } catch {
           setFase({
             nombre: 'excluido',
@@ -211,17 +430,25 @@ export default function App() {
     dieta: DietaGuardada | null,
     v: number,
     extra: Partial<FaseResultados> = {},
+    /** "Otra propuesta" y responder a una pregunta piden aunque la guardada siga valiendo. */
+    pedirSiempre = false,
   ) => {
-    void import('./meals').then(({ generarEjemplos, componerDia, compraDeDia }) => {
-      const ejemplos = generarEjemplos(inputs, resultado, v)
+    // Lo que viniera de camino era para el plan de antes (§4bis.4): se corta aquí, no al llegar.
+    cancelarPropuesta()
+    setIaError('')
+    void import('./meals').then((menus) => {
+      const ejemplos = menus.generarEjemplos(inputs, resultado, v)
       const compone = dieta !== null && dieta.activa && ofreceDietaPropia(inputs, ejemplos)
-      const compuesto = compone ? componerDia(dieta.interpretada, inputs, resultado, v) : null
-      const compraDieta = compuesto ? compraDeDia(compuesto, ejemplos.compra?.opcional_ciclo) : null
-      setFase((previa) =>
-        previa.nombre === 'resultados'
-          ? { ...previa, ...extra, inputs, resultado, ejemplos, dieta, compuesto, compraDieta }
-          : previa,
-      )
+      if (!compone || dieta === null) {
+        aplicarDia(menus, inputs, resultado, dieta, ejemplos, null, extra)
+        return
+      }
+      const dia = componerConPropuesta(menus, dieta, inputs, resultado, v)
+      if (conHuecosDeIa(dia.compuesto)) huboPropuesta.current = true
+      aplicarDia(menus, inputs, resultado, dieta, ejemplos, dia.compuesto, extra)
+      if (pedirSiempre || !dia.vale) {
+        pedirPropuesta(menus, inputs, resultado, dieta, v, dia, ejemplos, pedirSiempre)
+      }
     })
   }
 
@@ -282,7 +509,10 @@ export default function App() {
     if (fase.nombre !== 'resultados') return
     const siguiente = variante + 1
     setVariante(siguiente)
-    rehacer(fase.inputs, fase.resultado, fase.dieta, siguiente)
+    // §4bis.3: cuando los huecos los monta la IA el botón dice "Otra propuesta" y es una llamada
+    // nueva con `variante + 1`; mientras llega se sigue viendo la propuesta anterior.
+    const conIa = fase.compuesto?.comidas.some((c) => c.origen === 'propuesta_ia') === true
+    rehacer(fase.inputs, fase.resultado, fase.dieta, siguiente, {}, conIa)
   }
 
   // ---- v1.3: "Cuéntanos cómo comes" (SPEC-dieta-propia §5.5) ----
@@ -345,6 +575,34 @@ export default function App() {
     rehacer(fase.inputs, fase.resultado, dieta, variante)
   }
 
+  /**
+   * Responder a una pregunta del modelo (§4bis.5): la respuesta se guarda, se añade al texto
+   * contado como línea nueva —es contexto para la próxima propuesta, igual que lo dictado— y se
+   * vuelve a pedir la propuesta con la **misma** variante.
+   */
+  const responderPregunta = (pregunta: string, respuesta: string) => {
+    if (fase.nombre !== 'resultados' || fase.dieta === null) return
+    const previa = fase.dieta
+    const anteriores = previa.propuesta?.respuestas ?? []
+    const respuestas = [
+      ...anteriores.filter((r) => r.pregunta !== pregunta),
+      { pregunta, respuesta },
+    ].slice(-RESPUESTAS_MAX)
+    const linea = `${pregunta}: ${respuesta}`
+    const junto = previa.texto === '' ? linea : `${previa.texto}\n${linea}`
+    // El texto guardado es el mismo que vuelve a "Editar lo que conté" y el que se reinterpreta:
+    // si la línea no cabe en los 4 000 caracteres, no se añade (la respuesta viaja igual).
+    const dieta: DietaGuardada = {
+      ...previa,
+      texto: junto.length <= TEXTO_MAX ? junto : previa.texto,
+    }
+    if (previa.propuesta !== undefined) {
+      dieta.propuesta = { ...previa.propuesta, respuestas }
+    }
+    guardarDieta(dieta)
+    rehacer(fase.inputs, fase.resultado, dieta, variante, {}, true)
+  }
+
   /** "Ver mi menú con lo mío" y "Ver el menú propuesto": el conmutador de §5.2 y §5.4. */
   const activarDieta = (activa: boolean) => () => {
     if (fase.nombre !== 'resultados' || fase.dieta === null) return
@@ -385,8 +643,13 @@ export default function App() {
     // El ajuste pertenece a un plan que ya no existe. Los pesajes NO se borran: son el historial
     // del usuario en este dispositivo y sobreviven a un cuestionario nuevo.
     borrarAjuste()
-    // "Empezar de cero" se lleva también lo que la persona nos contó y su borrador (§5.5).
+    // "Empezar de cero" se lleva también lo que la persona nos contó y su borrador (§5.5), y con
+    // ellos la propuesta de la IA que colgaba de ahí (§4bis.4).
     borrarDieta()
+    cancelarPropuesta()
+    setIaError('')
+    setSinIa(false)
+    huboPropuesta.current = false
     setBorrador(borradorInicial())
     setPasoInicial('sexo')
     setCamposMarcados([])
@@ -474,6 +737,10 @@ export default function App() {
             onVerPropuesto={activarDieta(false)}
             onBorrarDieta={borrarDietaPropia}
             onCorregirDieta={corregirDieta}
+            pidiendoIa={iaPidiendo}
+            errorIa={iaError}
+            sinIa={sinIa}
+            onResponderPregunta={responderPregunta}
           />
         ) : null}
 

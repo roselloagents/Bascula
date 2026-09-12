@@ -62,6 +62,14 @@ interface ResultadosProps {
   onVerPropuesto?: () => void
   onBorrarDieta?: () => void
   onCorregirDieta?: (comida: number, alimento: number, cambios: Partial<AlimentoPropio>) => void
+  // ---- decisión L (§4bis): la propuesta la pide y la guarda `App` ----
+  /** Hay una propuesta en vuelo (§4bis.4). */
+  pidiendoIa?: boolean
+  /** Error de §5.3 al proponer, sin perder lo que había (§4bis.5). */
+  errorIa?: string
+  /** En esta sesión hubo propuesta de IA y ahora no (§4bis.5). */
+  sinIa?: boolean
+  onResponderPregunta?: (pregunta: string, respuesta: string) => void
 }
 
 export function Resultados({
@@ -86,6 +94,10 @@ export function Resultados({
   onVerPropuesto,
   onBorrarDieta,
   onCorregirDieta,
+  pidiendoIa = false,
+  errorIa = '',
+  sinIa = false,
+  onResponderPregunta,
 }: ResultadosProps) {
   // SPEC-ux §2.8: con avisos de condición médica, IMC 35/40 o 65 años o más,
   // el bloque de avisos sube por encima de los menús.
@@ -236,6 +248,17 @@ export function Resultados({
             if (abierto) setEstadoDieta('')
             setFormularioAbierto(abierto)
           }}
+          pidiendoIa={pidiendoIa}
+          errorIa={errorIa}
+          sinIa={sinIa}
+          onResponderPregunta={
+            onResponderPregunta
+              ? (pregunta, respuesta) => {
+                  setEstadoDieta('')
+                  onResponderPregunta(pregunta, respuesta)
+                }
+              : undefined
+          }
         />
       ) : (
         <BloqueMenus

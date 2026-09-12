@@ -25,6 +25,7 @@ import { entero, fechaLarga, leerNumero, num, numCorto } from '../utiles/formato
 import { ResumenAlimentos } from './BloquesMenu'
 import { NotasCondicion } from './NotasCondicion'
 import { FormularioDieta } from './FormularioDieta'
+import { PreguntaIA } from './PreguntaIA'
 import { localizarAlimento, useAperturaDieta } from './dieta'
 import { ERROR_NO_DISPONIBLE } from '../../dieta/api'
 
@@ -50,6 +51,29 @@ const NOTA_FIJA =
 /** [SPEC] §5.4, al volver al menú propuesto. */
 export const ESTADO_MENU_PROPUESTO =
   'Estás viendo el menú propuesto. Lo que nos contaste sigue guardado.'
+
+/** [SPEC] §4bis.5, bajo la descripción cuando algún hueco lo ha montado el modelo. */
+export const LINEA_PROPUESTA_IA =
+  'Las comidas marcadas «propuesta IA» las ha montado Claude con lo que nos contaste; los gramos los cuadramos nosotros.'
+
+/** [SPEC] §4bis.4, mientras hay una propuesta en vuelo y se enseñan las plantillas. */
+export const PIDIENDO_PROPUESTA = 'Pidiendo una propuesta a la IA…'
+
+/** [SPEC] §4bis.5, cuando en esta sesión hubo propuesta de IA y ahora no la hay. */
+export const LINEA_SIN_IA = 'Menú montado con nuestras plantillas: la IA no está disponible ahora.'
+
+/** [SPEC] §4bis.3, el botón cambia de nombre cuando los huecos los propone el modelo. */
+export const BOTON_OTRA_PROPUESTA = 'Otra propuesta'
+/** [SPEC] §5.4, el mismo botón sin IA. */
+export const BOTON_OTRO_EJEMPLO = 'Ver otro ejemplo'
+
+/**
+ * El consejo del modelo llega por partida doble (§4bis.3 lo emite como aviso y §4bis.5 lo pinta
+ * como nota). Aquí manda la nota y el aviso se descarta, como en el PDF: el mismo párrafo dos
+ * veces seguidas se lee como un error. El código se escribe literal para no arrastrar
+ * `src/meals/dieta/textos.ts` —que vive en el paquete diferido de menús— a la carga inicial.
+ */
+const CODIGO_CONSEJO_IA = 'DIETA_CONSEJO_IA'
 
 /** Estado del alimento cuando no es `listo` (§5.4). */
 const ESTADO_TEXTO: Record<AlimentoAjustado['estado'], string> = {
@@ -145,6 +169,13 @@ interface PropsFila {
   alimento: AlimentoAjustado
   /** `parcial` no pinta "igual" cuando nada se ha movido (§5.4). */
   modo: DiaCompuesto['modo']
+  /**
+   * `false` en las comidas `propuesta_ia` (§4bis.3): ahí no hay "Cambiar" ni "Esto no lo como"
+   * —lo que se cambia es la propuesta entera, con "Otra propuesta" o respondiendo a la pregunta—
+   * y tampoco se pintan el "(antes N g)" ni las etiquetas de cambio: el gramaje de partida lo
+   * puso el modelo a ojo, no la persona, así que "antes" no significa nada para ella.
+   */
+  editable?: boolean
   onGuardar: (cambios: Partial<AlimentoPropio>, aviso?: string) => void
   onQuitar: () => void
 }
@@ -171,7 +202,7 @@ function macrosDelEnvase(
   }
 }
 
-function FilaAlimento({ alimento, modo, onGuardar, onQuitar }: PropsFila) {
+function FilaAlimento({ alimento, modo, editable = true, onGuardar, onQuitar }: PropsFila) {
   const contable = esContable(alimento)
   const [abierta, setAbierta] = useState(false)
   // "Cambiar" edita lo DICTADO, no la cuenta ajustada que se pinta en la fila.
@@ -226,13 +257,13 @@ function FilaAlimento({ alimento, modo, onGuardar, onQuitar }: PropsFila) {
         {detalle !== '' ? <span className="dieta-nota"> · {detalle}</span> : null}
         {/* Lo que la persona nos dijo, en pequeño: sin esto la fila enseñaba 360 g y un "−40 g"
             sin decir nunca que ella había dicho 400 (el PDF sí lo imprime). */}
-        {!pendiente && alimento.delta_g !== 0 ? (
+        {editable && !pendiente && alimento.delta_g !== 0 ? (
           <span className="dieta-nota"> (antes {entero(alimento.gramos ?? 0)} g)</span>
         ) : null}
       </span>
 
       <span className="dieta-etiquetas">
-        {!pendiente && cambio !== 'igual' ? (
+        {editable && !pendiente && cambio !== 'igual' ? (
           <span
             className={`dieta-etiqueta ${cambio === 'sube' ? 'dieta-etiqueta-sube' : 'dieta-etiqueta-baja'}`}
           >
@@ -241,7 +272,7 @@ function FilaAlimento({ alimento, modo, onGuardar, onQuitar }: PropsFila) {
           </span>
         ) : null}
         {/* En modo parcial, "igual" sería ruido en todas las filas: solo se pinta en `completa`. */}
-        {!pendiente && cambio === 'igual' && modo === 'completa' ? (
+        {editable && !pendiente && cambio === 'igual' && modo === 'completa' ? (
           <span className="dieta-etiqueta">igual</span>
         ) : null}
         {estimado ? (
@@ -259,7 +290,8 @@ function FilaAlimento({ alimento, modo, onGuardar, onQuitar }: PropsFila) {
 
       {alimento.nota ? <p className="dieta-nota">{alimento.nota}</p> : null}
 
-      {pendiente ? (
+      {/* §4bis.3: la fila de una comida propuesta por el modelo no se edita. */}
+      {!editable ? null : pendiente ? (
         <div className="dieta-pendiente" key="pendiente">
           <CampoNumero
             etiqueta={`${alimento.nombre}: ¿cuántos gramos?`}
@@ -297,7 +329,7 @@ function FilaAlimento({ alimento, modo, onGuardar, onQuitar }: PropsFila) {
         </div>
       )}
 
-      {abierta && !pendiente ? (
+      {editable && abierta && !pendiente ? (
         <div className="dieta-edicion">
           <CampoNumero
             etiqueta={contable ? 'Cuántas unidades' : 'Gramos que comes'}
@@ -380,14 +412,20 @@ interface PropsComida {
 
 function ComidaDelDia({ comida, modo, onGuardar, onQuitar, onExcluirAlimento }: PropsComida) {
   const propia = comida.origen === 'propia'
+  // §4bis.3: el hueco lo eligió el modelo y el algoritmo le cuadró los gramos. Se pinta como una
+  // comida `propia` (gramos finales, estado, "estimado") pero sin sus acciones por fila.
+  const ia = comida.origen === 'propuesta_ia'
+  const conFilas = propia || ia
   return (
     <li className="menu-comida">
       <div className="menu-comida-cabecera">
         <h3>{comida.nombre}</h3>
         {comida.hora ? <span className="comida-hora cifra">{comida.hora}</span> : null}
         <span className="cifra dieta-pct">{numCorto(comida.pct_kcal, 1)} % de tus kcal</span>
-        <span className={`dieta-origen${propia ? ' dieta-origen-propia' : ''}`}>
-          {propia ? 'tuya' : 'propuesta'}
+        <span
+          className={`dieta-origen${propia ? ' dieta-origen-propia' : ia ? ' dieta-origen-ia' : ''}`}
+        >
+          {propia ? 'tuya' : ia ? 'propuesta IA' : 'propuesta'}
         </span>
         {comida.peri ? (
           <span className="etiqueta-peri">
@@ -396,13 +434,14 @@ function ComidaDelDia({ comida, modo, onGuardar, onQuitar, onExcluirAlimento }: 
         ) : null}
       </div>
 
-      {propia ? (
+      {conFilas ? (
         <ul className="menu-alimentos">
           {comida.alimentos.map((alimento, i) => (
             <FilaAlimento
               key={`${alimento.nombre}-${i}`}
               alimento={alimento}
               modo={modo}
+              editable={propia}
               onGuardar={(cambios, aviso) => onGuardar(i, cambios, aviso)}
               onQuitar={() => onQuitar(i, alimento.nombre)}
             />
@@ -462,6 +501,15 @@ interface Props {
   onDeshacerExclusion?: (id: string) => void
   onCambiarAlimentos?: () => void
   onFormulario?: (abierto: boolean) => void
+  // ---- decisión L (§4bis): la propuesta de la IA la pide y la guarda `App` ----
+  /** Hay una propuesta en vuelo: el bloque entra en `aria-busy` y lo dice (§4bis.4). */
+  pidiendoIa?: boolean
+  /** Texto de §5.3 cuando la petición falla; lo que había en pantalla no se toca (§4bis.5). */
+  errorIa?: string
+  /** En esta sesión hubo propuesta de IA y ahora no la hay: línea pequeña de §4bis.5. */
+  sinIa?: boolean
+  /** Responder a una pregunta del modelo: guarda, añade al texto contado y vuelve a pedir. */
+  onResponderPregunta?: (pregunta: string, respuesta: string) => void
   /** Contador: cada vez que sube, el bloque hace scroll y mueve el foco a su h2 (§5.3). */
   foco?: number
   /** Solo para los tests: en producción se usa `window`. */
@@ -482,10 +530,17 @@ export function BloqueDietaPropia({
   onDeshacerExclusion,
   onCambiarAlimentos,
   onFormulario,
+  pidiendoIa = false,
+  errorIa = '',
+  sinIa = false,
+  onResponderPregunta,
   foco = 0,
   ventana,
 }: Props) {
   const [verAvisos, setVerAvisos] = useState(false)
+  // "Seguir así" cierra la tarjeta de preguntas; una propuesta nueva trae preguntas nuevas y la
+  // tarjeta vuelve, así que lo que se recuerda es QUÉ preguntas se descartaron, no un booleano.
+  const [preguntasCerradas, setPreguntasCerradas] = useState('')
   const [efimero, setEfimero] = useState<{ texto: string; deshacer: () => void } | null>(null)
   const [estado, setEstado] = useState('')
   const apertura = useAperturaDieta()
@@ -559,15 +614,24 @@ export function BloqueDietaPropia({
     })
   }
 
-  const avisos = compuesto.avisos
+  // §4bis.5: el consejo se pinta como nota; si además llega como aviso, ese aviso sobra.
+  const consejo = compuesto.consejo_ia?.trim() ?? ''
+  const avisos =
+    consejo === ''
+      ? compuesto.avisos
+      : compuesto.avisos.filter((a) => a.codigo !== CODIGO_CONSEJO_IA)
   const visibles = verAvisos ? avisos : avisos.slice(0, AVISOS_VISIBLES)
   const ocultos = avisos.length - visibles.length
-  const hayHuecos = compuesto.comidas.some((c) => c.origen === 'propuesta')
+  const huecosIa = compuesto.comidas.some((c) => c.origen === 'propuesta_ia')
+  const hayHuecos = huecosIa || compuesto.comidas.some((c) => c.origen === 'propuesta')
+  const preguntas = compuesto.preguntas ?? []
+  const clavePreguntas = preguntas.map((p) => p.texto).join('|')
+  const verPreguntas = preguntas.length > 0 && clavePreguntas !== preguntasCerradas
   const objetivo = compuesto.objetivo
   const t = compuesto.totales
 
   return (
-    <section className="seccion">
+    <section className="seccion" aria-busy={pidiendoIa}>
       <NotasCondicion condiciones={inputs.condiciones} dietaPropia />
 
       <header className="seccion-cabecera">
@@ -587,8 +651,24 @@ export function BloqueDietaPropia({
           </span>
         </h2>
         <p className="seccion-descripcion">{DESCRIPCION_MODO[compuesto.modo]}</p>
+        {/* §4bis.5: quién ha montado los huecos y quién ha puesto los gramos. */}
+        {huecosIa ? <p className="seccion-descripcion">{LINEA_PROPUESTA_IA}</p> : null}
+        {/* §4bis.5: solo si en esta sesión hubo propuesta y ahora se ven las plantillas. */}
+        {sinIa && !huecosIa ? <p className="dieta-fecha">{LINEA_SIN_IA}</p> : null}
         {dieta.fecha !== '' ? (
           <p className="dieta-fecha">Nos lo contaste el {fechaLarga(dieta.fecha)}.</p>
+        ) : null}
+        {/* §4bis.4: mientras la propuesta viaja se enseña lo que hay y se dice que hay más. */}
+        {pidiendoIa ? (
+          <p className="dieta-pidiendo" role="status">
+            {PIDIENDO_PROPUESTA}
+          </p>
+        ) : null}
+        {/* §4bis.5: los errores de §5.3, sin perder la propuesta anterior ni las plantillas. */}
+        {errorIa !== '' ? (
+          <p className="nota nota-recuadro" role="alert">
+            {errorIa}
+          </p>
         ) : null}
       </header>
 
@@ -602,6 +682,15 @@ export function BloqueDietaPropia({
         textos={compuesto.apuntado}
         clase="dieta-chip dieta-chip-apuntado"
       />
+
+      {/* §4bis.5: la tarjeta de pregunta va encima de las comidas. */}
+      {verPreguntas && onResponderPregunta ? (
+        <PreguntaIA
+          preguntas={preguntas}
+          onResponder={onResponderPregunta}
+          onSeguir={() => setPreguntasCerradas(clavePreguntas)}
+        />
+      ) : null}
 
       <ol className="lista-menu">
         {compuesto.comidas.map((comida, i) => (
@@ -644,6 +733,9 @@ export function BloqueDietaPropia({
         Tu plan pedía: {entero(objetivo.kcal)} kcal · {entero(objetivo.prot)} g de proteína ·{' '}
         {entero(objetivo.fat)} g de grasa · {entero(objetivo.carb)} g de hidratos
       </p>
+
+      {/* §4bis.5: el consejo del modelo, antes de los avisos de §4.4. */}
+      {consejo !== '' ? <p className="nota nota-recuadro dieta-consejo">{consejo}</p> : null}
 
       {avisos.length > 0 ? (
         <div className="dieta-avisos">
@@ -727,9 +819,15 @@ export function BloqueDietaPropia({
         />
       ) : (
         <div className="acciones-menu">
+          {/* §4bis.3: con huecos de la IA el botón pide OTRA propuesta, que es una llamada. */}
           {hayHuecos && onOtroEjemplo ? (
-            <button type="button" className="btn btn-secundario" onClick={onOtroEjemplo}>
-              Ver otro ejemplo
+            <button
+              type="button"
+              className="btn btn-secundario"
+              aria-busy={pidiendoIa}
+              onClick={onOtroEjemplo}
+            >
+              {huecosIa ? BOTON_OTRA_PROPUESTA : BOTON_OTRO_EJEMPLO}
             </button>
           ) : null}
           <button

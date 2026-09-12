@@ -195,6 +195,15 @@
   color: var(--verde);
 }
 
+/* "propuesta IA": el hueco lo eligió el modelo y el algoritmo le cuadró los gramos (§4bis.5).
+   Contorno en azul de hidratos sobre papel (≈ 4,7:1): se distingue de "tuya" (verde relleno) y de
+   "propuesta" (gris relleno) por forma y por color, no solo por color. */
+.dieta-origen-ia {
+  border-color: var(--carbo);
+  background: var(--papel);
+  color: var(--carbo);
+}
+
 /* "provisional": faltan gramos, así que los demás pueden cambiar (§4.4 DIETA_PENDIENTES). */
 .dieta-origen-provisional {
   border-color: var(--aviso-borde);
@@ -453,4 +462,58 @@
 
 .dieta-formulario > * + * {
   margin-top: var(--e-6);
+}
+
+/* ---- Decisión L: propuesta de la IA (§4bis.5) ------------------------- */
+
+/* "Pidiendo una propuesta a la IA…": pequeño, bajo la descripción, sin mover nada de sitio. */
+.dieta-pidiendo {
+  margin-top: var(--e-4);
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+  font-weight: 500;
+}
+
+/* El consejo del modelo va antes de los avisos, con el mismo recuadro pero en azul de hidratos:
+   no señala nada que no cuadre, así que no debe leerse como un aviso más. */
+.dieta-consejo {
+  border-left: 3px solid var(--carbo);
+  background: var(--carbo-velo);
+}
+
+/* Tarjeta "Una pregunta antes de seguir", encima de las comidas. */
+.dieta-preguntas {
+  margin-top: var(--e-8);
+  padding: var(--e-6);
+  border: 1px solid var(--carbo-velo);
+  border-radius: var(--r-md);
+  background: var(--papel);
+}
+
+.dieta-pregunta + .dieta-pregunta {
+  margin-top: var(--e-6);
+  padding-top: var(--e-6);
+  border-top: 1px solid var(--linea);
+}
+
+.dieta-pregunta-texto {
+  margin: var(--e-4) 0 var(--e-4);
+}
+
+/* Las opciones se envuelven: a 375 px tres opciones de 30 caracteres no caben en una línea. */
+.dieta-pregunta-opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-4);
+}
+
+.dieta-pregunta-otra {
+  margin-top: var(--e-6);
+}
+
+/* `.campo` es una rejilla: sin esto el botón se estiraba de lado a lado y "Responder" quedaba
+   centrado debajo del campo, como si fuera otra etiqueta. */
+.dieta-pregunta-otra .btn-plano {
+  justify-self: start;
+  margin-top: var(--e-2);
 }
