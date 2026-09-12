@@ -1,7 +1,9 @@
 # `api/` — el servicio de "Cuéntanos cómo comes" (v1.3)
 
-Servicio HTTP mínimo que interpreta con Claude lo que la persona dicta o escribe sobre cómo come.
-La especificación normativa es [`docs/SPEC-dieta-propia.md`](../docs/SPEC-dieta-propia.md) (§1, §2, §3 y §7).
+Servicio HTTP mínimo que interpreta con Claude lo que la persona dicta o escribe sobre cómo come y
+que, desde la decisión L, **propone también las comidas que faltan** (los gramos finales los cuadra
+el navegador). La especificación normativa es [`docs/SPEC-dieta-propia.md`](../docs/SPEC-dieta-propia.md)
+(§1, §2, §3, §4bis y §7).
 
 Node 24 ejecuta el TypeScript **sin build** (sintaxis borrable, imports relativos con extensión `.ts`).
 La voz nunca pasa por aquí: la transcripción la hace el navegador. Ningún endpoint recibe audio.
@@ -18,7 +20,19 @@ Con `npm run dev` en otra terminal, Vite manda `/api/*` a `http://127.0.0.1:8787
 así que el front funciona sin nginx delante.
 
 Sin `ANTHROPIC_API_KEY` el servicio arranca igual: `/api/capacidades` devuelve `interpretar: false`
-y `/api/dieta/interpretar` responde `503 SIN_CLAVE`. Es el modo en el que se desarrolla el front.
+y `/api/dieta/interpretar` y `/api/dieta/proponer` responden `503 SIN_CLAVE`. Es el modo en el que se
+desarrolla el front.
+
+## Los endpoints
+
+| Ruta | Qué hace |
+|---|---|
+| `GET /api/salud` | `{ ok, version }`. Es el `HEALTHCHECK`; no lleva control de origen. |
+| `GET /api/capacidades` | Si se puede interpretar, con qué modelo y el token efímero de la ventana (§2.2). |
+| `POST /api/dieta/interpretar` | Lee el texto dictado como comidas, gustos y hábitos (§2.3). Cuerpo ≤ 16 KB. |
+| `POST /api/dieta/proponer` | Propone una comida por hueco (1–6) con todo el contexto, más `consejo` y hasta dos `preguntas` (§4bis.1). Cuerpo ≤ 32 KB; `422 PROPUESTA_VACIA` si algún hueco se queda sin alimentos válidos. |
+
+Los dos endpoints del modelo comparten origen, token, cuotas, presupuesto en euros y tiempos.
 
 ```bash
 curl http://127.0.0.1:8787/api/salud          # {"ok":true,"version":"1.3.0"}
@@ -28,6 +42,8 @@ curl -H 'Origin: http://localhost:5173' http://127.0.0.1:8787/api/capacidades
 node api/scripts/probar-interpretar.mjs       # prueba de punta a punta (necesita clave)
 # Contra producción el script deduce el Origin de la url; se puede forzar con BASCULA_ORIGEN=…
 node api/scripts/probar-interpretar.mjs https://bascula.rsagents.es
+node api/scripts/probar-proponer.mjs           # dos huecos con el contexto del §0 (necesita clave)
+node api/scripts/probar-proponer.mjs --solo-pollo   # la petición extrema del tercer audio
 ```
 
 ## Comprobaciones
@@ -57,7 +73,8 @@ npm run test:api        # vitest: el cliente de Anthropic va INYECTADO, ningún 
 | Fichero | Qué hace |
 |---|---|
 | `src/servidor.ts` | Arranque, rutas, cabeceras, origen, token, cuotas y tiempos (§2 y §7). |
-| `src/interpretar.ts` | El prompt con las 14 reglas, la llamada con `messages.parse`, el reintento único y la post-validación (§3). |
+| `src/interpretar.ts` | El prompt con las 14 reglas, la llamada con `messages.create`, el reintento único y la post-validación (§3). |
+| `src/proponer.ts` | El prompt de dietista (§4bis.2, con las reglas 4-9 y 14 reutilizadas de `interpretar.ts`), la llamada y la post-validación hueco a hueco (§4bis.1). |
 | `src/catalogo.ts` | Carga `src/data/foods.json` y lo compacta a una línea por alimento (§3.2). |
 | `src/esquema.ts` | zod de la entrada HTTP y de la salida del modelo (§2.3 y §3.4). |
 | `src/limites.ts` | Cuotas por IP, global y en euros, persistidas en `cuotas.json` (§7). |
@@ -66,12 +83,15 @@ npm run test:api        # vitest: el cliente de Anthropic va INYECTADO, ningún 
 
 ## Presupuesto de tiempo
 
-De fuera adentro: nginx 90 s > cliente 75 s > servidor 60 s = primer intento 35 s + reintento 20 s.
+De fuera adentro: nginx 90 s > cliente 75 s > servidor 70 s = primer intento 60 s + reintento 10 s
+(los mismos para interpretar y para proponer).
 `maxRetries: 0` en el SDK (el reintento es manual y auditable) y `AbortSignal` al cerrar la conexión:
 quien cancela no paga.
 
 ## Privacidad
 
-El cuerpo lleva **solo** el texto y los nombres de las comidas del plan: ni sexo, ni edad, ni peso,
-ni objetivo. El log es una línea JSON por petición **sin el texto, sin la salida del modelo y sin la
+El cuerpo de `/api/dieta/interpretar` lleva **solo** el texto y los nombres de las comidas del plan;
+el de `/api/dieta/proponer`, los huecos con su objetivo y el contexto de §4bis.1 (texto, comidas ya
+puestas, gustos, hábitos, base y restricciones, excluidos y favoritos, y solo las condiciones
+`diabetes`, `cardiaca` e `hipertension`): ni sexo, ni edad, ni peso, ni objetivo, ni kcal del día. El log es una línea JSON por petición **sin el texto, sin la salida del modelo y sin la
 IP** (solo un `ip_hash` con sal del día).

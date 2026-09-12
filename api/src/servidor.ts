@@ -7,7 +7,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AlimentoCatalogo } from './catalogo.ts'
 import { cargarCatalogo } from './catalogo.ts'
-import { validarEntrada } from './esquema.ts'
+import { validarEntrada, validarEntradaProponer } from './esquema.ts'
 import type { ClienteModelo, UsoModelo } from './interpretar.ts'
 import {
   ESFUERZO_POR_DEFECTO,
@@ -20,11 +20,14 @@ import {
 } from './interpretar.ts'
 import type { Limites } from './limites.ts'
 import { crearLimites, fechaUtc } from './limites.ts'
+import { construirSistemaProponer, proponerHuecos } from './proponer.ts'
 import { crearToken, secretoAleatorio, tokenValido } from './token.ts'
 
 export const VERSION = '1.3.0'
 /** Tope del cuerpo de `/api/dieta/interpretar` (§7). nginx corta antes, a 64 KB. */
 export const MAX_CUERPO = 16 * 1024
+/** Tope del cuerpo de `/api/dieta/proponer` (§4bis.1): lleva los huecos y todo el contexto. */
+export const MAX_CUERPO_PROPONER = 32 * 1024
 /** Presupuesto total del servidor: 35 s del primer intento + 20 s del reintento, con holgura. */
 export const MS_PRESUPUESTO = 70_000
 
@@ -97,6 +100,8 @@ export interface Aplicacion {
   limites: Limites
   catalogo: Map<string, AlimentoCatalogo>
   sistema: string
+  /** El bloque `system` de `/api/dieta/proponer` (§4bis.2), también serializado una sola vez. */
+  sistemaProponer: string
 }
 
 export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
@@ -104,6 +109,7 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
   const config: Config = { ...configDesdeEntorno(process.env, () => {}), ...opciones.config }
   const catalogo = opciones.catalogo ?? cargarCatalogo()
   const sistema = construirSistema(catalogo)
+  const sistemaProponer = construirSistemaProponer(catalogo)
   const ahora = opciones.ahora ?? (() => Date.now())
   const registrar = opciones.registrar ?? ((linea: string) => console.log(linea))
   const limites =
@@ -142,6 +148,12 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
     if (ruta === '/api/dieta/interpretar') {
       if (metodo !== 'POST') return fallo(res, 405, 'METODO_NO_ADMITIDO')
       void interpretar(req, res)
+      return
+    }
+
+    if (ruta === '/api/dieta/proponer') {
+      if (metodo !== 'POST') return fallo(res, 405, 'METODO_NO_ADMITIDO')
+      void proponer(req, res)
       return
     }
 
@@ -253,7 +265,124 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
     return fallo(res, 502, 'MODELO_NO_DISPONIBLE')
   }
 
-  return { manejar, config, limites, catalogo, sistema }
+  /**
+   * `POST /api/dieta/proponer` (§4bis.1): mismo control de origen, token, cuota y presupuesto que
+   * interpretar, y el mismo abort al cerrar la conexión. Lo único distinto es el tope del cuerpo
+   * (32 KB, porque viaja todo el contexto) y lo que se valida.
+   */
+  async function proponer(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const entrada = ahora()
+    if (!tipoJson(req)) return fallo(res, 415, 'TIPO_NO_ADMITIDO')
+    if (!origenAdmitido(req, config.origenes)) return fallo(res, 403, 'ORIGEN_NO_ADMITIDO')
+
+    const declarado = Number(req.headers['content-length'] ?? '0')
+    if (Number.isFinite(declarado) && declarado > MAX_CUERPO_PROPONER) {
+      return fallo(res, 413, 'CUERPO_GRANDE')
+    }
+    const cuerpo = await leerCuerpo(req, MAX_CUERPO_PROPONER)
+    if (cuerpo === null) {
+      // Se contesta primero y se corta la conexión después: si no, el cliente no ve el 413.
+      res.on('finish', () => req.destroy())
+      return fallo(res, 413, 'CUERPO_GRANDE')
+    }
+
+    if (!puedeInterpretar) return fallo(res, 503, 'SIN_CLAVE')
+
+    const ip = ipDe(req)
+    if (!tokenValido(config.secreto, ip, req.headers['x-bascula-token'], ahora())) {
+      return fallo(res, 401, 'TOKEN_INVALIDO')
+    }
+
+    let leido: unknown
+    try {
+      leido = JSON.parse(cuerpo)
+    } catch {
+      return fallo(res, 400, 'TEXTO_INVALIDO')
+    }
+    const datos = validarEntradaProponer(leido)
+    if (datos === null) return fallo(res, 400, 'TEXTO_INVALIDO')
+
+    // Cuota compartida con interpretar: una propuesta cuesta lo mismo que una lectura (§4bis.6).
+    const motivo = limites.comprobar(ip)
+    if (motivo !== null) return fallo(res, 429, motivo)
+    limites.registrarPeticion(ip)
+
+    const abortador = new AbortController()
+    res.on('close', () => {
+      if (!res.writableFinished) abortador.abort()
+    })
+
+    let euros = 0
+    let uso: UsoModelo | null = null
+    const resultado = await proponerHuecos({
+      cliente: cliente as ClienteModelo,
+      modelo: config.modelo,
+      esfuerzo: config.esfuerzo,
+      sistema: sistemaProponer,
+      entrada: datos,
+      catalogo,
+      senalCliente: abortador.signal,
+      limiteMs: entrada + MS_PRESUPUESTO,
+      ahora,
+      alFacturar: (coste, usoLlamada) => {
+        euros += coste
+        uso = usoLlamada
+        limites.registrarCoste(coste)
+      },
+    })
+
+    const comun = {
+      fecha: new Date(ahora()).toISOString(),
+      ip_hash: hashIp(ip, config.secreto, ahora()),
+      ruta: 'proponer',
+      huecos: datos.huecos.length,
+      variante: datos.contexto.variante,
+      respuestas: datos.contexto.respuestas.length,
+      modelo: config.modelo,
+      intentos: resultado.intentos,
+      uso,
+      coste_eur: Math.round(euros * 1e6) / 1e6,
+      latencia_ms: ahora() - entrada,
+    }
+
+    if (resultado.estado === 'ok') {
+      const propuesta = resultado.propuesta
+      registrar(
+        JSON.stringify({
+          ...comun,
+          resultado: 'ok',
+          alimentos: propuesta.comidas.reduce((n, c) => n + c.alimentos.length, 0),
+          preguntas: propuesta.preguntas.length,
+          consejo: propuesta.consejo !== null,
+          retirados: propuesta.retirados.length,
+          descartados: propuesta.descartados,
+        }),
+      )
+      return responder(res, 200, {
+        comidas: propuesta.comidas,
+        consejo: propuesta.consejo,
+        preguntas: propuesta.preguntas,
+        modelo: config.modelo,
+      })
+    }
+
+    registrar(
+      JSON.stringify({
+        ...comun,
+        resultado: resultado.estado,
+        motivo: resultado.estado === 'modelo' ? resultado.motivo : undefined,
+      }),
+    )
+    if (resultado.estado === 'abortado') {
+      res.destroy()
+      return
+    }
+    if (resultado.estado === 'vacia') return fallo(res, 422, 'PROPUESTA_VACIA')
+    if (resultado.estado === 'tiempo') return fallo(res, 504, 'TIEMPO_AGOTADO')
+    return fallo(res, 502, 'MODELO_NO_DISPONIBLE')
+  }
+
+  return { manejar, config, limites, catalogo, sistema, sistemaProponer }
 }
 
 export function crearServidor(opciones: OpcionesServidor = {}): Server & { app: Aplicacion } {
@@ -277,6 +406,7 @@ export const MENSAJES: Record<string, string> = {
   CUERPO_GRANDE: 'Lo que nos has mandado es demasiado grande.',
   TIPO_NO_ADMITIDO: 'Se esperaba application/json.',
   SIN_CONTENIDO: 'No hemos reconocido ninguna comida, gusto ni costumbre.',
+  PROPUESTA_VACIA: 'No hemos podido montar una propuesta con esto.',
   CUOTA_IP: 'Has hecho muchas interpretaciones hoy. Vuelve a intentarlo mañana.',
   CUOTA_GLOBAL: 'Estamos recibiendo muchas peticiones. Espera un minuto y vuelve a intentarlo.',
   PRESUPUESTO: 'Hoy ya no podemos leer más textos. Vuelve a intentarlo mañana.',
@@ -351,7 +481,7 @@ function tipoJson(req: IncomingMessage): boolean {
  * chunked` no hay `Content-Length` que mirar antes, y destruir aquí dejaba al navegador con un
  * fallo de red en vez del error de §2.3).
  */
-function leerCuerpo(req: IncomingMessage): Promise<string | null> {
+function leerCuerpo(req: IncomingMessage, maximo: number = MAX_CUERPO): Promise<string | null> {
   return new Promise((cumplir) => {
     const trozos: Buffer[] = []
     let total = 0
@@ -359,7 +489,7 @@ function leerCuerpo(req: IncomingMessage): Promise<string | null> {
     req.on('data', (trozo: Buffer) => {
       if (cerrado) return
       total += trozo.length
-      if (total > MAX_CUERPO) {
+      if (total > maximo) {
         cerrado = true
         req.pause()
         cumplir(null)

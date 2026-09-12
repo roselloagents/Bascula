@@ -75,6 +75,8 @@ describe('rutas y cabeceras', () => {
     expect(await salud.json()).toMatchObject({ error: { codigo: 'METODO_NO_ADMITIDO' } })
     const interpretar = await fetch(`${b.url}/api/dieta/interpretar`, { method: 'GET' })
     expect(interpretar.status).toBe(405)
+    const proponer = await fetch(`${b.url}/api/dieta/proponer`, { method: 'GET' })
+    expect(proponer.status).toBe(405)
   })
 })
 

@@ -171,6 +171,23 @@ export interface ClienteModelo {
 
 // ---------- Prompt (§3.3: las 14 reglas) ----------
 
+/** Reglas 4-9 de §3.3 (alimentos, estado, catálogo, macros, cantidades, ajustable). El prompt de
+ *  propuesta (§4bis.2) las reutiliza TAL CUAL, así que se escriben una sola vez. */
+export const REGLAS_ALIMENTOS = `4. ALIMENTOS. Uno por ingrediente mencionado. Las mezclas ("un batido de…") se separan en sus ingredientes. Las marcas y los productos se describen por lo que son (nombre: "Cereales de arroz integral y avena 0 %"). "grupo_aprox" siempre: proteina, lacteo, carbohidrato, grasa, verdura, fruta, bebida u otro.
+
+5. ESTADO, OBLIGATORIO. "estado" es crudo, cocido, seco o listo. "En seco", "en crudo", "sin cocer", "pesado antes de cocinar" → crudo en arroz, pasta, legumbre, cereal, carne y pescado; seco solo en copos, polvos y texturizados; "ya hecho", "cocido", "a la plancha", "hervido" → cocido; lo que se come tal cual (pan, yogur, fiambre, frutos secos, fruta) → listo. Si no dice el estado en un alimento donde importa (arroz, pasta, legumbre, carne, pescado, patata) → crudo y "nota": "Lo hemos tomado en crudo; si lo pesas cocinado, dilo".
+
+6. EMPAREJAMIENTO CON EL CATÁLOGO. Pon "alimento_id" solo si es EL MISMO ALIMENTO EN EL MISMO ESTADO. Las variedades sí ("arroz basmati en seco" → arroz_blanco_crudo, con "nota": "Basmati ≈ arroz blanco"); los productos distintos no ("pan proteico" no es "pan integral"). Si el estado que dice la persona no existe en el catálogo, NO emparejes: alimento propio con macros estimados en ese estado y una "nota". Con "alimento_id" puedes copiar los macros del catálogo.
+
+7. MACROS ESTIMADOS ("origen_macros": "estimado") para lo que no está en el catálogo: valores típicos por 100 g de BEDCA/USDA o del etiquetado habitual en España, redondeados. "carb" ES HIDRATO TOTAL, CON LA FIBRA DENTRO: una etiqueta europea declara los hidratos SIN la fibra, así que hay que sumarla (un cereal integral que declara 46 g de hidratos y 27 g de fibra → "carb" 73 y "fibra" 27). "fibra" siempre (0 si no tiene). "alcohol" en g/100 g (0 casi siempre; vino ≈ 10, cerveza ≈ 4, destilados ≈ 33). Suplementos: proteína en polvo ≈ 380 kcal, 75 de proteína, 8 de hidratos y 6 de grasa salvo que se diga otra cosa. En los estimados, "confianza" es "media" o "baja".
+
+8. CANTIDADES. Todo a gramos: "250 gramos" → 250; "cinco huevos" → "cantidad_unidades" 5 y la "unidad" del catálogo (huevo_entero: 55 g, "huevo M"); un scoop ≈ 30 g salvo que se dé el peso ("un scoop de unos 60 g en total" → 60 g); cucharada 15 g (de aceite 10 g), cucharadita 5 g, puñado de frutos secos 30 g, rebanada de pan de molde 30 g, rebanada de barra u hogaza 45 g, loncha de fiambre o de jamón cocido 25 g, loncha de queso 20 g, cazo de arroz o de pasta cocidos 100 g, vaso de leche o de bebida vegetal 250 g, yogur 125 g, lata de atún escurrida y pieza mediana de fruta según el catálogo. CUANDO EL ALIMENTO DEL CATÁLOGO TIENE UNIDAD, ESA UNIDAD MANDA. SIN CANTIDAD ("unos cereales", "unas tiras de fiambre") → "gramos": null, "cantidad_unidades": null y "nota": "No has dicho la cantidad". NUNCA INVENTES GRAMOS.
+
+9. AJUSTABLE. "ajustable": false para especias, edulcorantes, café, té, agua, caldos, verduras de hoja y guarniciones sin cantidad relevante, y para TODA bebida alcohólica y TODO refresco o zumo azucarado (se cuentan sus kcal, no se tocan sus gramos). true para el resto.`
+
+/** Regla 14 de §3.3 (idioma y forma). También la reutiliza el prompt de propuesta (§4bis.2). */
+export const REGLA_FORMA = `14. IDIOMA Y FORMA. Español de España, mayúscula inicial, nombres cortos, sin marcas salvo que identifiquen el producto. "notas" generales (pocas y breves) solo para supuestos ("He tomado el scoop como 60 g, como has dicho"). Máximos: 8 comidas, 15 alimentos por comida, 40 en total, 20 gustos, 12 hábitos.`
+
 export const INSTRUCCIONES = `Eres el asistente de Báscula. Conviertes lo que una persona cuenta sobre cómo come en datos estructurados: comidas concretas con alimentos y gramos, gustos y hábitos. No opinas, no recomiendas, no cambias cantidades: describes lo que ha dicho, y solo lo que ha dicho.
 
 REGLAS
@@ -185,17 +202,7 @@ REGLAS
 
 3. COMIDAS. Agrupa por comida. Usa los nombres de las comidas del plan cuando encajen (desayuno → "Desayuno"; almuerzo o comida del mediodía → "Comida"; cena → "Cena"; media mañana, merienda, recena, pre o post entreno → el que exista en el plan o el que diga la persona). Si describe más comidas que el plan, mantén las suyas. Orden cronológico si es deducible; si no, el del texto. UNA COMIDA SOLO EXISTE SI TIENE AL MENOS UN ALIMENTO CON NOMBRE: "al mediodía como fuera" no es una comida, es un hábito de tipo "otro".
 
-4. ALIMENTOS. Uno por ingrediente mencionado. Las mezclas ("un batido de…") se separan en sus ingredientes. Las marcas y los productos se describen por lo que son (nombre: "Cereales de arroz integral y avena 0 %"). "grupo_aprox" siempre: proteina, lacteo, carbohidrato, grasa, verdura, fruta, bebida u otro.
-
-5. ESTADO, OBLIGATORIO. "estado" es crudo, cocido, seco o listo. "En seco", "en crudo", "sin cocer", "pesado antes de cocinar" → crudo en arroz, pasta, legumbre, cereal, carne y pescado; seco solo en copos, polvos y texturizados; "ya hecho", "cocido", "a la plancha", "hervido" → cocido; lo que se come tal cual (pan, yogur, fiambre, frutos secos, fruta) → listo. Si no dice el estado en un alimento donde importa (arroz, pasta, legumbre, carne, pescado, patata) → crudo y "nota": "Lo hemos tomado en crudo; si lo pesas cocinado, dilo".
-
-6. EMPAREJAMIENTO CON EL CATÁLOGO. Pon "alimento_id" solo si es EL MISMO ALIMENTO EN EL MISMO ESTADO. Las variedades sí ("arroz basmati en seco" → arroz_blanco_crudo, con "nota": "Basmati ≈ arroz blanco"); los productos distintos no ("pan proteico" no es "pan integral"). Si el estado que dice la persona no existe en el catálogo, NO emparejes: alimento propio con macros estimados en ese estado y una "nota". Con "alimento_id" puedes copiar los macros del catálogo.
-
-7. MACROS ESTIMADOS ("origen_macros": "estimado") para lo que no está en el catálogo: valores típicos por 100 g de BEDCA/USDA o del etiquetado habitual en España, redondeados. "carb" ES HIDRATO TOTAL, CON LA FIBRA DENTRO: una etiqueta europea declara los hidratos SIN la fibra, así que hay que sumarla (un cereal integral que declara 46 g de hidratos y 27 g de fibra → "carb" 73 y "fibra" 27). "fibra" siempre (0 si no tiene). "alcohol" en g/100 g (0 casi siempre; vino ≈ 10, cerveza ≈ 4, destilados ≈ 33). Suplementos: proteína en polvo ≈ 380 kcal, 75 de proteína, 8 de hidratos y 6 de grasa salvo que se diga otra cosa. En los estimados, "confianza" es "media" o "baja".
-
-8. CANTIDADES. Todo a gramos: "250 gramos" → 250; "cinco huevos" → "cantidad_unidades" 5 y la "unidad" del catálogo (huevo_entero: 55 g, "huevo M"); un scoop ≈ 30 g salvo que se dé el peso ("un scoop de unos 60 g en total" → 60 g); cucharada 15 g (de aceite 10 g), cucharadita 5 g, puñado de frutos secos 30 g, rebanada de pan de molde 30 g, rebanada de barra u hogaza 45 g, loncha de fiambre o de jamón cocido 25 g, loncha de queso 20 g, cazo de arroz o de pasta cocidos 100 g, vaso de leche o de bebida vegetal 250 g, yogur 125 g, lata de atún escurrida y pieza mediana de fruta según el catálogo. CUANDO EL ALIMENTO DEL CATÁLOGO TIENE UNIDAD, ESA UNIDAD MANDA. SIN CANTIDAD ("unos cereales", "unas tiras de fiambre") → "gramos": null, "cantidad_unidades": null y "nota": "No has dicho la cantidad". NUNCA INVENTES GRAMOS.
-
-9. AJUSTABLE. "ajustable": false para especias, edulcorantes, café, té, agua, caldos, verduras de hoja y guarniciones sin cantidad relevante, y para TODA bebida alcohólica y TODO refresco o zumo azucarado (se cuentan sus kcal, no se tocan sus gramos). true para el resto.
+${REGLAS_ALIMENTOS}
 
 10. ACEITE. Si una comida concreta lleva algo que se cocina (carne, pescado, huevo, verdura salteada) o una ensalada y no se menciona ninguna grasa de adición, no inventes gramos: pon "falta_aceite": true.
 
@@ -205,7 +212,7 @@ REGLAS
 
 13. NO ENTENDIDO. Los fragmentos que no se pueden llevar a nada de lo anterior ("tiras de fibra") van a "no_entendido" con una "sugerencia" si la hay ("¿Quizá «tiras de fiambre de pavo»?"). No los conviertas en alimentos.
 
-14. IDIOMA Y FORMA. Español de España, mayúscula inicial, nombres cortos, sin marcas salvo que identifiquen el producto. "notas" generales (pocas y breves) solo para supuestos ("He tomado el scoop como 60 g, como has dicho"). Máximos: 8 comidas, 15 alimentos por comida, 40 en total, 20 gustos, 12 hábitos.
+${REGLA_FORMA}
 
 CATÁLOGO DE ALIMENTOS
 Una línea por alimento: id | nombre | grupo | estado | kcal por 100 g | proteína | hidratos totales | grasa | fibra | unidad (solo si es contable). Los macros son por 100 g y los hidratos ya incluyen la fibra.
@@ -500,10 +507,12 @@ export function postValidar(
   }
 }
 
-type RevisionAlimento =
+export type RevisionAlimento =
   { alimento: AlimentoPropio } | { problema: { texto: string; sugerencia?: string } } | null
 
-function revisarAlimento(
+/** Un alimento del modelo, revisado contra el catálogo y saneado (§3.5). Lo reutiliza la
+ *  post-validación de cada hueco propuesto (§4bis.1), que impone las mismas reglas. */
+export function revisarAlimento(
   crudo: AlimentoModelo,
   catalogo: Map<string, AlimentoCatalogo>,
 ): RevisionAlimento {
