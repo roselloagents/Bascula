@@ -513,6 +513,14 @@ const NOTA_FIJA_DIETA =
   'modelo de inteligencia artificial: revisa que haya entendido bien cada alimento y corrige lo que ' +
   'haga falta con «Cambiar».'
 
+/**
+ * Línea de §4bis.5, bajo la descripción del bloque, cuando algún hueco lo ha montado el modelo.
+ * Las preguntas de vuelta (§4bis.5) NO se imprimen: en papel no se pueden responder.
+ */
+const NOTA_PROPUESTA_IA =
+  'Las comidas marcadas «propuesta IA» las ha montado Claude con lo que nos contaste; los gramos ' +
+  'los cuadramos nosotros.'
+
 /** Nota encima de la tabla de reparto cuando hay comidas dictadas (§5.1). */
 const NOTA_REPARTO_DIETA =
   'Este reparto es el que te proponíamos; tus comidas van por otros porcentajes, los tienes más abajo.'
@@ -603,7 +611,11 @@ function LineaAlimentoPropio({
   )
 }
 
-/** Una toma del día compuesto: dictada ("tuya") o montada por el generador ("propuesta"). */
+/**
+ * Una toma del día compuesto: dictada ("tuya"), propuesta por el modelo ("propuesta IA", §4bis.5) o
+ * montada por el generador de plantillas ("propuesta"). Las dos primeras llevan `AlimentoAjustado[]`
+ * con sus gramos ya cuadrados, así que se imprimen igual; la tercera, su `ejemplo`.
+ */
 function BloqueComidaCompuesta({
   comida,
   compacta,
@@ -611,7 +623,8 @@ function BloqueComidaCompuesta({
   comida: ComidaCompuesta
   compacta: boolean
 }) {
-  const propia = comida.origen === 'propia'
+  const ia = comida.origen === 'propuesta_ia'
+  const conAlimentos = comida.origen === 'propia' || ia
   const alimentos = (comida.alimentos ?? []).filter((a) => !!a && a.retirado !== true)
   return (
     <View style={{ marginBottom: compacta ? 4 : 8 }} minPresenceAhead={compacta ? 36 : 60}>
@@ -630,11 +643,11 @@ function BloqueComidaCompuesta({
           {winAnsi(comida.nombre) || SIN_DATO}
           {comida.hora ? ` · ${comida.hora}` : ''}
           {comida.peri ? ' · cerca de tu entreno' : ''}
-          {propia ? ' · tuya' : ' · propuesta'}
+          {conAlimentos ? (ia ? ' · propuesta IA' : ' · tuya') : ' · propuesta'}
         </Text>
         <Text style={{ fontSize: 9 }}>{totalesTexto(comida.totales)}</Text>
       </View>
-      {propia ? (
+      {conAlimentos ? (
         <View style={{ paddingHorizontal: 7, paddingTop: 4 }}>
           {alimentos.map((a, i) => (
             <LineaAlimentoPropio key={`${a.nombre}-${i}`} alimento={a} compacta={compacta} />
@@ -664,11 +677,23 @@ function BloqueDietaPropia({
   const dictados = comidas.reduce((n, c) => n + (c.alimentos ?? []).length, 0)
   const compacta = dictados > ALIMENTOS_DIETA_COMPACTA
   const pendientes = (dia.pendientes ?? []).filter((p) => !!p)
-  const avisos = (dia.avisos ?? []).filter((a) => !!a && typeof a.texto === 'string')
   const noEntendido = (dia.no_entendido ?? []).filter((n) => !!n)
+  // v1.3 (§4bis.5): la línea de la propuesta de la IA solo aparece si alguna comida es suya, y el
+  // consejo del modelo se imprime como nota, justo antes de los avisos de §4.4. Como §4bis.3 lo
+  // emite ADEMÁS como aviso `DIETA_CONSEJO_IA`, ese aviso se descarta cuando ya va en la nota: en
+  // papel no hay dónde plegarlo, así que se leería dos veces seguidas.
+  const hayPropuestaIa = comidas.some((c) => c.origen === 'propuesta_ia')
+  const consejoIa = typeof dia.consejo_ia === 'string' ? winAnsi(dia.consejo_ia).trim() : ''
+  const avisos = (dia.avisos ?? []).filter(
+    (a) =>
+      !!a &&
+      typeof a.texto === 'string' &&
+      !(consejoIa.length > 0 && a.codigo === 'DIETA_CONSEJO_IA'),
+  )
   return (
     <View>
       <Text style={s.p}>{DESCRIPCION_MODO[dia.modo] ?? DESCRIPCION_MODO.parcial}</Text>
+      {hayPropuestaIa ? <Text style={s.p}>{NOTA_PROPUESTA_IA}</Text> : null}
       {dia.provisional ? (
         <Text style={[s.small, { marginBottom: 3 }]}>
           Provisional: nos falta la cantidad de algún alimento, así que estos gramos pueden cambiar.
@@ -728,6 +753,12 @@ function BloqueDietaPropia({
           Pendiente de cantidad:{' '}
           {lista(pendientes.map((p) => `${winAnsi(p.nombre)} (${winAnsi(p.comida)})`))}.
         </Text>
+      ) : null}
+
+      {consejoIa.length > 0 ? (
+        <View style={compacta ? [s.nota, { padding: 5, marginBottom: 4 }] : s.nota} wrap={false}>
+          <Text style={compacta ? { fontSize: 9, lineHeight: 1.25 } : undefined}>{consejoIa}</Text>
+        </View>
       ) : null}
 
       {/* Compactado (§6.2): los avisos pierden la caja, no el texto. Se imprimen todos igual. */}

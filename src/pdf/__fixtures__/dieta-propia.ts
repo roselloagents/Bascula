@@ -133,6 +133,21 @@ function comidaPropia(
   }
 }
 
+/**
+ * Un hueco que ha montado el modelo y que el algoritmo ha cuadrado (§4bis.3): por dentro es una
+ * comida como la dictada —`AlimentoAjustado[]` con los gramos ya cuadrados y `ejemplo: null`—, solo
+ * cambia el origen, que es lo que le pone al PDF la etiqueta "propuesta IA".
+ */
+function comidaPropuestaIa(
+  nombre: string,
+  hora: string | null,
+  objetivo: Macros | null,
+  alimentos: readonly AlimentoAjustado[],
+  peri = false,
+): ComidaCompuesta {
+  return { ...comidaPropia(nombre, hora, objetivo, alimentos, peri), origen: 'propuesta_ia' }
+}
+
 function comidaPropuesta(ejemplo: EjemploComida, objetivo: Macros, fibra: number): ComidaCompuesta {
   return {
     nombre: ejemplo.comida,
@@ -191,6 +206,12 @@ const M = {
   aceite: { kcal: 899, prot: 0, carb: 0, fat: 99.9, fibra: 0, alcohol: 0 },
   brocoli: { kcal: 34, prot: 2.8, carb: 6.6, fat: 0.4, fibra: 2.6, alcohol: 0 },
   vino: { kcal: 83, prot: 0.1, carb: 2.6, fat: 0, fibra: 0, alcohol: 10.3 },
+  // v1.3 (§4bis): lo que propone el modelo para los huecos del fixture D.
+  calabacin: { kcal: 17, prot: 1.3, carb: 3.1, fat: 0.3, fibra: 1.1, alcohol: 0 },
+  salmon: { kcal: 208, prot: 20, carb: 0, fat: 13.4, fibra: 0, alcohol: 0 },
+  patata: { kcal: 87, prot: 2, carb: 20, fat: 0.1, fibra: 1.8, alcohol: 0 },
+  tomate: { kcal: 18, prot: 0.9, carb: 3.5, fat: 0.2, fibra: 1.2, alcohol: 0 },
+  pan_centeno: { kcal: 250, prot: 8.5, carb: 48, fat: 1.6, fibra: 8, alcohol: 0 },
 } satisfies Record<string, MacrosPropio>
 
 const OBJETIVO: Macros = { kcal: 2190, prot: 185, carb: 205, fat: 70 }
@@ -836,6 +857,166 @@ export const DIA_MAXIMO: DiaCompuesto = montarDia('completa', COMIDAS_MAXIMO, OB
   n_variables: 24,
 })
 
+// ---------- D. Huecos propuestos por la IA (§4bis): mixto, con consejo y con preguntas ----------
+// El desayuno es el dictado del §0; la Comida y la Cena las ha propuesto el modelo y las ha cuadrado
+// el algoritmo (`propuesta_ia`); la Merienda no convenció (fuera del ±15 %) y cayó al generador de
+// plantillas (`propuesta`), de ahí `origen_huecos: 'mixto'` y su nota apuntada.
+
+const COMIDA_PROPUESTA_IA: AlimentoAjustado[] = [
+  propio({
+    nombre: 'Pechuga de pollo',
+    alimento_id: 'pechuga_pollo',
+    grupo: 'proteina',
+    estado: 'crudo',
+    gramos: 200,
+    ajustados: 210,
+    macros: M.pollo,
+    texto: 'pechuga de pollo',
+  }),
+  propio({
+    nombre: 'Arroz blanco (crudo)',
+    alimento_id: 'arroz_blanco_crudo',
+    grupo: 'carbohidrato',
+    estado: 'crudo',
+    gramos: 70,
+    ajustados: 65,
+    macros: M.arroz,
+    texto: 'arroz blanco',
+  }),
+  propio({
+    nombre: 'Calabacín',
+    alimento_id: 'calabacin',
+    grupo: 'verdura',
+    gramos: 200,
+    macros: M.calabacin,
+    fijo: true,
+    texto: 'calabacín',
+  }),
+  propio({
+    nombre: 'Aceite de oliva virgen extra',
+    alimento_id: 'aove',
+    grupo: 'grasa',
+    gramos: 10,
+    macros: M.aceite,
+    fijo: true,
+    texto: 'aceite de oliva',
+  }),
+]
+
+const CENA_PROPUESTA_IA: AlimentoAjustado[] = [
+  propio({
+    nombre: 'Salmón',
+    alimento_id: 'salmon',
+    grupo: 'proteina',
+    estado: 'crudo',
+    gramos: 160,
+    ajustados: 150,
+    macros: M.salmon,
+    texto: 'salmón',
+  }),
+  propio({
+    nombre: 'Patata cocida',
+    alimento_id: 'patata_cocida',
+    grupo: 'carbohidrato',
+    estado: 'cocido',
+    gramos: 250,
+    ajustados: 270,
+    macros: M.patata,
+    texto: 'patata cocida',
+  }),
+  propio({
+    nombre: 'Pan de centeno de panadería',
+    grupo: 'carbohidrato',
+    gramos: 40,
+    macros: M.pan_centeno,
+    nota: 'No está en nuestra base: sus macros son una estimación.',
+    texto: 'pan de centeno',
+  }),
+  propio({
+    nombre: 'Tomate',
+    alimento_id: 'tomate',
+    grupo: 'verdura',
+    gramos: 150,
+    macros: M.tomate,
+    fijo: true,
+    texto: 'tomate',
+  }),
+  propio({
+    nombre: 'Aceite de oliva virgen extra',
+    alimento_id: 'aove',
+    grupo: 'grasa',
+    gramos: 8,
+    macros: M.aceite,
+    fijo: true,
+    texto: 'aceite de oliva',
+  }),
+]
+
+/** §4bis.6: el día con huecos de la IA, su consejo y sus dos preguntas (que el PDF no imprime). */
+export const DIA_PROPUESTA_IA: DiaCompuesto = montarDia(
+  'parcial',
+  [
+    comidaPropia('Desayuno', '08:00', { kcal: 560, prot: 45, carb: 50, fat: 20 }, DESAYUNO_DICTADO),
+    comidaPropuestaIa(
+      'Comida',
+      '14:00',
+      { kcal: 620, prot: 55, carb: 55, fat: 20 },
+      COMIDA_PROPUESTA_IA,
+    ),
+    comidaPropuesta(MERIENDA_PROPUESTA, { kcal: 370, prot: 30, carb: 40, fat: 10 }, 4.1),
+    comidaPropuestaIa(
+      'Cena',
+      '21:00',
+      { kcal: 640, prot: 55, carb: 60, fat: 20 },
+      CENA_PROPUESTA_IA,
+    ),
+  ],
+  OBJETIVO,
+  {
+    avisos: [
+      {
+        // §4bis.3: el consejo también llega como aviso informativo; el PDF lo imprime UNA vez.
+        codigo: 'DIETA_CONSEJO_IA',
+        texto:
+          'Pollo y arroz cuadran en calorías y proteína, pero se quedan cortos de fibra y de potasio: ' +
+          'hemos metido una verdura en cada comida.',
+      },
+      {
+        codigo: 'DIETA_PENDIENTES',
+        texto:
+          'Nos falta la cantidad de Cereales de arroz y avena 0 %. Hasta que la pongas en su comida, ' +
+          'estos gramos son provisionales: lo que falta cambia el resto.',
+      },
+      {
+        codigo: 'DIETA_ESTIMADOS',
+        texto:
+          'Los alimentos marcados con «estimado» no están en nuestra base: sus macros son una ' +
+          'estimación. Si tienes el envase a mano, escríbelos desde «Cambiar».',
+      },
+    ],
+    aplicado: ['Desayuno: la tuya, cada día', 'Sin brócoli', 'Favorito: salmón'],
+    apuntado: ['Para Merienda no nos ha convencido la propuesta y hemos usado la nuestra.'],
+    pendientes: [{ comida: 'Desayuno', nombre: 'Cereales de arroz y avena 0 %' }],
+    no_entendido: [{ texto: 'tiras de fibra', sugerencia: '¿Quizá «tiras de fiambre de pavo»?' }],
+    notas: ['He tomado el scoop como 60 g, como has dicho.'],
+    n_variables: 8,
+    preguntas: [
+      {
+        texto: '¿Metemos alguna verdura que sí te guste?',
+        opciones: ['No, así está bien', 'Sí, dime cuáles', 'Solo en la cena'],
+      },
+      {
+        texto: '¿Repetimos el mismo desayuno todos los días?',
+        opciones: ['Sí, siempre igual', 'Prefiero variar'],
+      },
+    ],
+    consejo_ia:
+      'Pollo y arroz cuadran en calorías y proteína, pero se quedan cortos de fibra y de potasio: ' +
+      'hemos metido una verdura en cada comida.',
+    origen_huecos: 'mixto',
+  },
+)
+
 // ---------- DatosPdf listos para renderizar ----------
 
 /** La compra de §6.1: los alimentos que no están en nuestra base van sin formato de venta. */
@@ -881,3 +1062,5 @@ export const MUESTRA_DIETA_PARCIAL: DatosPdf = conDieta(DIA_PARCIAL)
 export const MUESTRA_DIETA_COMPLETA: DatosPdf = conDieta(DIA_COMPLETO)
 /** El máximo de §6.2, con el que el bloque tiene que compactar para caber. */
 export const MUESTRA_DIETA_MAXIMA: DatosPdf = conDieta(DIA_MAXIMO)
+/** v1.3 (§4bis): desayuno dictado, dos huecos de la IA y uno caído a plantillas. */
+export const MUESTRA_DIETA_PROPUESTA_IA: DatosPdf = conDieta(DIA_PROPUESTA_IA)

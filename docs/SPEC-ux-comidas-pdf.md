@@ -1925,6 +1925,12 @@ páginas porque es una página de texto, sin tablas ni gráficas. Si no cabe, pa
   el pie de todas las páginas añade la marca "con tus comidas" y la página de la compra usa la lista de
   §6.1. Sin ese campo el PDF es **idéntico** al de la v1.2, incluido este título. Las equivalencias y el
   resumen "Sin: … · Favoritos: …" se siguen imprimiendo igual.
+- **v1.3.2 — huecos propuestos por la IA (decisión L).** Las comidas que ha montado el modelo llevan la
+  etiqueta **"propuesta IA"** y se imprimen como las **tuya** (sus gramos ya cuadrados, el estado y
+  "estimado" cuando toque); bajo la descripción del bloque aparece entonces la línea de
+  [`SPEC-dieta-propia.md`](SPEC-dieta-propia.md) §4bis.5 ("Las comidas marcadas «propuesta IA» las ha
+  montado Claude…"), el `consejo_ia` va como nota una sola vez antes de los avisos y las preguntas de
+  vuelta **no se imprimen**: en papel no se pueden responder.
 
 ### 4.4b Página — Lista de la compra semanal
 
@@ -2074,6 +2080,12 @@ viven en `SPEC-calculo.md` o en `verify-vectors.mjs` se registran en el §7 de a
 
 
 ---
+
+### v1.3.2 — huecos propuestos por la IA (decisión L, 2026-09-12)
+
+| # | Sev. | Dónde | Resumen de lo aplicado |
+|---|---|---|---|
+| L-1 | major | §4.4 | Cuando los huecos del día los propone el modelo ([`SPEC-dieta-propia.md`](SPEC-dieta-propia.md) §4bis), esas comidas se imprimen como las dictadas —gramos ya cuadrados por el algoritmo, estado, "estimado"— con la etiqueta **"propuesta IA"**, y bajo la descripción del bloque va la línea "Las comidas marcadas «propuesta IA» las ha montado Claude con lo que nos contaste; los gramos los cuadramos nosotros.". El `consejo_ia` se imprime como nota **una sola vez** (si además llega el aviso `DIETA_CONSEJO_IA` con el mismo texto, el PDF lo descarta: en papel no hay dónde plegarlo) y las preguntas de vuelta **no se imprimen**, porque en papel no se pueden responder. Un hueco que cayó a plantillas sigue diciendo "propuesta" y su motivo va en "Apuntado". El tope de 10 páginas se mantiene. |
 
 ### v1.3 — "Cuéntanos cómo comes" (2026-09-12)
 

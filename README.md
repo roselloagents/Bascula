@@ -27,6 +27,9 @@ ceno ligero, sin hidratos; no me gusta el brócoli"— y la aplicación monta el
 - **Los huecos los monta el generador de menús de siempre** con lo que queda de tu plan, así que
   puedes contar solo el desayuno, algunas comidas o el día entero. Cada comida va marcada **"tuya"** o
   **"propuesta"**, en la pantalla y en el PDF.
+- **Y si la IA está disponible, los huecos los propone ella** con todo lo que le has contado —esas
+  comidas van marcadas **"propuesta IA"**—, mientras los gramos los sigue cuadrando nuestro algoritmo;
+  si algo no le convence, vuelve a las plantillas de siempre y te lo dice.
 - **Los gustos y las costumbres cuentan aunque no lleven gramos**: lo que no quieres ver se suma a tus
   alimentos excluidos, lo que te gusta a tus favoritos, y las costumbres se aplican donde se puede
   ("cena sin hidratos") o se apuntan donde todavía no ("hago cinco comidas").

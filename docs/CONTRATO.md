@@ -205,17 +205,30 @@ sobreviven a una interpretación.
 |---|---|---|
 | `DietaInterpretada` (con `ComidaPropia`, `AlimentoPropio`, `MacrosPropio`, `GustoPropio`, `HabitoPropio`, `EstadoAlimentoPropio`, `GrupoAprox`, `TipoHabito`) | el servicio `api/` (Claude), ya post-validado (§3.5); las correcciones por fila, la UI | `src/meals/dieta` y la UI |
 | `DiaCompuesto` (con `ComidaCompuesta`, `AlimentoAjustado`, `ModoComposicion`, `OrigenComida`) | `componerDia` en el navegador | la UI (§5.4), la compra (§6.1) y el PDF (§6.2) |
+| `PropuestaIA` (con `PreguntaIA`) y `RespuestaIA` | el servicio `api/` (Claude) en `POST /api/dieta/proponer`, ya post-validado; las respuestas las escribe la UI | `componerDia` (que cuadra los gramos), la UI (§4bis.5) y la persistencia |
 | `DatosPdf.dieta_propia?: DiaCompuesto` | la UI | **solo el PDF** |
+
+**Decisión L (§4bis), toda en campos opcionales.** `OrigenComida` gana un tercer valor, `'propuesta_ia'`:
+una comida que ha elegido el modelo y cuyos gramos ha cuadrado el algoritmo. Por dentro es como una
+comida `'propia'` —`alimentos: AlimentoAjustado[]` y `ejemplo: null`—, así que **quien ya leía
+`origen === 'propia'` para decidir si pinta alimentos o un `ejemplo` tiene que leer ahora
+`origen !== 'propuesta'`**; es el único punto en el que la decisión L toca código existente. `DiaCompuesto`
+gana `preguntas?: PreguntaIA[]`, `consejo_ia?: string | null` y `origen_huecos?: 'ia' | 'plantillas' |
+'mixto' | null`, los tres ausentes cuando los huecos se montan con plantillas. En el PDF (§4bis.5): las
+comidas `propuesta_ia` se imprimen como las `propia` con la etiqueta **"propuesta IA"**, `consejo_ia` va
+como nota —una sola vez: si además llega el aviso `DIETA_CONSEJO_IA` con el mismo texto, el PDF lo
+descarta— y las **preguntas no se imprimen**.
 
 `MacrosPropio` extiende `Macros` con `fibra` y `alcohol` (g por 100 g en `macros_100g`; gramos absolutos
 en `aporte` y en los totales). Las kcal de un alimento salen siempre de `macros_100g.kcal`, nunca de
 4/4/9, igual que en el resto del generador (§3.0).
 
-### Tres funciones nuevas, exportadas desde `src/meals/index.ts`
+### Cuatro funciones nuevas, exportadas desde `src/meals/index.ts`
 
 ```ts
-export function generarComidas(inputs: Inputs, resultado: Resultado, huecos: Comida[], variante?: number): EjemploComida[]
-export function componerDia(interpretada: DietaInterpretada, inputs: Inputs, resultado: Resultado, variante?: number): DiaCompuesto
+export function generarComidas(inputs: Inputs, resultado: Resultado, huecos: Comida[], variante?: number, sinHidratos?: boolean[]): EjemploComida[]
+export function componerDia(interpretada: DietaInterpretada, inputs: Inputs, resultado: Resultado, variante?: number, propuesta?: PropuestaIA): DiaCompuesto
+export function huecosParaProponer(interpretada: DietaInterpretada, inputs: Inputs, resultado: Resultado): { nombre: string; hora: string | null; peri: boolean; objetivo: Macros; sin_hidratos: boolean }[]
 export function compraDeDia(compuesto: DiaCompuesto, opcionalCiclo?: SeccionOpcionalCompra): ListaCompra
 ```
 
@@ -224,7 +237,16 @@ export function compraDeDia(compuesto: DiaCompuesto, opcionalCiclo?: SeccionOpci
   `generarEjemplos`. Es el motor de menús de siempre, sin la envoltura del día entero.
 - `componerDia` es **pura y determinista** (SPEC-dieta-propia §4): mismas entradas, mismo `DiaCompuesto`
   bit a bit. Conserva las comidas dictadas (ajustando los gramos solo si hace falta), monta los huecos que
-  falten con `generarComidas` y emite los avisos de §4.4 en su orden de prioridad.
+  falten con `generarComidas` y emite los avisos de §4.4 en su orden de prioridad. **Con el quinto
+  argumento `propuesta`** (§4bis.3) cada hueco lo llenan los alimentos del modelo y el solver de §4.2 les
+  cuadra los gramos; el hueco que venga vacío o que tras el cuadre quede fuera del ±15 % en kcal o en
+  proteína cae al generador de plantillas. Sin ese argumento se comporta exactamente como en la v1.3.0:
+  **llamar a `componerDia` con cuatro argumentos sigue siendo válido y da el mismo resultado de siempre.**
+- `huecosParaProponer` devuelve los huecos que hay que pedirle al modelo —los mismos que montaría
+  `generarComidas`, con el objetivo ya repartido por §4.3.2 y con `sin_hidratos` hueco a hueco—, con la
+  forma estructural de `HuecoPropuesta` (`src/dieta/api.ts`). De ahí salen el cuerpo de
+  `POST /api/dieta/proponer` y la `huecos_clave` que decide si una propuesta guardada se puede reutilizar
+  (`claveHuecos` en `src/dieta/almacen.ts`: nombres y objetivos redondeados, sin hora ni `peri`).
 - `compraDeDia` devuelve una `ListaCompra` con la forma de siempre. Los alimentos dictados que no están en
   `foods.json` van con `alimento_id: 'propio:{slug}:{estado}'`, `envases: 0`, `envase_descripcion: ''` y
   `dura_dias: 0`: **la pantalla y el PDF imprimen "—"** en "Comprar" y en "Dura" (`textoComprar` /
@@ -238,6 +260,11 @@ export function compraDeDia(compuesto: DiaCompuesto, opcionalCiclo?: SeccionOpci
   activa: boolean, gustos_sumados: { excluidos: string[]; favoritos: string[] } }`. No depende de
   `firmaPlan`: con otro plan se vuelve a componer, porque `componerDia` es pura. "Empezar de cero" la
   borra; "Editar tus datos", no. `cargarDieta` tolera basura.
+  **La misma clave y la misma versión en la v1.3.2** (§4bis.4): se le añade un campo **opcional**
+  `propuesta?: { variante: number; huecos_clave: string; propuesta: PropuestaIA; respuestas: RespuestaIA[] }`.
+  Lo guardado por la v1.3.0 y la v1.3.1 se sigue leyendo tal cual (sin `propuesta` se pide otra, o se
+  montan los huecos con plantillas), y una `propuesta` ilegible se descarta sin tirar el resto de la
+  dieta. `huecos_clave` que ya no coincide con los huecos de ahora ⇒ la propuesta **no** se reutiliza.
 - `bascula:dieta:borrador:v1` = el texto del cuadro mientras se escribe (debounce de 500 ms). Se borra con
   "Empezar de cero" y al validar una interpretación.
 
@@ -252,12 +279,21 @@ nginx en `/api/*` y en una red interna: **la clave nunca llega al navegador**. R
 | `GET /api/salud` | — | `{ ok: true, version: '1.3.0' }` (es el `HEALTHCHECK`) |
 | `GET /api/capacidades` | — | `{ interpretar: boolean, modelo: string \| null, token: string \| null }` |
 | `POST /api/dieta/interpretar` | `{ texto: string (10–4 000), comidas_plan: string[] (2–6) }`, ≤ 16 KB, cabecera `X-Bascula-Token` | `DietaInterpretada` + `modelo: string` |
+| `POST /api/dieta/proponer` (v1.3.2, §4bis.1) | `{ huecos: HuecoPropuesta[] (1–6), contexto: ContextoPropuesta }`, ≤ 32 KB, cabecera `X-Bascula-Token` | `{ comidas: ComidaPropia[] (una por hueco, en el mismo orden), consejo: string \| null, preguntas: PreguntaIA[] (≤ 2), modelo: string }` |
+
+`proponer` comparte con `interpretar` la lista blanca de modelos, el token efímero, la cuota por IP, la
+global y el presupuesto en euros: **una propuesta cuenta como una interpretación**. Los alimentos que
+devuelve pasan por la misma post-validación de §3.5 (macros del catálogo, unidad, estado y saneado), así
+que el navegador recibe `ComidaPropia` de verdad y **los gramos definitivos los pone su propio algoritmo**,
+nunca el modelo. En el cuerpo viajan los huecos (nombre, hora, `peri`, objetivo y `sin_hidratos`), lo
+dictado, los gustos, los hábitos, el perfil dietético, las condiciones `diabetes` / `cardiaca` /
+`hipertension`, las respuestas a preguntas anteriores y la `variante`.
 
 Códigos de error: `400 TEXTO_INVALIDO`, `401 TOKEN_INVALIDO`, `403 ORIGEN_NO_ADMITIDO`,
 `404 NO_EXISTE`, `405 METODO_NO_ADMITIDO`, `413 CUERPO_GRANDE`, `415 TIPO_NO_ADMITIDO`,
-`422 SIN_CONTENIDO`, `429 CUOTA_IP` / `CUOTA_GLOBAL` / `PRESUPUESTO`, `502 MODELO_NO_DISPONIBLE`,
-`503 SIN_CLAVE`, `504 TIEMPO_AGOTADO`. **No viaja ningún otro dato del usuario** (ni sexo, ni edad, ni
-peso, ni objetivo) y el servidor no guarda ni registra el texto. Sin `ANTHROPIC_API_KEY`,
+`422 SIN_CONTENIDO` (y `422 PROPUESTA_VACIA` en `proponer`), `429 CUOTA_IP` / `CUOTA_GLOBAL` /
+`PRESUPUESTO`, `502 MODELO_NO_DISPONIBLE`, `503 SIN_CLAVE`, `504 TIEMPO_AGOTADO`. **No viaja ningún otro
+dato del usuario** (ni sexo, ni edad, ni peso, ni objetivo, ni las kcal del plan) y el servidor no guarda ni registra el texto. Sin `ANTHROPIC_API_KEY`,
 `capacidades` devuelve `interpretar: false` y la pantalla dice que la función no está disponible. El resto
 —presupuesto en euros, cuotas por IP, token efímero, tiempos 90/75/60— está en `SPEC-dieta-propia.md` §2,
 §3 y §7.

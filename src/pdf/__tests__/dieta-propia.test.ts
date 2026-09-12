@@ -10,6 +10,7 @@ import {
   MUESTRA_DIETA_COMPLETA,
   MUESTRA_DIETA_MAXIMA,
   MUESTRA_DIETA_PARCIAL,
+  MUESTRA_DIETA_PROPUESTA_IA,
 } from '../__fixtures__/dieta-propia'
 import { textoDelPdf } from './utiles'
 
@@ -23,7 +24,7 @@ async function paginas(datos: typeof MUESTRA_COMPLETA): Promise<number> {
 }
 
 describe('PDF con dieta propia (§6.2)', () => {
-  it('escribe los tres PDF de muestra', async () => {
+  it('escribe los cuatro PDF de muestra', async () => {
     await expect(
       renderToFile(elementoPlan(MUESTRA_DIETA_PARCIAL), `${SALIDA}/plan-dieta-parcial.pdf`),
     ).resolves.toBeDefined()
@@ -33,13 +34,17 @@ describe('PDF con dieta propia (§6.2)', () => {
     await expect(
       renderToFile(elementoPlan(MUESTRA_DIETA_MAXIMA), `${SALIDA}/plan-dieta-maxima.pdf`),
     ).resolves.toBeDefined()
-  }, 180_000)
+    await expect(
+      renderToFile(elementoPlan(MUESTRA_DIETA_PROPUESTA_IA), `${SALIDA}/plan-dieta-ia.pdf`),
+    ).resolves.toBeDefined()
+  }, 240_000)
 
-  it('los tres casos caben en el máximo de 10 páginas de §4.4b', async () => {
+  it('los cuatro casos caben en el máximo de 10 páginas de §4.4b', async () => {
     for (const [nombre, datos] of [
       ['parcial', MUESTRA_DIETA_PARCIAL],
       ['completa', MUESTRA_DIETA_COMPLETA],
       ['máxima', MUESTRA_DIETA_MAXIMA],
+      ['propuesta IA', MUESTRA_DIETA_PROPUESTA_IA],
     ] as const) {
       const n = await paginas(datos)
       expect(n, `${nombre}: ${n} páginas`).toBeLessThanOrEqual(10)
@@ -58,6 +63,8 @@ describe('PDF con dieta propia (§6.2)', () => {
     expect(texto).toContain('con tus comidas')
     // Nota de la tabla de reparto (§5.1) en modo completa.
     expect(texto).toContain('tus comidas van por otros porcentajes')
+    // Sin huecos de la IA, ni etiqueta ni línea de §4bis.5.
+    expect(texto).not.toContain('propuesta IA')
     expect(texto).not.toContain('undefined')
     expect(texto).not.toMatch(/NaN/)
   }, 120_000)
@@ -106,6 +113,39 @@ describe('PDF con dieta propia (§6.2)', () => {
     expect(texto).toContain('Las cantidades salen de tu menú con lo tuyo dentro.')
     // El guion largo se codifica como 0x97 en WinAnsi: se busca ese byte, no el carácter Unicode.
     expect(texto).toContain(String.fromCharCode(0x97))
+  }, 120_000)
+
+  it('imprime los huecos de la IA como los dictados, con su etiqueta y su línea (§4bis.5)', async () => {
+    const texto = await textoDelPdf(await renderToBuffer(elementoPlan(MUESTRA_DIETA_PROPUESTA_IA)))
+    // Etiqueta de §4bis.5 en las comidas del modelo, y la del generador sin tocar.
+    expect(texto).toContain('Comida · 14:00 · propuesta IA')
+    expect(texto).toContain('Cena · 21:00 · propuesta IA')
+    expect(texto).toContain('Merienda · 17:30 · cerca de tu entreno · propuesta')
+    expect(texto).toContain('Desayuno · 08:00 · tuya')
+    // La línea bajo la descripción del bloque.
+    expect(texto).toContain('Las comidas marcadas «propuesta IA» las ha montado Claude')
+    // Los alimentos propuestos se imprimen como los dictados: gramos finales, estado y "estimado".
+    expect(texto).toContain('Pechuga de pollo')
+    expect(texto).toContain('Pan de centeno de panadería')
+    expect(texto).toContain('ya cocido')
+    expect(texto).toContain('estimado')
+    // El hueco que cayó a plantillas se dice en "Apuntado".
+    expect(texto).toContain('Para Merienda no nos ha convencido la propuesta')
+    expect(texto).not.toContain('undefined')
+    expect(texto).not.toMatch(/NaN/)
+  }, 120_000)
+
+  it('el consejo del modelo va una sola vez y las preguntas no se imprimen (§4bis.5)', async () => {
+    const texto = await textoDelPdf(await renderToBuffer(elementoPlan(MUESTRA_DIETA_PROPUESTA_IA)))
+    const consejo = 'se quedan cortos de fibra y de potasio'
+    expect(texto).toContain(consejo)
+    // El mismo texto llega como `consejo_ia` y como aviso `DIETA_CONSEJO_IA`: en papel va una vez.
+    expect(texto.split(consejo)).toHaveLength(2)
+    // Las preguntas de vuelta no se pueden responder en papel: no se imprimen.
+    expect(texto).not.toContain('¿Metemos alguna verdura que sí te guste?')
+    expect(texto).not.toContain('Una pregunta antes de seguir')
+    expect(texto).not.toContain('Solo en la cena')
+    expect(texto).not.toContain('Prefiero variar')
   }, 120_000)
 
   it('sin `dieta_propia` el PDF es el de la v1.2', async () => {
