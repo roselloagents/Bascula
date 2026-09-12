@@ -28,7 +28,12 @@ export const VERSION = '1.3.0'
 export const MAX_CUERPO = 16 * 1024
 /** Tope del cuerpo de `/api/dieta/proponer` (§4bis.1): lleva los huecos y todo el contexto. */
 export const MAX_CUERPO_PROPONER = 32 * 1024
-/** Presupuesto total del servidor: 35 s del primer intento + 20 s del reintento, con holgura. */
+/**
+ * Presupuesto total del servidor (§2.3): 60 s del primer intento + 10 s del reintento en la
+ * lectura del texto dictado, 50 s + 20 s en la propuesta (§4bis.1). En los dos casos suman
+ * exactamente estos 70 000 ms: no hay holgura, así que quien toque los tiempos de una llamada
+ * tiene que mirar también los de la otra.
+ */
 export const MS_PRESUPUESTO = 70_000
 
 export interface Config {
@@ -293,14 +298,17 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
       return fallo(res, 401, 'TOKEN_INVALIDO')
     }
 
+    // Código propio: los motivos de un 400 aquí (0 o más de 6 huecos, objetivo fuera de rango,
+    // hueco sin nombre, JSON roto) no tienen nada que ver con el texto dictado, y el front pintaba
+    // "El texto es demasiado corto o demasiado largo" delante de alguien que no había escrito nada.
     let leido: unknown
     try {
       leido = JSON.parse(cuerpo)
     } catch {
-      return fallo(res, 400, 'TEXTO_INVALIDO')
+      return fallo(res, 400, 'HUECOS_INVALIDOS')
     }
     const datos = validarEntradaProponer(leido)
-    if (datos === null) return fallo(res, 400, 'TEXTO_INVALIDO')
+    if (datos === null) return fallo(res, 400, 'HUECOS_INVALIDOS')
 
     // Cuota compartida con interpretar: una propuesta cuesta lo mismo que una lectura (§4bis.6).
     const motivo = limites.comprobar(ip)
@@ -314,6 +322,9 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
 
     let euros = 0
     let uso: UsoModelo | null = null
+    // `true` si alguna de las llamadas se ha cobrado por estimación (se agotó por tiempo y no hubo
+    // `usage` que leer): el coste del log es entonces una cota, no una medida.
+    let estimado = false
     const resultado = await proponerHuecos({
       cliente: cliente as ClienteModelo,
       modelo: config.modelo,
@@ -324,9 +335,10 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
       senalCliente: abortador.signal,
       limiteMs: entrada + MS_PRESUPUESTO,
       ahora,
-      alFacturar: (coste, usoLlamada) => {
+      alFacturar: (coste, usoLlamada, esEstimado) => {
         euros += coste
-        uso = usoLlamada
+        if (usoLlamada !== null) uso = usoLlamada
+        if (esEstimado === true) estimado = true
         limites.registrarCoste(coste)
       },
     })
@@ -342,6 +354,7 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
       intentos: resultado.intentos,
       uso,
       coste_eur: Math.round(euros * 1e6) / 1e6,
+      coste_estimado: estimado,
       latencia_ms: ahora() - entrada,
     }
 
@@ -356,6 +369,7 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
           consejo: propuesta.consejo !== null,
           retirados: propuesta.retirados.length,
           descartados: propuesta.descartados,
+          huecos_vacios: propuesta.vacios,
         }),
       )
       return responder(res, 200, {
@@ -407,6 +421,7 @@ export const MENSAJES: Record<string, string> = {
   TIPO_NO_ADMITIDO: 'Se esperaba application/json.',
   SIN_CONTENIDO: 'No hemos reconocido ninguna comida, gusto ni costumbre.',
   PROPUESTA_VACIA: 'No hemos podido montar una propuesta con esto.',
+  HUECOS_INVALIDOS: 'No hemos podido preparar la petición. Vuelve a intentarlo.',
   CUOTA_IP: 'Has hecho muchas interpretaciones hoy. Vuelve a intentarlo mañana.',
   CUOTA_GLOBAL: 'Estamos recibiendo muchas peticiones. Espera un minuto y vuelve a intentarlo.',
   PRESUPUESTO: 'Hoy ya no podemos leer más textos. Vuelve a intentarlo mañana.',
