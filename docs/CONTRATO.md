@@ -246,7 +246,9 @@ export function compraDeDia(compuesto: DiaCompuesto, opcionalCiclo?: SeccionOpci
   `generarComidas`, con el objetivo ya repartido por §4.3.2 y con `sin_hidratos` hueco a hueco—, con la
   forma estructural de `HuecoPropuesta` (`src/dieta/api.ts`). De ahí salen el cuerpo de
   `POST /api/dieta/proponer` y la `huecos_clave` que decide si una propuesta guardada se puede reutilizar
-  (`claveHuecos` en `src/dieta/almacen.ts`: nombres y objetivos redondeados, sin hora ni `peri`).
+  (`claveHuecos` en `src/dieta/almacen.ts`: nombres y objetivos **en cubos de 25 kcal y 5 g por macro**,
+  sin hora ni `peri`; con una huella exacta, corregir un gramo de una comida dictada invalidaba la
+  propuesta y pagaba otra llamada).
 - `compraDeDia` devuelve una `ListaCompra` con la forma de siempre. Los alimentos dictados que no están en
   `foods.json` van con `alimento_id: 'propio:{slug}:{estado}'`, `envases: 0`, `envase_descripcion: ''` y
   `dura_dias: 0`: **la pantalla y el PDF imprimen "—"** en "Comprar" y en "Dura" (`textoComprar` /
@@ -261,7 +263,8 @@ export function compraDeDia(compuesto: DiaCompuesto, opcionalCiclo?: SeccionOpci
   `firmaPlan`: con otro plan se vuelve a componer, porque `componerDia` es pura. "Empezar de cero" la
   borra; "Editar tus datos", no. `cargarDieta` tolera basura.
   **La misma clave y la misma versión en la v1.3.2** (§4bis.4): se le añade un campo **opcional**
-  `propuesta?: { variante: number; huecos_clave: string; propuesta: PropuestaIA; respuestas: RespuestaIA[] }`.
+  `propuesta?: { variante: number; huecos_clave: string; propuesta: PropuestaIA; respuestas: RespuestaIA[];
+  cerradas?: string[] }` (`cerradas`: las preguntas que se cerraron con "Seguir así", para que no vuelvan).
   Lo guardado por la v1.3.0 y la v1.3.1 se sigue leyendo tal cual (sin `propuesta` se pide otra, o se
   montan los huecos con plantillas), y una `propuesta` ilegible se descarta sin tirar el resto de la
   dieta. `huecos_clave` que ya no coincide con los huecos de ahora ⇒ la propuesta **no** se reutiliza.
@@ -279,19 +282,21 @@ nginx en `/api/*` y en una red interna: **la clave nunca llega al navegador**. R
 | `GET /api/salud` | — | `{ ok: true, version: '1.3.0' }` (es el `HEALTHCHECK`) |
 | `GET /api/capacidades` | — | `{ interpretar: boolean, modelo: string \| null, token: string \| null }` |
 | `POST /api/dieta/interpretar` | `{ texto: string (10–4 000), comidas_plan: string[] (2–6) }`, ≤ 16 KB, cabecera `X-Bascula-Token` | `DietaInterpretada` + `modelo: string` |
-| `POST /api/dieta/proponer` (v1.3.2, §4bis.1) | `{ huecos: HuecoPropuesta[] (1–6), contexto: ContextoPropuesta }`, ≤ 32 KB, cabecera `X-Bascula-Token` | `{ comidas: ComidaPropia[] (una por hueco, en el mismo orden), consejo: string \| null, preguntas: PreguntaIA[] (≤ 2), modelo: string }` |
+| `POST /api/dieta/proponer` (v1.3.2, §4bis.1) | `{ huecos: HuecoPropuesta[] (1–6), contexto: ContextoPropuesta }`, ≤ 32 KB, cabecera `X-Bascula-Token` | `{ comidas: ComidaPropia[] (una por hueco, en el mismo orden; alimentos vacío en el hueco que el modelo no supo montar), consejo: string \| null, preguntas: PreguntaIA[] (≤ 2), modelo: string }` |
 
 `proponer` comparte con `interpretar` la lista blanca de modelos, el token efímero, la cuota por IP, la
 global y el presupuesto en euros: **una propuesta cuenta como una interpretación**. Los alimentos que
 devuelve pasan por la misma post-validación de §3.5 (macros del catálogo, unidad, estado y saneado), así
 que el navegador recibe `ComidaPropia` de verdad y **los gramos definitivos los pone su propio algoritmo**,
-nunca el modelo. En el cuerpo viajan los huecos (nombre, hora, `peri`, objetivo y `sin_hidratos`), lo
+nunca el modelo. Esa post-validación también **retira los excluidos por nombre**, no solo por `alimento_id`,
+y **descarta lo que contradice la base o las restricciones** del perfil según los `tags` del catálogo. En el cuerpo viajan los huecos (nombre, hora, `peri`, objetivo y `sin_hidratos`), lo
 dictado, los gustos, los hábitos, el perfil dietético, las condiciones `diabetes` / `cardiaca` /
 `hipertension`, las respuestas a preguntas anteriores y la `variante`.
 
-Códigos de error: `400 TEXTO_INVALIDO`, `401 TOKEN_INVALIDO`, `403 ORIGEN_NO_ADMITIDO`,
-`404 NO_EXISTE`, `405 METODO_NO_ADMITIDO`, `413 CUERPO_GRANDE`, `415 TIPO_NO_ADMITIDO`,
-`422 SIN_CONTENIDO` (y `422 PROPUESTA_VACIA` en `proponer`), `429 CUOTA_IP` / `CUOTA_GLOBAL` /
+Códigos de error: `400 TEXTO_INVALIDO` (en `proponer`, `400 HUECOS_INVALIDOS`), `401 TOKEN_INVALIDO`,
+`403 ORIGEN_NO_ADMITIDO`, `404 NO_EXISTE`, `405 METODO_NO_ADMITIDO`, `413 CUERPO_GRANDE`,
+`415 TIPO_NO_ADMITIDO`, `422 SIN_CONTENIDO` (y `422 PROPUESTA_VACIA` en `proponer`, **solo cuando TODOS
+los huecos quedan vacíos**), `429 CUOTA_IP` / `CUOTA_GLOBAL` /
 `PRESUPUESTO`, `502 MODELO_NO_DISPONIBLE`, `503 SIN_CLAVE`, `504 TIEMPO_AGOTADO`. **No viaja ningún otro
 dato del usuario** (ni sexo, ni edad, ni peso, ni objetivo, ni las kcal del plan) y el servidor no guarda ni registra el texto. Sin `ANTHROPIC_API_KEY`,
 `capacidades` devuelve `interpretar: false` y la pantalla dice que la función no está disponible. El resto
