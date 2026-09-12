@@ -1,8 +1,9 @@
-// Cliente de `/api/*` (SPEC-dieta-propia §2.2, §2.3 y §5.3) con un `fetch` falso: ninguna
-// prueba toca la red ni la API de Anthropic.
+// Cliente de `/api/*` (SPEC-dieta-propia §2.2, §2.3, §4bis.1 y §5.3) con un `fetch` falso:
+// ninguna prueba toca la red ni la API de Anthropic.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  type ContextoPropuesta,
   ERROR_CUOTA,
   ERROR_GENERICO,
   ERROR_NO_DISPONIBLE,
@@ -11,10 +12,13 @@ import {
   ERROR_TEXTO,
   ERROR_TIEMPO,
   ErrorApi,
+  type HuecoPropuesta,
   capacidades,
   esCancelado,
   interpretarDieta,
   mensajeDeError,
+  proponerHuecos,
+  sinModelo,
 } from '../api'
 
 // ---- Reloj falso ----------------------------------------------------------
@@ -255,5 +259,172 @@ describe('mensajeDeError', () => {
     } as unknown as Response)
     const e = await fallo('texto largo de verdad', ['Comida'], 'tok')
     expect(mensajeDeError(e)).toBe(ERROR_RED)
+  })
+})
+
+// ---- `POST /api/dieta/proponer` (§4bis.1) --------------------------------
+
+const HUECOS: HuecoPropuesta[] = [
+  {
+    nombre: 'Comida',
+    hora: '14:00',
+    peri: false,
+    objetivo: { kcal: 620, prot: 48, carb: 62, fat: 20 },
+    sin_hidratos: false,
+  },
+]
+
+const CONTEXTO: ContextoPropuesta = {
+  texto: 'Desayuno siempre 250 g de kéfir',
+  comidas_propias: [{ nombre: 'Desayuno', alimentos: ['Kéfir natural entero 250 g'] }],
+  gustos: [],
+  habitos: [],
+  perfil: {
+    base: 'omnivoro',
+    restricciones: [],
+    low_carb: false,
+    excluidos: [],
+    favoritos: [],
+  },
+  condiciones: [],
+  menu_sencillo: false,
+  respuestas: [],
+  variante: 0,
+}
+
+const PROPUESTA = {
+  comidas: [{ nombre: 'Comida', alimentos: [] }],
+  consejo: 'Solo pollo y arroz cuadra en calorías, pero te deja sin fibra.',
+  preguntas: [{ texto: '¿Metemos alguna verdura?', opciones: ['No, así está bien', 'Sí'] }],
+  modelo: 'claude-sonnet-5',
+}
+
+/** Corre `proponerHuecos` y devuelve el error que lanza. */
+async function falloProponer(...args: Parameters<typeof proponerHuecos>): Promise<ErrorApi> {
+  try {
+    await proponerHuecos(...args)
+  } catch (e) {
+    return e as ErrorApi
+  }
+  throw new Error('esperábamos un error')
+}
+
+describe('proponerHuecos (§4bis.1)', () => {
+  it('manda huecos y contexto a /api/dieta/proponer con el token', async () => {
+    falsoFetch.mockResolvedValue(respuesta(200, PROPUESTA))
+    const salida = await proponerHuecos(HUECOS, CONTEXTO, 'tok')
+    expect(salida.modelo).toBe('claude-sonnet-5')
+    expect(salida.preguntas).toHaveLength(1)
+    const [url, init] = falsoFetch.mock.calls[0]
+    expect(url).toBe('/api/dieta/proponer')
+    expect(init.method).toBe('POST')
+    expect(init.headers['X-Bascula-Token']).toBe('tok')
+    expect(JSON.parse(init.body)).toEqual({ huecos: HUECOS, contexto: CONTEXTO })
+  })
+
+  it('el cuerpo no lleva ningún dato personal (§7)', async () => {
+    falsoFetch.mockResolvedValue(respuesta(200, PROPUESTA))
+    await proponerHuecos(HUECOS, CONTEXTO, 'tok')
+    const cuerpo = falsoFetch.mock.calls[0][1].body as string
+    for (const campo of ['sexo', 'edad', 'peso', 'altura', 'objetivo_efectivo', 'kcal_totales']) {
+      expect(cuerpo).not.toContain(campo)
+    }
+  })
+
+  it('lo guardado va sin el modelo (§4bis.4)', async () => {
+    falsoFetch.mockResolvedValue(respuesta(200, PROPUESTA))
+    const salida = await proponerHuecos(HUECOS, CONTEXTO, 'tok')
+    const guardable = sinModelo(salida)
+    expect(guardable).toEqual({
+      comidas: PROPUESTA.comidas,
+      consejo: PROPUESTA.consejo,
+      preguntas: PROPUESTA.preguntas,
+    })
+    expect('modelo' in guardable).toBe(false)
+  })
+
+  it('cada código de error tiene el texto de la §5.3, incluido PROPUESTA_VACIA', async () => {
+    const casos: [number, string, string][] = [
+      [422, 'PROPUESTA_VACIA', ERROR_SIN_CONTENIDO],
+      [429, 'CUOTA_IP', ERROR_CUOTA],
+      [503, 'SIN_CLAVE', ERROR_NO_DISPONIBLE],
+      [502, 'MODELO_NO_DISPONIBLE', ERROR_GENERICO],
+      [504, 'TIEMPO_AGOTADO', ERROR_TIEMPO],
+    ]
+    for (const [estado, codigo, texto] of casos) {
+      falsoFetch.mockReset()
+      falsoFetch.mockResolvedValue(respuesta(estado, errorApi(codigo)))
+      const e = await falloProponer(HUECOS, CONTEXTO, 'tok')
+      expect(e.estado).toBe(estado)
+      expect(e.codigo).toBe(codigo)
+      expect(mensajeDeError(e)).toBe(texto)
+    }
+  })
+
+  it('ante 401 pide otro token y reintenta una vez', async () => {
+    falsoFetch
+      .mockResolvedValueOnce(respuesta(401, errorApi('TOKEN_INVALIDO')))
+      .mockResolvedValueOnce(respuesta(200, { interpretar: true, modelo: 'm', token: 'nuevo' }))
+      .mockResolvedValueOnce(respuesta(200, PROPUESTA))
+    const salida = await proponerHuecos(HUECOS, CONTEXTO, 'viejo')
+    expect(salida.modelo).toBe('claude-sonnet-5')
+    expect(falsoFetch).toHaveBeenCalledTimes(3)
+    expect(falsoFetch.mock.calls[1][0]).toBe('/api/capacidades')
+    expect(falsoFetch.mock.calls[2][0]).toBe('/api/dieta/proponer')
+    expect(falsoFetch.mock.calls[2][1].headers['X-Bascula-Token']).toBe('nuevo')
+  })
+
+  it('si el 401 se repite, el error sube y el texto es el genérico', async () => {
+    falsoFetch
+      .mockResolvedValueOnce(respuesta(401, errorApi('TOKEN_INVALIDO')))
+      .mockResolvedValueOnce(respuesta(200, { interpretar: true, modelo: 'm', token: 'nuevo' }))
+      .mockResolvedValueOnce(respuesta(401, errorApi('TOKEN_INVALIDO')))
+    const e = await falloProponer(HUECOS, CONTEXTO, 'viejo')
+    expect(falsoFetch).toHaveBeenCalledTimes(3)
+    expect(e.estado).toBe(401)
+    expect(mensajeDeError(e)).toBe(ERROR_GENERICO)
+  })
+
+  it('un fallo de red da el texto de conexión', async () => {
+    falsoFetch.mockRejectedValue(new TypeError('failed to fetch'))
+    const e = await falloProponer(HUECOS, CONTEXTO, 'tok')
+    expect(e.estado).toBe(0)
+    expect(mensajeDeError(e)).toBe(ERROR_RED)
+  })
+
+  it('cerrar el bloque aborta y no enseña ningún mensaje', async () => {
+    const control = new AbortController()
+    falsoFetch.mockImplementation(
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_, rechazar) => {
+          init.signal.addEventListener('abort', () => {
+            const error = new Error('abortado')
+            error.name = 'AbortError'
+            rechazar(error)
+          })
+        }),
+    )
+    const promesa = falloProponer(HUECOS, CONTEXTO, 'tok', control.signal)
+    control.abort()
+    const e = await promesa
+    expect(esCancelado(e)).toBe(true)
+    expect(mensajeDeError(e)).toBe('')
+  })
+
+  it('el mismo tope de 75 s corta con el texto de "hemos tardado demasiado"', async () => {
+    umbralMs = 200_000
+    falsoFetch.mockImplementation(
+      (_url: string, init: { signal: AbortSignal }) =>
+        new Promise((_, rechazar) => {
+          init.signal.addEventListener('abort', () => {
+            const error = new Error('abortado')
+            error.name = 'AbortError'
+            rechazar(error)
+          })
+        }),
+    )
+    const e = await falloProponer(HUECOS, CONTEXTO, 'tok')
+    expect(e.codigo).toBe('TIEMPO_AGOTADO')
+    expect(mensajeDeError(e)).toBe(ERROR_TIEMPO)
   })
 })

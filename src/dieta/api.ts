@@ -1,8 +1,17 @@
-// Cliente HTTP de "Cuéntanos cómo comes" (SPEC-dieta-propia §2.2, §2.3 y §5.3).
+// Cliente HTTP de "Cuéntanos cómo comes" (SPEC-dieta-propia §2.2, §2.3, §4bis.1 y §5.3).
 // Aquí no se interpreta nada: solo se habla con `/api/*`, se traduce el error a un texto
 // normativo y se deja el resto al componente. Ninguna clave viaja por el navegador.
 
-import type { DietaInterpretada } from '../engine/types'
+import type {
+  DietaInterpretada,
+  GustoPropio,
+  HabitoPropio,
+  Macros,
+  PreferenciaBase,
+  PropuestaIA,
+  RespuestaIA,
+  Restriccion,
+} from '../engine/types'
 
 /** Tope de tiempo del cliente (§2.3: nginx 90 s > cliente 75 s > servidor 60 s). */
 export const TOPE_INTERPRETAR_MS = 75_000
@@ -22,6 +31,73 @@ export interface Capacidades {
 /** Respuesta de `POST /api/dieta/interpretar` (§2.3): la dieta interpretada más el modelo. */
 export interface RespuestaInterpretar extends DietaInterpretada {
   modelo: string
+}
+
+// ---- `POST /api/dieta/proponer` (§4bis.1) --------------------------------
+
+/**
+ * Un hueco del día tal y como viaja al servicio: nombre y hora del plan, si es la comida de
+ * alrededor del entrenamiento, el objetivo ya repartido (§4.3.2) y si el hueco va sin hidratos.
+ * De 1 a 6 por petición. **No lleva nada del perfil de la persona.**
+ */
+export interface HuecoPropuesta {
+  nombre: string
+  hora: string | null
+  peri: boolean
+  objetivo: Macros
+  sin_hidratos: boolean
+}
+
+/** Las condiciones que sí viajan (§4bis.1); el resto se queda en el navegador. */
+export type CondicionPropuesta = 'diabetes' | 'cardiaca' | 'hipertension'
+
+/** Una comida ya dictada, resumida en líneas "Kéfir natural entero 250 g" (§4bis.1). */
+export interface ComidaPropiaTexto {
+  nombre: string
+  alimentos: string[]
+}
+
+/** El perfil dietético que viaja: base, restricciones y las dos listas del paso 14 (§4bis.1). */
+export interface PerfilPropuesta {
+  base: PreferenciaBase
+  restricciones: Restriccion[]
+  low_carb: boolean
+  excluidos: string[]
+  favoritos: string[]
+}
+
+/**
+ * El contexto de §4bis.1. Lo monta `contextoParaProponer` (`src/dieta/contexto.ts`).
+ * **No viaja** sexo, edad, peso, objetivo ni kcal totales: solo lo que hace falta para elegir
+ * alimentos (§7).
+ */
+export interface ContextoPropuesta {
+  texto: string
+  comidas_propias: ComidaPropiaTexto[]
+  gustos: GustoPropio[]
+  habitos: HabitoPropio[]
+  perfil: PerfilPropuesta
+  condiciones: CondicionPropuesta[]
+  menu_sencillo: boolean
+  respuestas: RespuestaIA[]
+  variante: number
+}
+
+/** Respuesta de `POST /api/dieta/proponer` (§4bis.1): la propuesta más el modelo que la firmó. */
+export interface RespuestaProponer extends PropuestaIA {
+  modelo: string
+}
+
+/**
+ * La propuesta sin el `modelo`, que es lo único que se guarda (§4bis.4): el nombre del modelo no
+ * pinta nada en el navegador y guardarlo sería quedarse con un dato del servicio.
+ */
+export function sinModelo(respuesta: RespuestaProponer): PropuestaIA {
+  return {
+    comidas: respuesta.comidas,
+    consejo: respuesta.consejo,
+    preguntas: respuesta.preguntas,
+  }
 }
 
 /**
@@ -216,13 +292,13 @@ export async function capacidades(signal?: AbortSignal): Promise<Capacidades> {
   return SIN_CAPACIDADES
 }
 
-/** Una sola llamada a `/api/dieta/interpretar`, sin reintentos. */
-async function pedirInterpretacion(
-  texto: string,
-  comidasPlan: string[],
+/** Un solo POST con cuerpo JSON, sin reintentos. Lo comparten los dos endpoints del modelo. */
+async function pedirJson<T>(
+  ruta: string,
+  cuerpo: unknown,
   token: string | null,
   limite: Limite,
-): Promise<RespuestaInterpretar> {
+): Promise<T> {
   const cabeceras: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -230,11 +306,11 @@ async function pedirInterpretacion(
   if (token !== null && token !== '') cabeceras['X-Bascula-Token'] = token
   let respuesta: Response
   try {
-    respuesta = await fetch('/api/dieta/interpretar', {
+    respuesta = await fetch(ruta, {
       method: 'POST',
       headers: cabeceras,
       cache: 'no-store',
-      body: JSON.stringify({ texto, comidas_plan: comidasPlan }),
+      body: JSON.stringify(cuerpo),
       signal: limite.signal,
     })
   } catch (fallo) {
@@ -244,9 +320,31 @@ async function pedirInterpretacion(
     throw new ErrorApi(respuesta.status, await codigoDeRespuesta(respuesta))
   }
   try {
-    return (await respuesta.json()) as RespuestaInterpretar
+    return (await respuesta.json()) as T
   } catch (fallo) {
     throw errorDeFallo(fallo, limite)
+  }
+}
+
+/**
+ * Ante `401` vuelve a pedir el token **una** vez y reintenta (§2.3). Si repite, el error sube tal
+ * cual y el texto que ve el usuario es el genérico (§5.3).
+ */
+async function conTokenRenovado<T>(
+  token: string | null,
+  limite: Limite,
+  llamar: (token: string | null) => Promise<T>,
+): Promise<T> {
+  try {
+    return await llamar(token)
+  } catch (fallo) {
+    if (!(fallo instanceof ErrorApi) || fallo.estado !== 401) throw fallo
+    const nuevas = await capacidades(limite.signal)
+    // Si el corte llegó mientras se pedía el token, manda el corte: enseñar "algo ha fallado"
+    // a quien acaba de pulsar "Cancelar" es mentir.
+    if (limite.signal.aborted) throw errorDeFallo(new Error('abort'), limite)
+    if (!nuevas.interpretar || nuevas.token === null) throw fallo
+    return await llamar(nuevas.token)
   }
 }
 
@@ -266,17 +364,41 @@ export async function interpretarDieta(
 ): Promise<RespuestaInterpretar> {
   const limite = conTope(TOPE_INTERPRETAR_MS, signal)
   try {
-    try {
-      return await pedirInterpretacion(texto, comidasPlan, token, limite)
-    } catch (fallo) {
-      if (!(fallo instanceof ErrorApi) || fallo.estado !== 401) throw fallo
-      const nuevas = await capacidades(limite.signal)
-      // Si el corte llegó mientras se pedía el token, manda el corte: enseñar "algo ha fallado"
-      // a quien acaba de pulsar "Cancelar" es mentir.
-      if (limite.signal.aborted) throw errorDeFallo(new Error('abort'), limite)
-      if (!nuevas.interpretar || nuevas.token === null) throw fallo
-      return await pedirInterpretacion(texto, comidasPlan, nuevas.token, limite)
-    }
+    return await conTokenRenovado(token, limite, (usado) =>
+      pedirJson<RespuestaInterpretar>(
+        '/api/dieta/interpretar',
+        { texto, comidas_plan: comidasPlan },
+        usado,
+        limite,
+      ),
+    )
+  } catch (fallo) {
+    throw errorDeFallo(fallo, limite)
+  } finally {
+    limite.soltar()
+  }
+}
+
+/**
+ * `POST /api/dieta/proponer` (§4bis.1): los huecos del día los propone el modelo con todo el
+ * contexto y el algoritmo del navegador cuadra después los gramos. Mismo tope de 75 s sobre toda
+ * la operación, misma renovación de token ante `401` y los mismos textos de error (§5.3) que
+ * `interpretarDieta`; el `422` de aquí es `PROPUESTA_VACIA`.
+ *
+ * No valida nada: los límites de §4bis.1 (1–6 huecos, tamaños del contexto) los impone el
+ * servidor, y `contextoParaProponer` ya recorta lo que hay que recortar.
+ */
+export async function proponerHuecos(
+  huecos: HuecoPropuesta[],
+  contexto: ContextoPropuesta,
+  token: string | null,
+  signal?: AbortSignal,
+): Promise<RespuestaProponer> {
+  const limite = conTope(TOPE_INTERPRETAR_MS, signal)
+  try {
+    return await conTokenRenovado(token, limite, (usado) =>
+      pedirJson<RespuestaProponer>('/api/dieta/proponer', { huecos, contexto }, usado, limite),
+    )
   } catch (fallo) {
     throw errorDeFallo(fallo, limite)
   } finally {

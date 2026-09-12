@@ -1,17 +1,23 @@
-// Persistencia local de lo que la persona nos contó y suma de gustos al paso 14
-// (SPEC-dieta-propia §5.5).
+// Persistencia local de lo que la persona nos contó, suma de gustos al paso 14 y la propuesta
+// de la IA (SPEC-dieta-propia §5.5 y §4bis.4).
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DietaInterpretada } from '../../engine/types'
+import type { HuecoPropuesta } from '../api'
 import {
   CLAVE_BORRADOR_DIETA,
   CLAVE_DIETA,
   type DietaGuardada,
+  type PropuestaGuardada,
+  VERSION_DIETA,
   borrarDieta,
+  borrarPropuesta,
   cargarBorradorDieta,
   cargarDieta,
+  claveHuecos,
   guardarBorradorDieta,
   guardarDieta,
+  guardarPropuesta,
   retirarGustos,
   sumarGustos,
 } from '../almacen'
@@ -244,5 +250,200 @@ describe('sumarGustos / retirarGustos (§5.5)', () => {
     const salida = retirarGustos(excluidos, [], null)
     expect(salida.excluidos).toEqual(['a'])
     expect(salida.excluidos).not.toBe(excluidos)
+  })
+})
+
+// ---- Propuesta de la IA (§4bis.4) ----------------------------------------
+
+function hueco(nombre: string, kcal: number, prot: number): HuecoPropuesta {
+  return {
+    nombre,
+    hora: '14:00',
+    peri: false,
+    objetivo: { kcal, prot, carb: 62, fat: 20 },
+    sin_hidratos: false,
+  }
+}
+
+function propuestaGuardada(parcial: Partial<PropuestaGuardada> = {}): PropuestaGuardada {
+  return {
+    variante: 0,
+    huecos_clave: claveHuecos([hueco('Comida', 620, 48)]),
+    propuesta: {
+      comidas: [{ nombre: 'Comida', alimentos: [] }],
+      consejo: 'Te falta fibra.',
+      preguntas: [{ texto: '¿Metemos verdura?', opciones: ['No', 'Sí'] }],
+    },
+    respuestas: [{ pregunta: '¿Metemos verdura?', respuesta: 'Solo en la cena' }],
+    ...parcial,
+  }
+}
+
+describe('claveHuecos (§4bis.4)', () => {
+  it('la misma lista da la misma clave', () => {
+    const huecos = [hueco('Comida', 620, 48), hueco('Cena', 500, 40)]
+    expect(claveHuecos(huecos)).toBe(claveHuecos([...huecos]))
+  })
+
+  it('no depende del orden en que estén escritas las propiedades', () => {
+    const uno: HuecoPropuesta = {
+      nombre: 'Comida',
+      hora: '14:00',
+      peri: false,
+      objetivo: { kcal: 620, prot: 48, carb: 62, fat: 20 },
+      sin_hidratos: false,
+    }
+    const otro = {
+      sin_hidratos: false,
+      objetivo: { fat: 20, carb: 62, prot: 48, kcal: 620 },
+      peri: false,
+      hora: '14:00',
+      nombre: 'Comida',
+    } as HuecoPropuesta
+    expect(claveHuecos([otro])).toBe(claveHuecos([uno]))
+  })
+
+  it('cambia con el nombre, con las kcal y con los macros', () => {
+    const base = claveHuecos([hueco('Comida', 620, 48)])
+    expect(claveHuecos([hueco('Cena', 620, 48)])).not.toBe(base)
+    expect(claveHuecos([hueco('Comida', 700, 48)])).not.toBe(base)
+    expect(claveHuecos([hueco('Comida', 620, 52)])).not.toBe(base)
+  })
+
+  it('redondea: kcal enteras y macros con un decimal', () => {
+    expect(claveHuecos([hueco('Comida', 620.4, 48.04)])).toBe(
+      claveHuecos([hueco('Comida', 620, 48)]),
+    )
+    expect(claveHuecos([hueco('Comida', 620, 48.06)])).not.toBe(
+      claveHuecos([hueco('Comida', 620, 48)]),
+    )
+  })
+
+  it('el orden de los huecos sí cuenta: es otro reparto', () => {
+    expect(claveHuecos([hueco('Comida', 620, 48), hueco('Cena', 500, 40)])).not.toBe(
+      claveHuecos([hueco('Cena', 500, 40), hueco('Comida', 620, 48)]),
+    )
+  })
+
+  it('sin huecos da una clave válida y estable', () => {
+    expect(claveHuecos([])).toBe('[]')
+  })
+})
+
+describe('propuesta guardada (§4bis.4)', () => {
+  it('guarda y recupera la propuesta entera', () => {
+    const dieta = guardada({ propuesta: propuestaGuardada() })
+    guardarDieta(dieta)
+    expect(cargarDieta()).toEqual(dieta)
+  })
+
+  it('una dieta sin propuesta se lee sin el campo (compatibilidad con lo ya guardado)', () => {
+    guardarDieta(guardada())
+    const leida = cargarDieta()
+    expect(leida).not.toBeNull()
+    expect('propuesta' in (leida as DietaGuardada)).toBe(false)
+  })
+
+  it('tolera basura: la propuesta se descarta pero la dieta sobrevive', () => {
+    for (const basura of [7, 'no', null, {}, { propuesta: { comidas: [] } }]) {
+      window.localStorage.setItem(CLAVE_DIETA, JSON.stringify({ ...guardada(), propuesta: basura }))
+      const leida = cargarDieta()
+      expect(leida?.texto).toBe('Desayuno 250 g de kéfir')
+      expect(leida?.propuesta).toBeUndefined()
+    }
+  })
+
+  it('sanea variante, consejo, preguntas y respuestas', () => {
+    window.localStorage.setItem(
+      CLAVE_DIETA,
+      JSON.stringify({
+        ...guardada(),
+        propuesta: {
+          variante: 99.6,
+          huecos_clave: 7,
+          propuesta: {
+            comidas: [
+              { nombre: 'Comida', alimentos: [] },
+              { nombre: 42, alimentos: [] },
+              { nombre: 'Cena' },
+            ],
+            consejo: '',
+            preguntas: [
+              { texto: 'una', opciones: ['a', 'b'] },
+              { texto: 'sin opciones', opciones: [] },
+              { texto: 'dos', opciones: ['c', 'd'] },
+              { texto: 'tres', opciones: ['e', 'f'] },
+            ],
+          },
+          respuestas: [
+            { pregunta: 'p1', respuesta: 'r1' },
+            { pregunta: 'p2', respuesta: 7 },
+            { pregunta: 'p3', respuesta: 'r3' },
+            { pregunta: 'p4', respuesta: 'r4' },
+            { pregunta: 'p5', respuesta: 'r5' },
+            { pregunta: 'p6', respuesta: 'r6' },
+          ],
+        },
+      }),
+    )
+    const leida = cargarDieta()?.propuesta
+    expect(leida?.variante).toBe(20)
+    expect(leida?.huecos_clave).toBe('')
+    expect(leida?.propuesta.comidas).toEqual([{ nombre: 'Comida', alimentos: [] }])
+    expect(leida?.propuesta.consejo).toBeNull()
+    expect(leida?.propuesta.preguntas.map((p) => p.texto)).toEqual(['una', 'dos'])
+    expect(leida?.respuestas.map((r) => r.pregunta)).toEqual(['p1', 'p3', 'p4', 'p5'])
+  })
+
+  it('una clave de huecos ilegible no se reutiliza: queda vacía y nunca coincide', () => {
+    window.localStorage.setItem(
+      CLAVE_DIETA,
+      JSON.stringify({ ...guardada(), propuesta: { ...propuestaGuardada(), huecos_clave: null } }),
+    )
+    expect(cargarDieta()?.propuesta?.huecos_clave).not.toBe(claveHuecos([hueco('Comida', 620, 48)]))
+  })
+
+  it('guardarPropuesta la mete en la dieta guardada y devuelve la dieta nueva', () => {
+    guardarDieta(guardada())
+    const nueva = guardarPropuesta(propuestaGuardada())
+    expect(nueva?.propuesta).toEqual(propuestaGuardada())
+    expect(cargarDieta()?.propuesta).toEqual(propuestaGuardada())
+  })
+
+  it('guardarPropuesta respeta la dieta que le pasan y sin dieta guardada devuelve null', () => {
+    expect(guardarPropuesta(propuestaGuardada())).toBeNull()
+    const enMano = guardada({ texto: 'lo más fresco que hay' })
+    const nueva = guardarPropuesta(propuestaGuardada(), enMano)
+    expect(nueva?.texto).toBe('lo más fresco que hay')
+    expect(cargarDieta()?.texto).toBe('lo más fresco que hay')
+  })
+
+  it('borrarPropuesta deja la dieta sin el campo', () => {
+    guardarDieta(guardada({ propuesta: propuestaGuardada() }))
+    const nueva = borrarPropuesta()
+    expect(nueva?.propuesta).toBeUndefined()
+    expect(cargarDieta()?.propuesta).toBeUndefined()
+    expect(cargarDieta()?.texto).toBe('Desayuno 250 g de kéfir')
+  })
+
+  it('borrarPropuesta sin nada que borrar no rompe', () => {
+    expect(borrarPropuesta()).toBeNull()
+    guardarDieta(guardada())
+    expect(borrarPropuesta()?.propuesta).toBeUndefined()
+  })
+
+  it('reinterpretar descarta la propuesta anterior', () => {
+    guardarDieta(guardada({ propuesta: propuestaGuardada() }))
+    // Lo que hace `interpretacionNueva` en App.tsx: una `DietaGuardada` nueva, sin arrastrar nada.
+    guardarDieta({
+      version: VERSION_DIETA,
+      texto: 'Ahora desayuno tostadas',
+      interpretada: interpretada({ comidas: [{ nombre: 'Desayuno', alimentos: [] }] }),
+      fecha: '2026-09-13',
+      activa: true,
+      gustos_sumados: { excluidos: [], favoritos: [] },
+    })
+    expect(cargarDieta()?.propuesta).toBeUndefined()
+    expect(cargarDieta()?.texto).toBe('Ahora desayuno tostadas')
   })
 })
