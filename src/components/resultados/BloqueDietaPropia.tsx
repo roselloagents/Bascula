@@ -859,9 +859,10 @@ export function BloqueDietaPropia({
         />
       ) : (
         <div className="acciones-menu">
-          {/* §4bis.4: la espera se dice DONDE está el dedo, no solo en la cabecera del bloque. */}
+          {/* §4bis.4: la espera se VE donde está el dedo; la región viva que la anuncia es la de la
+              cabecera, para no repetir el mismo aviso dos veces al lector de pantalla. */}
           {pidiendoIa ? (
-            <p className="dieta-pidiendo" role="status">
+            <p className="dieta-pidiendo" aria-hidden="true">
               {PIDIENDO_PROPUESTA}
             </p>
           ) : null}

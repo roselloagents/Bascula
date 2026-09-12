@@ -238,6 +238,7 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
       intentos: resultado.intentos,
       uso,
       coste_eur: Math.round(euros * 1e6) / 1e6,
+      coste_estimado: estimado,
       latencia_ms: ahora() - entrada,
     }
 
