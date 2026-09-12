@@ -6,6 +6,8 @@ import { ALIMENTOS, alimentoPorId } from '../data/foods'
 import type {
   AlimentoPorcion,
   Comida,
+  DiaCompuesto,
+  DietaInterpretada,
   EjemploComida,
   EjemploDia,
   Ejemplos,
@@ -50,6 +52,7 @@ import {
 import type { GramosAlimento } from './compra'
 import { listaCompraDeDias, seccionOpcionalCiclo } from './compra'
 import { alimentosCiclo, llevaSeccionCiclo, porRondasDeSintoma } from './ciclo'
+import { componerDiaCon } from './dieta/componer'
 import {
   NOTA_CARDIACA,
   NOTA_DIABETES,
@@ -1262,3 +1265,112 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
   })
   return listaCompraDeDias(diaA, gramosDeDia(diaB))
 }
+
+// ---------- v1.3: "Cuéntanos cómo comes" (docs/SPEC-dieta-propia.md §4) ----------
+
+/**
+ * Monta SOLO los huecos que quedan libres cuando la persona nos ha contado alguna de sus comidas
+ * (§4.3.3). Reutiliza `construirDia` con los `Comida` objetivo que trae el reparto del resto
+ * —mismo nombre, misma hora y mismo `peri` que el hueco del plan— y con el perfil de siempre, que
+ * ya lleva sumados los gustos del audio a las listas del paso 14 (§5.5).
+ *
+ * Devuelve también las notas del generador (dos platos, toma que no cierra, proteína lejos y el
+ * respaldo de exclusiones), que §4.3.3 manda recoger en `DiaCompuesto.notas`.
+ */
+function montarHuecos(
+  inputs: Inputs,
+  resultado: Resultado,
+  huecos: readonly Comida[],
+  variante: number,
+): { comidas: EjemploComida[]; notas: string[] } {
+  if (huecos.length === 0) return { comidas: [], notas: [] }
+  const perfil = perfilDeResultado(resultado, inputs)
+  const bancoSencillo = bancoSencilloEfectivo(perfil)
+  const sencillo = inputs.menu_sencillo === true && bancoSencillo !== null
+  // Mismo desplazamiento que el menú propuesto (§3.2): "Ver otro ejemplo" solo cambia `variante`.
+  const offset = sencillo ? 0 : inputs.n_comidas + inputs.edad + Math.max(0, Math.trunc(variante))
+  const dia = construirDia({
+    comidas: huecos,
+    perfil,
+    offset,
+    priorizarFibra: false,
+    banco: sencillo && bancoSencillo ? bancoSencillo.A : BANCOS[perfil.banco],
+    sencillo,
+    bancoSencillo,
+  })
+
+  const notas: string[] = []
+  for (let i = 0; i < dia.comidas.length; i++) {
+    const c = dia.comidas[i]
+    if (c.platos > 1) notas.push(notaDosPlatos(c.ejemplo.comida, huecos[i].kcal, c.platos))
+    if (c.porciones.length === 0) continue
+    const ajustable =
+      c.porciones.find((p) => p.rol === 'carbohidrato') ??
+      c.porciones.find((p) => p.rol === 'grasa') ??
+      c.porciones[c.porciones.length - 1]
+    if (!c.converge) {
+      notas.push(
+        notaComidaLejos(
+          c.ejemplo.comida,
+          c.ejemplo.totales.kcal - c.ejemplo.objetivo.kcal,
+          nombreCorto(ajustable.alimento),
+        ),
+      )
+    }
+    if (c.desviacionProteina > TOLERANCIA_PROTEINA) {
+      const proteico = c.porciones.find((p) => p.rol === 'proteina') ?? ajustable
+      notas.push(
+        notaProteinaLejos(
+          c.ejemplo.comida,
+          c.ejemplo.totales.prot,
+          c.ejemplo.objetivo.prot,
+          nombreCorto(proteico.alimento),
+        ),
+      )
+    }
+  }
+  if (perfil.excluidos.size > 0) {
+    const vistos = new Set<string>()
+    for (const c of dia.comidas) {
+      for (const a of c.ejemplo.alimentos) {
+        const clave = `${a.id}|${c.ejemplo.comida}`
+        if (!perfil.excluidos.has(a.id) || vistos.has(clave)) continue
+        vistos.add(clave)
+        notas.push(avisoExcluidoInevitable(alimentoPorId(a.id)!, c.ejemplo.comida))
+      }
+    }
+  }
+  return { comidas: dia.comidas.map((c) => c.ejemplo), notas }
+}
+
+/**
+ * Menú de un subconjunto de tomas con los objetivos que se le pasen (§4.3.3). Es la puerta que
+ * usa la composición del día; también sirve para montar un día entero pasándole `resultado.comidas`.
+ */
+export function generarComidas(
+  inputs: Inputs,
+  resultado: Resultado,
+  huecos: readonly Comida[],
+  variante = 0,
+): EjemploComida[] {
+  return montarHuecos(inputs, resultado, huecos, Math.max(0, Math.trunc(variante))).comidas
+}
+
+/**
+ * Compone el día con lo que la persona nos contó (SPEC-dieta-propia §4). Puro y determinista.
+ * El algoritmo vive en `./dieta/componer`; aquí se le inyecta el generador de menús, que es lo
+ * único que ese módulo no puede importar sin crear un ciclo.
+ */
+export function componerDia(
+  interpretada: DietaInterpretada,
+  inputs: Inputs,
+  resultado: Resultado,
+  variante = 0,
+): DiaCompuesto {
+  const v = Math.max(0, Math.trunc(variante))
+  return componerDiaCon(interpretada, inputs, resultado, v, (huecos, variante2) =>
+    montarHuecos(inputs, resultado, huecos, variante2),
+  )
+}
+
+export { compraDeDia } from './dieta/compra'

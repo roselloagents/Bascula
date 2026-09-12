@@ -47,9 +47,9 @@ function filasAplicables(a: Alimento): string[] {
 }
 
 describe('base de alimentos', () => {
-  it('tiene 105 alimentos (101 del plan + 4 `extra`) y ningún id duplicado', () => {
-    expect(ALIMENTOS.length).toBe(105)
-    expect(ALIMENTOS.filter((a) => a.tags.includes('extra')).length).toBe(4)
+  it('tiene 107 alimentos (101 del plan + 6 `extra`) y ningún id duplicado', () => {
+    expect(ALIMENTOS.length).toBe(107)
+    expect(ALIMENTOS.filter((a) => a.tags.includes('extra')).length).toBe(6)
     const ids = new Set(ALIMENTOS.map((a) => a.id))
     expect(ids.size).toBe(ALIMENTOS.length)
   })
