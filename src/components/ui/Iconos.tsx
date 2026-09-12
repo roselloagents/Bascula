@@ -120,6 +120,20 @@ export function IconoPapelera({ tam = 18, className }: IconoProps) {
   )
 }
 
+/** Micrófono del dictado (SPEC-dieta-propia §5.3): cápsula, arco y pie. */
+export function IconoMicro({ tam = 20, className }: IconoProps) {
+  return (
+    <svg viewBox="0 0 24 24" width={tam} height={tam} aria-hidden="true" className={className}>
+      <path
+        {...base}
+        d="M12 3.5a2.8 2.8 0 0 1 2.8 2.8v5a2.8 2.8 0 0 1-5.6 0v-5A2.8 2.8 0 0 1 12 3.5Z"
+      />
+      <path {...base} d="M5.8 11a6.2 6.2 0 0 0 12.4 0" />
+      <path {...base} d="M12 17.2v3.3M9 20.5h6" />
+    </svg>
+  )
+}
+
 /** Rueda de carga: se detiene con prefers-reduced-motion (regla en el CSS). */
 export function Cargador({ tam = 18, className }: IconoProps) {
   return (

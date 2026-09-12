@@ -82,6 +82,23 @@ export const NOTA_MENU =
 export const NOTA_VERDURA_FRUTA =
   'Las verduras y las frutas son intercambiables entre sí sin recalcular nada.'
 
+// ---- Notas fijas por condición médica sobre el bloque de menús (§3.1) ----
+// Vivían como constantes locales de `BloquesMenu.tsx`. Desde la v1.3 las comparten ese bloque y
+// el de "Tu menú, con lo tuyo dentro" a través de `NotasCondicion` (SPEC-dieta-propia §5.1).
+
+/** [SPEC] SPEC-ux §3.1, nota de diabetes. */
+export const NOTA_DIABETES =
+  'Estos gramajes de hidratos son un ejemplo: si usas insulina o pastillas que bajan el azúcar, revisa la dosis con tu equipo médico antes de cambiar tu forma de comer.'
+
+/** [SPEC] SPEC-ux §3.1, nota cardiaca. */
+export const NOTA_CARDIACA =
+  'Cocina sin sal añadida y evita embutidos y conservas: con tu condición el sodio importa más que los gramos exactos.'
+
+/** [SPEC] SPEC-dieta-propia §5.1: se añade a la de diabetes solo en el bloque de dieta propia,
+ *  donde los gramos de hidratos los ha movido un algoritmo. */
+export const NOTA_DIABETES_DIETA =
+  'Hemos movido gramos de hidratos para cuadrar el plan: si usas insulina, enséñale estos gramos a tu equipo médico antes de cambiar nada.'
+
 /** [SPEC] SPEC-ux §3.7.2: en modo sencillo el menú es fijo, así que no se ofrece otro ejemplo. */
 export const NOTA_SENCILLO_SIN_OTRO_EJEMPLO =
   'Has pedido comidas sencillas, así que este menú es fijo: son siempre los mismos platos, alternando dos versiones de cada comida. Si quieres más variedad, vuelve al cuestionario y desactiva "comidas sencillas".'

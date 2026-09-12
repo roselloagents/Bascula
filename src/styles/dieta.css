@@ -1,0 +1,397 @@
+/* =====================================================================
+   Báscula — "Cuéntanos cómo comes" (SPEC-dieta-propia §5.6)
+   Prefijo `.dieta-`. Todo lo que ya existe se reutiliza: `.seccion`,
+   `.menu-comida`, `.menu-gramos`, `.menu-totales`, `.menu-quitar`,
+   `.menu-alternativas`, `.nota`, `.nota-recuadro`, `.btn*`,
+   `.etiqueta-ajustado` y `.aviso-efimero.aviso-flotante`.
+   ===================================================================== */
+
+:root {
+  /* Cambio de gramos. Verde bosque sobre su velo (≈ 9:1) y ámbar de aviso sobre el suyo
+     (≈ 6:1): los dos por encima del 4,5:1 exigido, y no se distinguen solo por el color
+     (el signo + / − y el texto "igual" dicen lo mismo sin verlo). */
+  --dieta-sube: var(--verde);
+  --dieta-sube-fondo: var(--verde-velo);
+  --dieta-sube-borde: var(--verde-borde);
+  --dieta-baja: var(--aviso);
+  --dieta-baja-fondo: var(--aviso-velo);
+  --dieta-baja-borde: var(--aviso-borde);
+}
+
+/* ---- Tarjeta de entrada (§5.2) --------------------------------------- */
+
+.seccion-dieta {
+  border: 1px solid var(--verde-borde);
+  background: var(--papel);
+}
+
+.dieta-guardada {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-4);
+  align-items: center;
+  margin-top: var(--e-8);
+}
+
+/* ---- Formulario (§5.3) ------------------------------------------------ */
+
+.dieta-campo {
+  display: grid;
+  gap: var(--e-4);
+  margin-top: var(--e-8);
+}
+
+.dieta-campo textarea {
+  width: 100%;
+  min-height: 160px;
+  padding: var(--e-6);
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--r-md);
+  background: var(--papel);
+  color: var(--tinta);
+  font-family: var(--texto);
+  font-size: var(--t-base);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.dieta-contador {
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dieta-pista,
+.dieta-privacidad {
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  line-height: 1.5;
+}
+
+/* ---- Botón de micrófono (48 px) y anillo ------------------------------ */
+
+.dieta-micro-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-6);
+  margin-top: var(--e-8);
+}
+
+.dieta-micro {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-4);
+  min-height: var(--toque);
+  min-width: var(--toque);
+  padding: 0 var(--e-8);
+  border: 1px solid var(--verde-borde);
+  border-radius: 999px;
+  background: var(--verde-velo);
+  color: var(--verde);
+  font-family: var(--texto);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+
+.dieta-micro[aria-pressed='true'] {
+  border-color: var(--verde);
+  background: var(--verde);
+  color: var(--hueso);
+}
+
+/* El anillo late mientras se escucha. Es decoración: el estado lo dice `aria-pressed` y el
+   texto visible ("Escuchando… toca para parar"). */
+.dieta-micro[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 2px solid var(--verde-claro);
+  border-radius: 999px;
+  animation: dieta-anillo 1600ms ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes dieta-anillo {
+  0% {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dieta-micro[aria-pressed='true']::after {
+    animation: none;
+    opacity: 0.75;
+  }
+}
+
+/* Texto provisional del dictado: se ve, no se anuncia y no entra en el cuadro. */
+.dieta-provisional {
+  min-height: 1.4em;
+  color: var(--tinta-suave);
+  font-size: var(--t-sm);
+  font-style: italic;
+}
+
+.dieta-sin-micro {
+  display: grid;
+  gap: var(--e-4);
+  margin-top: var(--e-8);
+  padding: var(--e-6) var(--e-8);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+  background: var(--hueso-hundido);
+  font-size: var(--t-sm);
+}
+
+.dieta-enlace-copiable {
+  overflow-wrap: anywhere;
+  user-select: all;
+  font-family: var(--display);
+}
+
+/* ---- Bloque compuesto: distintivos (§5.4) ----------------------------- */
+
+.dieta-distintivos {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--e-4);
+  margin-left: var(--e-4);
+  vertical-align: middle;
+}
+
+.dieta-origen {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 999px;
+  background: var(--hueso-hundido);
+  color: var(--tinta-media);
+  font-family: var(--texto);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* "tuya": lo que la persona come de verdad. */
+.dieta-origen-propia {
+  border-color: var(--verde-borde);
+  background: var(--verde-velo);
+  color: var(--verde);
+}
+
+/* "provisional": faltan gramos, así que los demás pueden cambiar (§4.4 DIETA_PENDIENTES). */
+.dieta-origen-provisional {
+  border-color: var(--aviso-borde);
+  background: var(--aviso-velo);
+  color: var(--aviso);
+}
+
+.dieta-fecha {
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+}
+
+/* ---- "Lo que hemos tenido en cuenta" / "Apuntado" --------------------- */
+
+.dieta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-4);
+  margin: var(--e-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dieta-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--verde-borde);
+  border-radius: 999px;
+  background: var(--verde-velo);
+  color: var(--verde);
+  font-size: var(--t-xs);
+  font-weight: 500;
+}
+
+/* Apuntado: se ha leído pero aún no se aplica. Neutro, para no prometer nada. */
+.dieta-chip-apuntado {
+  border-color: var(--linea-fuerte);
+  background: var(--hueso-hundido);
+  color: var(--tinta-media);
+}
+
+/* ---- Fila de alimento dictado (§5.4 y §5.6) --------------------------- */
+
+/* Dos columnas: gramos y nombre. Las etiquetas van en la segunda fila, bajo el nombre, con
+   `flex-wrap`: a 375 px, con un nombre de 40 caracteres y dos etiquetas, no hay scroll. */
+.dieta-alimento {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: var(--e-2) var(--e-4);
+  align-items: baseline;
+  padding: var(--e-4) 0;
+  border-bottom: 1px solid var(--linea);
+}
+
+.dieta-alimento:last-child {
+  border-bottom: none;
+}
+
+.dieta-alimento .menu-gramos {
+  grid-column: 1;
+  white-space: nowrap;
+}
+
+.dieta-alimento-nombre {
+  grid-column: 2;
+  min-width: 0;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.dieta-etiquetas {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--e-2);
+  align-items: center;
+}
+
+.dieta-alimento .dieta-nota,
+.dieta-alimento .dieta-edicion,
+.dieta-alimento .dieta-pendiente {
+  grid-column: 2;
+}
+
+.dieta-nota {
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  line-height: 1.45;
+}
+
+/* ---- Etiquetas de cambio y de origen de macros ------------------------ */
+
+.dieta-etiqueta {
+  display: inline-block;
+  padding: 1px 7px;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 999px;
+  background: var(--hueso-hundido);
+  color: var(--tinta-media);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dieta-etiqueta-sube {
+  border-color: var(--dieta-sube-borde);
+  background: var(--dieta-sube-fondo);
+  color: var(--dieta-sube);
+}
+
+.dieta-etiqueta-baja {
+  border-color: var(--dieta-baja-borde);
+  background: var(--dieta-baja-fondo);
+  color: var(--dieta-baja);
+}
+
+/* "estimado" / "del envase": la macro no sale de nuestra base. */
+.dieta-etiqueta-macros {
+  border-style: dashed;
+}
+
+/* ---- Edición por fila (local, sin API) -------------------------------- */
+
+.dieta-cambiar {
+  grid-column: 2;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--e-2);
+  min-height: 44px;
+  padding: 0 var(--e-4);
+  border: none;
+  background: none;
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-weight: 500;
+}
+
+.dieta-cambiar:hover {
+  color: var(--verde);
+}
+
+.dieta-edicion {
+  display: grid;
+  gap: var(--e-6);
+  margin-top: var(--e-4);
+  padding: var(--e-6);
+  border: 1px solid var(--linea);
+  border-radius: var(--r-md);
+  background: var(--hueso-hundido);
+}
+
+.dieta-envase {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: var(--e-4);
+}
+
+.dieta-pendiente {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--e-4);
+  margin-top: var(--e-4);
+}
+
+/* ---- Totales del día y desviación ------------------------------------- */
+
+.dieta-total {
+  margin-top: var(--e-8);
+  padding-top: var(--e-6);
+  border-top: 1px solid var(--linea-fuerte);
+  font-variant-numeric: tabular-nums;
+}
+
+.dieta-total-plan {
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.dieta-desvio {
+  margin-left: var(--e-2);
+  font-size: var(--t-xs);
+  font-weight: 700;
+}
+
+.dieta-desvio-sube {
+  color: var(--dieta-sube);
+}
+
+.dieta-desvio-baja {
+  color: var(--dieta-baja);
+}
+
+/* ---- Avisos y no entendido -------------------------------------------- */
+
+.dieta-avisos {
+  display: grid;
+  gap: var(--e-4);
+  margin-top: var(--e-8);
+}
+
+.dieta-no-entendido {
+  color: var(--tinta-media);
+  font-size: var(--t-sm);
+}

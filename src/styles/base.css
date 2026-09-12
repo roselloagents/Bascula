@@ -693,8 +693,10 @@ input[inputmode='decimal'] {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* `!important` a propósito: la regla comodín de abajo lleva `!important` y, sin él, la rueda
+     se paraba del todo en vez de girar despacio (SPEC-dieta-propia §5.3). */
   .cargador {
-    animation-duration: 3s;
+    animation-duration: 3s !important;
   }
 
   /* Las transiciones sueltas llevaban duraciones fijas (160 ms del botón, 260 ms de la barra de
