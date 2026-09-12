@@ -111,11 +111,14 @@ describe('§4bis.3 — un hueco que no convence cae a nuestras plantillas', () =
     )
     expect(origenes(dia)).toEqual(['propia', 'propuesta_ia', 'propuesta'])
     expect(dia.origen_huecos).toBe('mixto')
-    expect(dia.apuntado).toContain(
+    // Va en `notas` (párrafo al pie), no en los chips de "Apuntado, pero aún no lo aplicamos":
+    // esa lista es lo que dijo la persona y esto es algo que SÍ hemos hecho (§4bis.3).
+    expect(dia.notas).toContain(
       'Para Cena no nos ha convencido la propuesta y hemos usado la nuestra.',
     )
-    // La que sí convenció no se apunta.
-    expect(dia.apuntado).not.toContain(
+    expect(dia.apuntado).toEqual([])
+    // La que sí convenció no se dice.
+    expect(dia.notas).not.toContain(
       'Para Comida no nos ha convencido la propuesta y hemos usado la nuestra.',
     )
     const cena = dia.comidas[2]
@@ -161,10 +164,11 @@ describe('§4bis.3 — origen_huecos en los tres casos', () => {
     })
     expect(origenes(dia)).toEqual(['propia', 'propuesta', 'propuesta'])
     expect(dia.origen_huecos).toBe('plantillas')
-    expect(dia.apuntado).toEqual([
+    expect(dia.notas).toEqual([
       'Para Comida no nos ha convencido la propuesta y hemos usado la nuestra.',
       'Para Cena no nos ha convencido la propuesta y hemos usado la nuestra.',
     ])
+    expect(dia.apuntado).toEqual([])
   })
 
   it('mixto cuando uno cae y otro no', () => {
@@ -196,7 +200,7 @@ describe('§4bis.3 — propuesta con menos huecos de los pedidos', () => {
       comidas: [PROPUESTA_IA_PARCIAL.comidas[1]], // solo la Cena
     })
     expect(origenes(dia)).toEqual(['propia', 'propuesta', 'propuesta_ia'])
-    expect(dia.apuntado).toContain(
+    expect(dia.notas).toContain(
       'Para Comida no nos ha convencido la propuesta y hemos usado la nuestra.',
     )
     // Emparejado por NOMBRE: la única comida de la propuesta es la Cena y ahí es donde entra.
@@ -267,7 +271,12 @@ describe('§4bis.3 — modo solo contexto con propuesta para todos los huecos', 
     const otro = componerDia(SOLO_CONTEXTO, CONTEXTO.inputs, CONTEXTO.resultado, 0, conArroz)
     expect(otro.comidas[2].origen).toBe('propuesta_ia')
     expect(otro.aplicado).not.toContain('Cena sin hidratos')
+    // El motivo es el plato, no el tamaño: `apuntadoNoCabe` contaría algo que no ha pasado
+    // (el hábito SÍ se aplicó al objetivo, y contar otra comida no arreglaría nada).
     expect(otro.apuntado).toContain(
+      '«ceno sin hidratos»: la propuesta de Cena trae guarnición; pide «Otra propuesta» y lo intentamos otra vez',
+    )
+    expect(otro.apuntado).not.toContain(
       '«ceno sin hidratos»: no lo aplicamos porque esa comida se quedaría demasiado pequeña; cuéntanos también otra comida y lo movemos',
     )
     // Pero la siguiente propuesta SÍ tiene que pedir la cena sin hidratos: la costumbre se retiró
@@ -307,7 +316,10 @@ describe('§4bis.3 — las notas del generador son las de los huecos que se ven'
       preguntas: [],
     })
     expect(origenes(dia)).toEqual(['propia', 'propuesta_ia', 'propuesta'])
-    expect(dia.notas).toEqual([sinIa.notas[1]])
+    expect(dia.notas).toEqual([
+      sinIa.notas[1],
+      'Para Cena no nos ha convencido la propuesta y hemos usado la nuestra.',
+    ])
   })
 
   it('y si ninguna propuesta convence, las notas son las de siempre', () => {
@@ -316,7 +328,7 @@ describe('§4bis.3 — las notas del generador son las de los huecos que se ven'
       consejo: null,
       preguntas: [],
     })
-    expect(dia.notas).toEqual(sinIa.notas)
+    expect(dia.notas.slice(0, 2)).toEqual(sinIa.notas)
   })
 })
 
@@ -482,5 +494,133 @@ describe('§6.1 — la compra con comidas propuestas por la IA', () => {
     )
     const lista = compraDeDia(dia)
     expect(lista.items.filter((i) => i.alimento_id === 'nueces')).toHaveLength(1)
+  })
+})
+
+describe('§4bis.3 — macros que la propuesta no puede alcanzar (decisión L: «solo pollo y arroz»)', () => {
+  /** Lo del tercer audio, literal: una comida sin ninguna fuente de grasa. */
+  const POLLO_Y_ARROZ = (nombre: string): ComidaPropia => ({
+    nombre,
+    alimentos: [
+      delCatalogo('pechuga_pollo', 200, 'Pechuga de pollo'),
+      delCatalogo('arroz_blanco_cocido', 250, 'Arroz blanco'),
+    ],
+  })
+
+  const dia = componerDia(DESAYUNO_SOLO, PLAN_1780.inputs, PLAN_1780.resultado, 0, {
+    comidas: [POLLO_Y_ARROZ('Comida'), POLLO_Y_ARROZ('Cena')],
+    consejo: null,
+    preguntas: [],
+  })
+
+  it('se sirve en vez de caer a plantillas: el término sin mínimo interior no manda', () => {
+    // Antes, el término de grasa (sin ninguna fuente que lo alcanzara) era decreciente en toda la
+    // caja y solo empujaba los gramos hacia arriba: 591 kcal y 59,9 g de proteína, fuera del ±15 %.
+    expect(origenes(dia)).toEqual(['propia', 'propuesta_ia', 'propuesta_ia'])
+    expect(dia.origen_huecos).toBe('ia')
+    expect(dia.notas).not.toContain(
+      'Para Comida no nos ha convencido la propuesta y hemos usado la nuestra.',
+    )
+  })
+
+  it('cada hueco sigue dentro del ±15 % del objetivo REAL, grasa incluida en la cuenta', () => {
+    for (const c of deIa(dia)) {
+      const T = c.objetivo!
+      expect(Math.abs(c.totales.kcal - T.kcal), c.nombre).toBeLessThanOrEqual(0.15 * T.kcal)
+      expect(Math.abs(c.totales.prot - T.prot), c.nombre).toBeLessThanOrEqual(0.15 * T.prot)
+    }
+  })
+
+  it('y avisa de lo que ese día NO lleva: ningún vegetal', () => {
+    expect(codigos(dia)).toContain('DIETA_SIN_VEGETALES')
+    const aviso = dia.avisos.find((a) => a.codigo === 'DIETA_SIN_VEGETALES')
+    // El texto del día dictado ("en lo que nos has contado") sería falso: esto lo montó la IA.
+    expect(aviso?.texto).toContain('En este menú casi no hay verdura ni fruta')
+  })
+
+  it('es determinista: dos composiciones iguales dan los mismos gramos', () => {
+    const otra = componerDia(DESAYUNO_SOLO, PLAN_1780.inputs, PLAN_1780.resultado, 0, {
+      comidas: [POLLO_Y_ARROZ('Comida'), POLLO_Y_ARROZ('Cena')],
+      consejo: null,
+      preguntas: [],
+    })
+    expect(otra.comidas.map((c) => c.alimentos.map((a) => a.gramos_ajustados))).toEqual(
+      dia.comidas.map((c) => c.alimentos.map((a) => a.gramos_ajustados)),
+    )
+  })
+})
+
+describe('§4bis.3 — los avisos de §4.4 miran el DÍA, propuesta incluida', () => {
+  it('un alimento estimado de la IA dispara DIETA_ESTIMADOS con su propio texto', () => {
+    // El día entero lo monta la IA (no hay ninguna comida dictada), y una de sus filas trae un
+    // producto que no está en nuestra base: los mismos macros, pero `estimado`.
+    const original = PROPUESTA_IA_CONTEXTO.comidas[0]
+    const estimado: ComidaPropia = {
+      nombre: original.nombre,
+      alimentos: original.alimentos.map((a, i) =>
+        i === 0
+          ? {
+              ...a,
+              alimento_id: null,
+              nombre: 'Tortitas de avena caseras',
+              origen_macros: 'estimado' as const,
+            }
+          : a,
+      ),
+    }
+    const dia = componerDia(
+      SOLO_CONTEXTO,
+      CONTEXTO.inputs,
+      CONTEXTO.resultado,
+      0,
+      con(PROPUESTA_IA_CONTEXTO, estimado),
+    )
+    expect(dia.comidas[0].origen).toBe('propuesta_ia')
+    expect(dia.comidas[0].alimentos[0].origen_macros).toBe('estimado')
+    expect(codigos(dia)).toContain('DIETA_ESTIMADOS')
+    const aviso = dia.avisos.find((a) => a.codigo === 'DIETA_ESTIMADOS')
+    // Esas filas no llevan "Cambiar" (§4bis.3): el consejo tiene que ser otro.
+    expect(aviso?.texto).toContain('«propuesta IA» no se pueden editar')
+  })
+
+  it('con verdura de sobra en la propuesta, DIETA_SIN_VEGETALES no salta', () => {
+    const dia = DIAS_CON_PROPUESTA.solo_contexto
+    expect(codigos(dia)).not.toContain('DIETA_SIN_VEGETALES')
+  })
+})
+
+describe('§4bis.3 — la grasa de adición propuesta se queda en raciones de cocina', () => {
+  it('el aceite nunca baja de 5 g en un hueco propuesto', () => {
+    for (const dia of Object.values(DIAS_CON_PROPUESTA)) {
+      for (const c of deIa(dia)) {
+        for (const a of c.alimentos) {
+          if (a.alimento_id !== 'aove') continue
+          expect(a.gramos_ajustados, `${c.nombre}/${a.nombre}`).toBeGreaterThanOrEqual(5)
+        }
+      }
+    }
+  })
+
+  it('el suelo no toca lo DICTADO: ahí manda lo que come la persona (§4.2)', () => {
+    const poco = componerDia(
+      {
+        ...SOLO_CONTEXTO,
+        comidas: [
+          {
+            nombre: 'Comida',
+            alimentos: [
+              delCatalogo('pechuga_pollo', 200, 'Pechuga de pollo'),
+              delCatalogo('aove', 4, 'Aceite de oliva'),
+            ],
+          },
+        ],
+      },
+      CONTEXTO.inputs,
+      CONTEXTO.resultado,
+    )
+    const aceite = poco.comidas.flatMap((c) => c.alimentos).find((a) => a.alimento_id === 'aove')
+    expect(aceite).toBeDefined()
+    // 4 g dictados con aporte menor de 30 kcal: fijo, y se queda exactamente como lo dijo.
+    expect(aceite?.gramos_ajustados).toBe(4)
   })
 })

@@ -29,13 +29,15 @@ import type {
 import { perfilDeResultado } from '../filtros'
 import { nombreCorto } from '../textos'
 import type { EntradaAjuste, EstadoAjuste, Pieza, Variable } from './ajuste'
-import { MACROS, SUELOS, ajustar, cajaDe, estadoDe } from './ajuste'
+import { MACROS, SUELOS, ajustar, cajaDe, estadoDe, totalesDe } from './ajuste'
 import {
   AVISOS_NO_CUADRA,
   AVISO_ESTIMADOS,
+  AVISO_ESTIMADOS_IA,
   AVISO_NO_CUADRA,
   AVISO_SIN_ACEITE,
   AVISO_SIN_VEGETALES,
+  AVISO_SIN_VEGETALES_IA,
   CODIGO_CONSEJO_IA,
   aplicadoFavorito,
   aplicadoHabitoHueco,
@@ -48,6 +50,7 @@ import {
   apuntadoNComidas,
   apuntadoNoCabe,
   apuntadoOtro,
+  apuntadoPropuestaConHidratos,
   apuntadoPropuestaNoConvence,
   apuntadoSinBase,
   avisoAlcohol,
@@ -145,6 +148,11 @@ function sinHidratosPropuesta(alimentos: readonly AlimentoPropio[]): boolean {
  * diferencia en kcal o en proteína y ese hueco se monta con nuestras plantillas.
  */
 const TOLERANCIA_IA = 0.15
+
+/** Suelo de una grasa de adición propuesta por la IA: menos de esto no se puede medir en casa. */
+const SUELO_GRASA_G = 5
+/** Densidad a partir de la cual una grasa es "de adición" (aceite, mantequilla): kcal/100 g. */
+const KCAL_GRASA_DENSA = 700
 /** Grasa mínima (g, o fracción de la del día) para que un alimento se nombre en DIETA_GRASA_ALTA. */
 const GRASA_RELEVANTE_G = 3
 const GRASA_RELEVANTE_PCT = 0.05
@@ -436,7 +444,7 @@ export function componerDiaCon(
 
   const dictadasPorNombre = new Set(dictadas.map((d) => normalizarNombre(d.nombre)))
   const sinHidratos = aMontar.map(() => false)
-  const porConfirmar: { hueco: number; aplicado: string; apuntado: string }[] = []
+  const porConfirmar: { hueco: number; aplicado: string; apuntado: string; texto: string }[] = []
   for (const h of interpretada.habitos) {
     aplicarHabito(h, {
       huecos,
@@ -471,6 +479,10 @@ export function componerDiaCon(
   // Se hace ANTES de montar para que el generador sepa qué huecos no va a enseñar nadie y no
   // suelte sus notas ("la Cena se queda 80 kcal por encima…") sobre una comida que no se ve.
   const deLaIa: (HuecoCuadrado | null)[] = aMontar.map(() => null)
+  // Las notas de la propuesta NO son "apuntado": esa lista son cosas que dijo la persona y que aún
+  // no aplicamos, y "hemos usado la nuestra" describe algo que SÍ se ha hecho (§4bis.3). Van al
+  // pie del bloque, con las demás notas, donde caben en una línea de texto.
+  const notasPropuesta: string[] = []
   if (propuesta !== undefined) {
     const porNombre = new Map<string, ComidaPropia>()
     for (const c of propuesta.comidas) {
@@ -496,7 +508,7 @@ export function componerDiaCon(
         }
         continue
       }
-      apuntado.push(apuntadoPropuestaNoConvence(comidasAMontar[j].nombre))
+      notasPropuesta.push(apuntadoPropuestaNoConvence(comidasAMontar[j].nombre))
     }
   }
 
@@ -512,15 +524,19 @@ export function componerDiaCon(
   // "aplicado" a "apuntado": nunca se promete lo que no se ha hecho.
   for (const p of porConfirmar) {
     const ia = deLaIa[p.hueco]
+    let motivo = p.apuntado
     if (ia !== null) {
       if (sinHidratosPropuesta(ia.alimentos)) continue
+      // Aquí el hábito SÍ se aplicó al objetivo y no había ningún problema de tamaño: lo que ha
+      // pasado es que la propuesta trajo guarnición. `apuntadoNoCabe` contaría otra cosa (§4.5).
+      motivo = apuntadoPropuestaConHidratos(p.texto, comidasAMontar[p.hueco].nombre)
     } else {
       const ejemplo = montado.comidas[p.hueco]
       if (ejemplo !== undefined && sinHidratosDeVerdad(ejemplo)) continue
     }
     const i = aplicado.indexOf(p.aplicado)
     if (i >= 0) aplicado.splice(i, 1)
-    apuntado.push(p.apuntado)
+    apuntado.push(motivo)
   }
 
   // ----- §4.6: el día, en el orden del plan y con las extras al final -----
@@ -590,6 +606,7 @@ export function componerDiaCon(
     diabetes: inputs.condiciones.includes('diabetes'),
     pendientes,
     ajustados,
+    propuestos: deLaIa.map((c) => c?.alimentos ?? []),
     variables,
     variableDe,
     resuelto: ajuste.resuelto,
@@ -644,7 +661,7 @@ export function componerDiaCon(
     apuntado,
     pendientes,
     no_entendido: interpretada.no_entendido,
-    notas: [...interpretada.notas, ...montado.notas],
+    notas: [...interpretada.notas, ...montado.notas, ...notasPropuesta],
     n_variables: variables.length,
     provisional: pendientes.length > 0,
   }
@@ -772,14 +789,14 @@ function cuadrarHueco(
       continue
     }
     const v = variables.length
-    variables.push(cajaDe(a))
+    variables.push(sueloDeCocina(a, cajaDe(a)))
     piezas.push({ macros: a.macros_100g, gramos: a.gramos ?? 0, variable: v })
     fichas.push({ estado, v })
   }
   const ajuste = ajustar({
     piezas,
     variables,
-    objetivo,
+    objetivo: objetivoAlcanzable(piezas, variables, objetivo),
     modo: 'completa',
     huecosAMontar: 0,
     lowCarb,
@@ -794,6 +811,48 @@ function cuadrarHueco(
     alimentos: filas,
     totales: publicar(filas.reduce((t, a) => suma(t, a.aporte), { ...CERO })),
   }
+}
+
+/**
+ * Suelo de cocina para la grasa de adición de un hueco propuesto (§4bis.3). La caja de §4.2.2 es
+ * `[0,5·g , 1,75·g]` sobre lo que propuso el modelo y no tiene suelo absoluto: con el aceite eso
+ * daba "3 g" para un plato entero, media cucharadita, que no es una instrucción usable en una
+ * cocina. El prompt le promete al modelo raciones de casa (aceite 5–15 g, §4bis.2 regla 2) y esto
+ * es lo que las sostiene. Solo se toca el camino de la propuesta: lo dictado (§4.2) no se toca.
+ */
+function sueloDeCocina(a: AlimentoPropio, caja: Variable): Variable {
+  if (a.grupo_aprox !== 'grasa' || a.macros_100g.kcal <= KCAL_GRASA_DENSA) return caja
+  if (caja.unidadG !== null) return caja
+  const suelo = Math.min(SUELO_GRASA_G, caja.hiRed)
+  if (!(suelo > caja.loRed)) return caja
+  return { ...caja, lo: Math.max(caja.lo, suelo), loRed: suelo }
+}
+
+/**
+ * Objetivo utilizable del hueco (§4bis.3). Un macro que la propuesta NO puede alcanzar ni con
+ * todas sus piezas en el extremo alto de la caja no tiene mínimo interior: su término de `F` es
+ * estrictamente decreciente y solo empuja los gramos hacia arriba, disparando los demás macros.
+ * Ese fue el caso de la decisión L ("solo pollo y arroz", sin ninguna fuente de grasa): el óptimo
+ * de `F` se iba a 591 kcal y 59,9 g de proteína y el hueco no pasaba el ±15 %, así que nunca se
+ * servía. Poniendo a 0 ese macro, `funcionCompleta` se salta su término y el resto cuadra.
+ *
+ * Es determinista y solo quita términos sin óptimo interior; el ±15 % de `convence` se sigue
+ * midiendo contra el objetivo REAL.
+ */
+function objetivoAlcanzable(
+  piezas: readonly Pieza[],
+  variables: readonly Variable[],
+  objetivo: Macros,
+): Macros {
+  const maximos = totalesDe(
+    piezas,
+    variables.map((v) => v.hiRed),
+  )
+  const util: Macros = { ...objetivo }
+  for (const m of MACROS) {
+    if (util[m] > 0 && maximos[m] < util[m]) util[m] = 0
+  }
+  return util
 }
 
 /** `true` si el hueco cuadrado se queda dentro del ±15 % en kcal y en proteína (§4bis.3). */
@@ -835,7 +894,7 @@ interface ContextoHabito {
   /** Huecos (índice dentro de `aMontar`) a los que se ha aplicado `sin_hidratos`. */
   sinHidratos: boolean[]
   /** Promesas que hay que comprobar contra lo realmente montado (§4.5): nunca prometer de más. */
-  porConfirmar: { hueco: number; aplicado: string; apuntado: string }[]
+  porConfirmar: { hueco: number; aplicado: string; apuntado: string; texto: string }[]
 }
 
 /** §4.3.2 y §4.5: un hábito se aplica a un hueco montado o se apunta. */
@@ -920,7 +979,12 @@ function aplicarHabito(h: HabitoPropio, c: ContextoHabito): void {
   if (h.tipo === 'sin_hidratos') {
     c.sinHidratos[j] = true
     // La promesa "Cena sin hidratos" solo vale si la cena montada los lleva de verdad.
-    c.porConfirmar.push({ hueco: j, aplicado: texto, apuntado: apuntadoNoCabe(h.texto) })
+    c.porConfirmar.push({
+      hueco: j,
+      aplicado: texto,
+      apuntado: apuntadoNoCabe(h.texto),
+      texto: h.texto,
+    })
   }
 }
 
@@ -959,6 +1023,13 @@ interface EntradaAvisos {
   diabetes: boolean
   pendientes: readonly { comida: string; nombre: string }[]
   ajustados: readonly AlimentoAjustado[][]
+  /**
+   * Las filas de los huecos que ha montado la IA (§4bis.3). Van aparte de `ajustados` porque los
+   * avisos que buscan "qué alimento DICTADO tiene recorrido" (proteína corta, grasa alta, límite)
+   * solo tienen sentido sobre lo que dijo la persona; los que se evalúan sobre el DÍA COMPLETO
+   * (§4.4) tienen que contarlas, y sin esto un día entero de IA no emitía ni un aviso.
+   */
+  propuestos: readonly AlimentoAjustado[][]
   variables: readonly Variable[]
   /** Índice en `variables` de cada alimento del día aplanado; -1 si es fijo o pendiente. */
   variableDe: readonly number[]
@@ -974,6 +1045,12 @@ function construirAvisos(e: EntradaAvisos): { codigo: string; texto: string }[] 
   const T = e.objetivo
   const M = e.totales
   const planos = e.ajustados.flat()
+  const deLaIa = e.propuestos.flat()
+  /** Todo lo que se come ese día, lo dictado y lo propuesto: los avisos de §4.4 miran el día. */
+  const delDia = [...planos, ...deLaIa]
+  const hayIa = deLaIa.length > 0
+  /** Un día sin ninguna comida de la persona: el copy no puede decir "tus comidas" (§4.4). */
+  const menu = e.modo === 'solo_contexto'
   const cajaDeAlimento = (i: number): Variable | undefined => e.variables[e.variableDe[i]]
   const variables = planos.filter((a) => a.estado_ajuste === 'variable')
 
@@ -1013,12 +1090,12 @@ function construirAvisos(e: EntradaAvisos): { codigo: string; texto: string }[] 
     }
     avisos.push({
       codigo: 'DIETA_PROTEINA_CORTA',
-      texto: avisoProteinaCorta(M.prot, T.prot, mejor ? nombreEnFrase(mejor) : null),
+      texto: avisoProteinaCorta(M.prot, T.prot, mejor ? nombreEnFrase(mejor) : null, menu),
     })
   }
 
   if (T.fat > 0 && M.fat < UMBRAL_GRASA_BAJA * T.fat) {
-    avisos.push({ codigo: 'DIETA_GRASA_BAJA', texto: avisoGrasaBaja(M.fat, T.fat) })
+    avisos.push({ codigo: 'DIETA_GRASA_BAJA', texto: avisoGrasaBaja(M.fat, T.fat, menu) })
   }
 
   if (T.fat > 0 && M.fat > UMBRAL_GRASA_ALTA * T.fat) {
@@ -1036,11 +1113,14 @@ function construirAvisos(e: EntradaAvisos): { codigo: string; texto: string }[] 
       .sort((x, y) => y.aporte.fat - x.aporte.fat)
       .slice(0, 2)
       .map((a) => nombreEnFrase(a))
-    avisos.push({ codigo: 'DIETA_GRASA_ALTA', texto: avisoGrasaAlta(M.fat, T.fat, conRecorrido) })
+    avisos.push({
+      codigo: 'DIETA_GRASA_ALTA',
+      texto: avisoGrasaAlta(M.fat, T.fat, conRecorrido, menu),
+    })
   }
 
   if (T.kcal > 0 && Math.abs(M.kcal - T.kcal) > UMBRAL_KCAL * T.kcal) {
-    avisos.push({ codigo: 'DIETA_KCAL_LEJOS', texto: avisoKcalLejos(M.kcal - T.kcal) })
+    avisos.push({ codigo: 'DIETA_KCAL_LEJOS', texto: avisoKcalLejos(M.kcal - T.kcal, menu) })
   }
 
   const umbralHc = e.diabetes ? UMBRAL_HC_DIABETES : UMBRAL_HC
@@ -1049,15 +1129,24 @@ function construirAvisos(e: EntradaAvisos): { codigo: string; texto: string }[] 
   }
 
   if (e.fibraObjetivo > 0 && M.fibra < UMBRAL_FIBRA * e.fibraObjetivo) {
-    avisos.push({ codigo: 'DIETA_FIBRA_BAJA', texto: avisoFibraBaja(M.fibra, e.fibraObjetivo) })
+    avisos.push({
+      codigo: 'DIETA_FIBRA_BAJA',
+      texto: avisoFibraBaja(M.fibra, e.fibraObjetivo, menu),
+    })
   }
 
-  if (e.modo === 'completa') {
-    const vegetales = planos
+  // El candado del modo `completa` estaba porque en `parcial` los huecos los montan nuestras
+  // plantillas, que siempre traen verdura. Con huecos de IA eso ya no se puede dar por hecho: un
+  // día de "solo pollo y arroz" se iba sin un aviso. Con IA cambia también el texto (§4bis.3).
+  if (e.modo === 'completa' || hayIa) {
+    const vegetales = delDia
       .filter((a) => a.grupo_aprox === 'verdura' || a.grupo_aprox === 'fruta')
       .reduce((t, a) => t + a.gramos_ajustados, 0)
     if (vegetales < GRAMOS_VEGETALES) {
-      avisos.push({ codigo: 'DIETA_SIN_VEGETALES', texto: AVISO_SIN_VEGETALES })
+      avisos.push({
+        codigo: 'DIETA_SIN_VEGETALES',
+        texto: hayIa ? AVISO_SIN_VEGETALES_IA : AVISO_SIN_VEGETALES,
+      })
     }
   }
 
@@ -1088,8 +1177,16 @@ function construirAvisos(e: EntradaAvisos): { codigo: string; texto: string }[] 
     }
   }
 
-  if (planos.some((a) => a.origen_macros === 'estimado')) {
-    avisos.push({ codigo: 'DIETA_ESTIMADOS', texto: AVISO_ESTIMADOS })
+  // También los propuestos: la fila pinta el distintivo "estimado" venga de donde venga, y el
+  // aviso que lo explica no puede quedarse mudo justo en el día que monta la IA.
+  const estimadoDictado = planos.some((a) => a.origen_macros === 'estimado')
+  const estimadoIa = deLaIa.some((a) => a.origen_macros === 'estimado')
+  if (estimadoDictado || estimadoIa) {
+    // "Escríbelos desde «Cambiar»" solo vale si hay alguna fila editable: las de la IA no lo son.
+    avisos.push({
+      codigo: 'DIETA_ESTIMADOS',
+      texto: estimadoDictado ? AVISO_ESTIMADOS : AVISO_ESTIMADOS_IA,
+    })
   }
 
   const distintos = new Set(avisos.map((a) => a.codigo)).size

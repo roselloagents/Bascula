@@ -40,35 +40,48 @@ export function avisoPropiasGrandes(pct: number, movidos: readonly string[]): st
   return `Lo que nos contaste ya se lleva ${k(pct)} % de tus calorías. Hemos hecho el resto del día lo más ligero que podemos${cola}.`
 }
 
+/**
+ * Un día en el que la persona no ha puesto ninguna comida (modo `solo_contexto`) NO se puede
+ * describir con "tus comidas" ni con "tus raciones": esos gramos los hemos puesto nosotros o los
+ * ha propuesto la IA (§4.4, variante de copy de la decisión L). `menu === true` es ese caso.
+ */
 export function avisoProteinaCorta(
   prot: number,
   objetivo: number,
   alimento: string | null,
+  menu = false,
 ): string {
   const consejo =
     alimento === null
       ? 'Añade una fuente de proteína a alguna comida.'
       : `Sube un poco más ${alimento}.`
-  return `Con estas comidas no llegamos a la proteína: te quedas en ${g(prot)} g de los ${g(objetivo)} g del plan. ${consejo}`
+  const cabeza = menu ? 'Con este menú' : 'Con estas comidas'
+  return `${cabeza} no llegamos a la proteína: te quedas en ${g(prot)} g de los ${g(objetivo)} g del plan. ${consejo}`
 }
 
-export function avisoGrasaBaja(fat: number, objetivo: number): string {
-  return `Tus comidas se quedan en ${g(fat)} g de grasa frente a los ${g(objetivo)} g de tu plan. Por debajo se resienten las hormonas y la absorción de las vitaminas A, D, E y K: añade aceite de oliva, frutos secos, aguacate o pescado azul.`
+export function avisoGrasaBaja(fat: number, objetivo: number, menu = false): string {
+  const cabeza = menu ? 'Este menú se queda' : 'Tus comidas se quedan'
+  return `${cabeza} en ${g(fat)} g de grasa frente a los ${g(objetivo)} g de tu plan. Por debajo se resienten las hormonas y la absorción de las vitaminas A, D, E y K: añade aceite de oliva, frutos secos, aguacate o pescado azul.`
 }
 
 export function avisoGrasaAlta(
   fat: number,
   objetivo: number,
   alimentos: readonly string[],
+  menu = false,
 ): string {
   if (alimentos.length === 0) {
-    return `Hemos recortado al máximo la grasa de tus comidas y aun así se queda en ${g(fat)} g frente a los ${g(objetivo)} g del plan: para bajar más habría que cambiar algún alimento, no su cantidad.`
+    const donde = menu ? 'de este menú' : 'de tus comidas'
+    return `Hemos recortado al máximo la grasa ${donde} y aun así se queda en ${g(fat)} g frente a los ${g(objetivo)} g del plan: para bajar más habría que cambiar algún alimento, no su cantidad.`
   }
   return `La grasa se queda en ${g(fat)} g frente a los ${g(objetivo)} g del plan. Lo que más la sube es ${enumerar(alimentos)}: mira si puedes recortar ahí.`
 }
 
-export function avisoKcalLejos(diferencia: number): string {
+export function avisoKcalLejos(diferencia: number, menu = false): string {
   const direccion = diferencia > 0 ? 'encima' : 'debajo'
+  if (menu) {
+    return `Con este menú te quedas ${k(Math.abs(diferencia))} kcal por ${direccion} de tu plan: prueba con otra propuesta.`
+  }
   return `Con estas comidas te quedas ${k(Math.abs(diferencia))} kcal por ${direccion} de tu plan: no se puede cuadrar más sin cambiar tus raciones.`
 }
 
@@ -76,12 +89,20 @@ export function avisoHcLejos(carb: number, objetivo: number): string {
   return `Los hidratos quedan en ${g(carb)} g frente a los ${g(objetivo)} g del plan.`
 }
 
-export function avisoFibraBaja(fibra: number, objetivo: number): string {
-  return `Tus comidas se quedan en ${g(fibra)} g de fibra frente a los ${g(objetivo)} g de tu plan: añade una ración de verdura, legumbre o fruta.`
+export function avisoFibraBaja(fibra: number, objetivo: number, menu = false): string {
+  const cabeza = menu ? 'Este menú se queda' : 'Tus comidas se quedan'
+  return `${cabeza} en ${g(fibra)} g de fibra frente a los ${g(objetivo)} g de tu plan: añade una ración de verdura, legumbre o fruta.`
 }
 
 export const AVISO_SIN_VEGETALES =
   'En lo que nos has contado casi no hay verdura ni fruta. Los números cuadran, pero un plan sin vegetales se queda corto de fibra, potasio y vitaminas: añade una ración de verdura a la comida y a la cena y una pieza de fruta.'
+
+/**
+ * El mismo aviso cuando el día lo ha montado la IA (§4bis.3): "en lo que nos has contado" sería
+ * falso —la persona no ha puesto esos platos— y el camino para cambiarlo tampoco es el mismo.
+ */
+export const AVISO_SIN_VEGETALES_IA =
+  'En este menú casi no hay verdura ni fruta. Los números cuadran, pero un día sin vegetales se queda corto de fibra, potasio y vitaminas: pide «Otra propuesta» o añade una ración de verdura a la comida y a la cena.'
 
 export const AVISO_SIN_ACEITE =
   'No nos has dicho el aceite de cocinar ni el de aliñar. Suelen ser una o dos cucharadas al día, entre 90 y 180 kcal: dilo y los gramos saldrán mejor.'
@@ -100,6 +121,13 @@ export function avisoLimitePorRacion(nombre: string, gramos: number): string {
 
 export const AVISO_ESTIMADOS =
   'Los alimentos marcados con «estimado» no están en nuestra base: sus macros son una estimación. Si tienes el envase a mano, escríbelos desde «Cambiar».'
+
+/**
+ * Cuando los únicos alimentos estimados están en comidas `propuesta_ia`, el consejo de arriba no
+ * sirve: esas filas no llevan "Cambiar" (§4bis.3). Se dice lo que sí se puede hacer.
+ */
+export const AVISO_ESTIMADOS_IA =
+  'Los alimentos marcados con «estimado» no están en nuestra base: sus macros son una estimación. En las comidas «propuesta IA» no se pueden editar; pide «Otra propuesta» si prefieres otra cosa.'
 
 export const AVISO_NO_CUADRA =
   'Con estas comidas el plan no cuadra bien. Lo de abajo es lo mejor que hemos podido hacer sin cambiar lo que comes: lee los avisos y cambia algún alimento.'
@@ -190,4 +218,14 @@ export function apuntadoPropuestaNoConvence(comida: string): string {
  */
 export function apuntadoExcluidoEnPropuesta(nombre: string, comida: string): string {
   return `La propuesta de ${comida} trae ${nombre}, que no querías: pide «Otra propuesta» si prefieres cambiarla.`
+}
+
+/**
+ * La costumbre se aplicó al objetivo del hueco, pero la propuesta de la IA trajo guarnición de
+ * todas formas (§4.5 comprobada contra lo montado). El texto de `apuntadoNoCabe` mentía aquí: no
+ * había ningún problema de tamaño y contar otra comida no arreglaría nada; lo que hay que hacer
+ * es pedir otra propuesta.
+ */
+export function apuntadoPropuestaConHidratos(texto: string, comida: string): string {
+  return `«${texto}»: la propuesta de ${comida} trae guarnición; pide «Otra propuesta» y lo intentamos otra vez`
 }
