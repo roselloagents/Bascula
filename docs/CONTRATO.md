@@ -91,8 +91,8 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
   isolipídica— ya filtradas por `preferencia_efectiva` y con la guarda de ración de §3.3. La
   pantalla y el PDF las pintan tal cual; no las recalculan.
 
-- Usa `src/data/foods.json` (copiado de `docs/foods.json`, **105** alimentos con el esquema de
-  `SPEC-ux-comidas-pdf.md` §3.0: los 101 del plan más los 4 con tag `extra` de la v1.2, que no entran en ningún menú) y las plantillas/algoritmo de `docs/SPEC-ux-comidas-pdf.md` §3.
+- Usa `src/data/foods.json` (copiado de `docs/foods.json`, **107** alimentos con el esquema de
+  `SPEC-ux-comidas-pdf.md` §3.0: los 101 del plan más los 6 con tag `extra` —4 de la tarjeta del ciclo de la v1.2 y 2 de las comidas dictadas de la v1.3—, que no entran en ningún menú) y las plantillas/algoritmo de `docs/SPEC-ux-comidas-pdf.md` §3.
 - Recorre `resultado.comidas` (un único array) y devuelve un `EjemploComida` por toma, cuyo campo `comida`
   es el `nombre` de `resultado.comidas[i]`. Tolerancia normativa (la misma que `SPEC-ux-comidas-pdf.md`
   §3.3, y la única que comprueban los tests): `totales.kcal` dentro de ±10 % de `objetivo.kcal`, y
@@ -140,7 +140,7 @@ Campos **nuevos y todos opcionales**: nada de lo anterior cambia de forma y la U
 - `generarListaCompra(ejemplos, inputs)` se exporta desde `src/meals/index.ts` y devuelve exactamente lo que `generarEjemplos` deja en `Ejemplos.compra`. Es pura y determinista (mismo `Ejemplos` e `Inputs` → misma lista, incluido el orden de `items`) y recibe `inputs` porque en modo sencillo reconstruye internamente el día B para ponderar los gramos de los dos días.
 - Fórmulas normativas (§3.7.3): `gramos_semana = round(7 · g_A)` en modo normal y `round(4 · g_A + 3 · g_B)` en modo sencillo —el calendario real de §3.7.2, no la media de los dos días—; `gramos_dia = round1(gramos_semana / 7)`; `envases = ceil(gramos_semana / envase_g)`; `dura_dias = min(floor(envases · envase_g / gramos_dia), conservacion_dias)`. La línea lleva el consejo fijo de compra en dos veces cuando `conservacion === 'fresco'`, la duración bruta pasa de `conservacion_dias` **y además se compran dos envases o más**.
 - Texto de las dos celdas de cantidad y del rótulo del modo sencillo: `textoCantidadSemana`, `textoCantidadDia` y `textoModoSencillo`, exportados desde `src/meals/compra.ts`. **Los usan la pantalla y el PDF**, que así imprimen exactamente la misma cadena (§4.4b: "las mismas cuatro columnas de §2.5b"); `src/components/resultados/compra.ts` los reexporta para la UI.
-- Datos: `src/data/mercadona.json`, **una fila por cada alimento de `foods.json`** (las 105, incluidos los `extra`) (cobertura total validada en `src/data/__tests__/mercadona.test.ts`), con el tipado y el índice en `src/data/mercadona.ts` (`MERCADONA`, `formatoCompra`, `ORDEN_SECCIONES`, `NOMBRE_SECCION`). **Sin precios**, por decisión: varían por tienda y por semana y envejecen mal en un PDF descargado. `envase_g` está expresado **en la misma base en la que `foods.json` mide el alimento** (crudo, cocido, escurrido o peso comestible), para que las fórmulas de arriba se apliquen sin conversiones.
+- Datos: `src/data/mercadona.json`, **una fila por cada alimento de `foods.json`** (las 107, incluidos los `extra`) (cobertura total validada en `src/data/__tests__/mercadona.test.ts`), con el tipado y el índice en `src/data/mercadona.ts` (`MERCADONA`, `formatoCompra`, `ORDEN_SECCIONES`, `NOMBRE_SECCION`). **Sin precios**, por decisión: varían por tienda y por semana y envejecen mal en un PDF descargado. `envase_g` está expresado **en la misma base en la que `foods.json` mide el alimento** (crudo, cocido, escurrido o peso comestible), para que las fórmulas de arriba se apliquen sin conversiones.
 - Presentación: la UI la pinta en §2.5b (tabla por sección, debajo de los menús) y el PDF en su propia página, §4.4b, justo después de los menús. Ninguno de los dos recalcula gramos ni envases.
 
 ## Exportador PDF — `src/pdf/index.ts`
@@ -282,7 +282,7 @@ que no lea los campos nuevos sigue funcionando igual.
 | `Ejemplos` | `avisos_menu?`, `alimentos_ciclo?` | `src/meals` | la UI (§2.5 y §2.2c) y el PDF (§4.4 y §4.3b) |
 | `ListaCompra` | `opcional_ciclo?: SeccionOpcionalCompra` | `src/meals` (§3.8.2) | la UI (§2.5b) y el PDF (§4.4b) |
 | tipos nuevos | `SintomaRegla`, `ConsejoCiclo`, `ResultadoCiclo`, `AlimentoCiclo`, `SeccionOpcionalCompra` | — | — |
-| `foods.json` | `nombre_corto` (obligatorio en los 105 alimentos) y el tag `extra` | los datos | la UI (chips del paso 14 y resumen de §2.5) y `src/meals` |
+| `foods.json` | `nombre_corto` (obligatorio en los 107 alimentos) y el tag `extra` | los datos | la UI (chips del paso 14 y resumen de §2.5) y `src/meals` |
 
 **Lo que el motor ignora (y por qué importa fuera de él).** `menu_sencillo`, `alimentos_excluidos` y
 `alimentos_favoritos` **no entran en ningún cálculo** de `calcular`: dos usuarios idénticos salvo esos
