@@ -16,17 +16,21 @@ import {
 } from '@react-pdf/renderer'
 import type { ReactNode } from 'react'
 import type {
+  AlimentoAjustado,
   AlimentoCiclo,
   AlimentoPorcion,
   AvisoTexto,
   Comida,
+  ComidaCompuesta,
   ConsejoCiclo,
   DatosPdf,
+  DiaCompuesto,
   EjemploComida,
   EjemploDia,
   ItemCompra,
   ListaCompra,
   Macros,
+  MacrosPropio,
   Pesaje,
   PuntoProyeccion,
   SeccionOpcionalCompra,
@@ -236,11 +240,14 @@ function Cabecera({ fecha }: { fecha: string }) {
 function Marco({
   fecha,
   ajustado,
+  conTusComidas,
   children,
 }: {
   fecha: string
   /** §4.3: con un plan ajustado a mano, la marca va en el pie de TODAS las páginas. */
   ajustado?: boolean
+  /** v1.3 (§6.2): la marca "con tus comidas" va junto a la de "ajustado a mano", en el mismo pie. */
+  conTusComidas?: boolean
   children: ReactNode
 }) {
   return (
@@ -251,6 +258,7 @@ function Marco({
         <Text>
           Una herramienta de RS Agents
           {ajustado ? ' · plan ajustado por ti' : ''}
+          {conTusComidas ? ' · con tus comidas' : ''}
         </Text>
         <Text render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`} />
       </View>
@@ -421,16 +429,23 @@ function BloqueComidaEjemplo({ comida }: { comida: EjemploComida }) {
         </Text>
         <Text style={{ fontSize: 9 }}>{totalesTexto(comida.totales)}</Text>
       </View>
-      <View style={{ paddingHorizontal: 7, paddingTop: 4 }}>
-        {(comida.alimentos ?? []).map((a, i) => (
-          <LineaAlimento key={`${a.id}-${i}`} alimento={a} />
-        ))}
-        {(comida.alternativas ?? []).length > 0 ? (
-          <Text style={[s.small, { marginTop: 3 }]}>
-            Alternativas: {lista(comida.alternativas.map(sinPuntoFinal))}.
-          </Text>
-        ) : null}
-      </View>
+      <CuerpoComidaEjemplo comida={comida} />
+    </View>
+  )
+}
+
+/** Alimentos y alternativas de una toma propuesta. Lo comparten el menú de siempre y el bloque de §6.2. */
+function CuerpoComidaEjemplo({ comida }: { comida: EjemploComida }) {
+  return (
+    <View style={{ paddingHorizontal: 7, paddingTop: 4 }}>
+      {(comida.alimentos ?? []).map((a, i) => (
+        <LineaAlimento key={`${a.id}-${i}`} alimento={a} />
+      ))}
+      {(comida.alternativas ?? []).length > 0 ? (
+        <Text style={[s.small, { marginTop: 3 }]}>
+          Alternativas: {lista(comida.alternativas.map(sinPuntoFinal))}.
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -452,6 +467,307 @@ function BloqueDia({ dia, titulo }: { dia: EjemploDia; titulo: string }) {
           {n}
         </Text>
       ))}
+    </View>
+  )
+}
+
+// ---------- v1.3: "Tu menú, con lo tuyo dentro" (docs/SPEC-dieta-propia.md §6.2) ----------
+// Aquí tampoco se calcula nada: todo sale de `datos.dieta_propia`, que compone `componerDia` en el
+// navegador (§4). El PDF solo elige qué se imprime y con qué palabras.
+
+const TITULO_DIETA = 'Tu menú, con lo tuyo dentro'
+
+/**
+ * Copia LITERAL de las notas por condición de `src/components/resultados/BloquesMenu.tsx`: §5.1 pide
+ * el mismo texto en la pantalla y en el papel. No se importan de `src/components/utiles/copy.ts`
+ * porque el componente compartido `NotasCondicion` es de otro ámbito y puede no existir todavía;
+ * cuando exista, estas tres constantes se sustituyen por sus textos sin tocar nada más.
+ */
+const NOTA_DIABETES =
+  'Estos gramajes de hidratos son un ejemplo: si usas insulina o pastillas que bajan el azúcar, ' +
+  'revisa la dosis con tu equipo médico antes de cambiar tu forma de comer.'
+const NOTA_DIABETES_DIETA =
+  'Hemos movido gramos de hidratos para cuadrar el plan: si usas insulina, enséñale estos gramos a ' +
+  'tu equipo médico antes de cambiar nada.'
+const NOTA_CARDIACA =
+  'Cocina sin sal añadida y evita embutidos y conservas: con tu condición el sodio importa más que ' +
+  'los gramos exactos.'
+
+/** Descripción según el modo (§5.4), literal. */
+const DESCRIPCION_MODO: Record<DiaCompuesto['modo'], string> = {
+  completa:
+    'Estas son tus comidas. Hemos movido los gramos lo justo para cuadrar tus calorías y tus macros. ' +
+    'Cada alimento está en el estado en el que nos lo contaste: si dijiste «en seco», los gramos son en seco.',
+  parcial:
+    'Las comidas que nos contaste van tal cual (o con los gramos ajustados donde hacía falta); las ' +
+    'demás las hemos montado para cuadrar el resto de tu plan.',
+  solo_contexto:
+    'Hemos montado el día con lo que nos contaste: sin lo que no te gusta, con lo que te gusta y como ' +
+    'prefieres cada comida.',
+}
+
+/** Nota fija del bloque (§5.4), literal. */
+const NOTA_FIJA_DIETA =
+  'Las comidas marcadas «tuya» son tu comida real, con los gramos ajustados por un algoritmo a tu ' +
+  'plan; las marcadas «propuesta» las hemos montado nosotros. Lo que dictaste lo ha interpretado un ' +
+  'modelo de inteligencia artificial: revisa que haya entendido bien cada alimento y corrige lo que ' +
+  'haga falta con «Cambiar».'
+
+/** Nota encima de la tabla de reparto cuando hay comidas dictadas (§5.1). */
+const NOTA_REPARTO_DIETA =
+  'Este reparto es el que te proponíamos; tus comidas van por otros porcentajes, los tienes más abajo.'
+
+/**
+ * A partir de este número de alimentos dictados el bloque **compacta** (§6.2): sin "(antes N g)" y
+ * sin las notas por alimento. Es lo que hace caber el caso máximo (8 comidas y 40 alimentos) dentro
+ * del tope de 10 páginas de §4.4b.
+ */
+const ALIMENTOS_DIETA_COMPACTA = 30
+
+const ESTADO_DIETA: Record<AlimentoAjustado['estado'], string> = {
+  crudo: 'en crudo',
+  cocido: 'ya cocido',
+  seco: 'en seco',
+  listo: '',
+}
+
+/** ` (+120)` / ` (-8)` solo cuando la desviación de ese macro supera el 2 % del plan (§5.4). */
+function sufijoDesvio(valor: number, objetivo: number, decimales = 0): string {
+  if (!Number.isFinite(valor) || !Number.isFinite(objetivo) || objetivo <= 0) return ''
+  const d = valor - objetivo
+  if (Math.abs(d) <= 0.02 * objetivo) return ''
+  return ` (${d > 0 ? '+' : ''}${num(d, decimales)})`
+}
+
+function totalesDiaTexto(t: MacrosPropio, objetivo: Macros): string {
+  return (
+    `Total: ${fmtKcal(t.kcal)}${sufijoDesvio(t.kcal, objetivo.kcal)}` +
+    ` · ${gramos(t.prot, 1)} de proteína${sufijoDesvio(t.prot, objetivo.prot, 1)}` +
+    ` · ${gramos(t.fat, 1)} de grasa${sufijoDesvio(t.fat, objetivo.fat, 1)}` +
+    ` · ${gramos(t.carb, 1)} de hidratos${sufijoDesvio(t.carb, objetivo.carb, 1)}` +
+    ` · ${gramos(t.fibra, 1)} de fibra`
+  )
+}
+
+function planPedidoTexto(objetivo: Macros): string {
+  return (
+    `Tu plan pedía: ${fmtKcal(objetivo.kcal)} · ${gramos(objetivo.prot)} de proteína` +
+    ` · ${gramos(objetivo.fat)} de grasa · ${gramos(objetivo.carb)} de hidratos`
+  )
+}
+
+/** Una línea de alimento dictado: gramos finales a la derecha y el detalle en letra pequeña debajo. */
+function LineaAlimentoPropio({
+  alimento,
+  compacta,
+}: {
+  alimento: AlimentoAjustado
+  compacta: boolean
+}) {
+  const pendiente = alimento.estado_ajuste === 'pendiente'
+  const detalles: string[] = []
+  const estado = ESTADO_DIETA[alimento.estado] ?? ''
+  if (estado.length > 0) detalles.push(estado)
+  if (
+    alimento.unidad &&
+    typeof alimento.cantidad_unidades === 'number' &&
+    alimento.cantidad_unidades > 0
+  ) {
+    detalles.push(`${num(alimento.cantidad_unidades)} x ${winAnsi(alimento.unidad.nombre)}`)
+  }
+  if (pendiente) detalles.push('nos falta la cantidad')
+  else if (!compacta && alimento.delta_g !== 0 && typeof alimento.gramos === 'number') {
+    detalles.push(`(antes ${gramos(alimento.gramos)})`)
+  }
+  if (alimento.origen_macros === 'estimado') detalles.push('estimado')
+  if (alimento.origen_macros === 'envase') detalles.push('del envase')
+  const nota = !compacta && alimento.nota ? winAnsi(alimento.nota).trim() : ''
+  const pie = [detalles.join(' · '), nota].filter((t) => t.length > 0).join(' · ')
+  return (
+    <View style={{ paddingVertical: compacta ? 1 : 2 }} wrap={false}>
+      <View style={{ flexDirection: 'row' }}>
+        <Text style={{ width: 12, color: C.acento }}>{'•'}</Text>
+        {/* Compactado (§6.2): el detalle va en la misma línea que el nombre, no debajo. */}
+        <Text style={{ flex: 1 }}>
+          {winAnsi(alimento.nombre) || SIN_DATO}
+          {compacta && pie.length > 0 ? <Text style={s.small}> · {pie}</Text> : null}
+        </Text>
+        <Text style={{ width: 62, textAlign: 'right', fontFamily: 'Helvetica-Bold' }}>
+          {pendiente ? SIN_DATO : gramos(alimento.gramos_ajustados)}
+        </Text>
+      </View>
+      {!compacta && pie.length > 0 ? (
+        <Text style={[s.small, { marginLeft: 12 }]}>{pie}</Text>
+      ) : null}
+    </View>
+  )
+}
+
+/** Una toma del día compuesto: dictada ("tuya") o montada por el generador ("propuesta"). */
+function BloqueComidaCompuesta({
+  comida,
+  compacta,
+}: {
+  comida: ComidaCompuesta
+  compacta: boolean
+}) {
+  const propia = comida.origen === 'propia'
+  const alimentos = (comida.alimentos ?? []).filter((a) => !!a && a.retirado !== true)
+  return (
+    <View style={{ marginBottom: compacta ? 4 : 8 }} minPresenceAhead={compacta ? 36 : 60}>
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          backgroundColor: C.acentoClaro,
+          paddingVertical: 4,
+          paddingHorizontal: 7,
+          borderRadius: 3,
+        }}
+        wrap={false}
+      >
+        <Text style={{ fontFamily: 'Helvetica-Bold', color: C.acento }}>
+          {winAnsi(comida.nombre) || SIN_DATO}
+          {comida.hora ? ` · ${comida.hora}` : ''}
+          {comida.peri ? ' · cerca de tu entreno' : ''}
+          {propia ? ' · tuya' : ' · propuesta'}
+        </Text>
+        <Text style={{ fontSize: 9 }}>{totalesTexto(comida.totales)}</Text>
+      </View>
+      {propia ? (
+        <View style={{ paddingHorizontal: 7, paddingTop: 4 }}>
+          {alimentos.map((a, i) => (
+            <LineaAlimentoPropio key={`${a.nombre}-${i}`} alimento={a} compacta={compacta} />
+          ))}
+        </View>
+      ) : comida.ejemplo ? (
+        <CuerpoComidaEjemplo comida={comida.ejemplo} />
+      ) : null}
+    </View>
+  )
+}
+
+/** El bloque entero de §6.2, en el lugar del "Ejemplo de menú". */
+function BloqueDietaPropia({
+  dia,
+  diabetes,
+  cardiaca,
+  resumen,
+}: {
+  dia: DiaCompuesto
+  diabetes: boolean
+  cardiaca: boolean
+  /** Resumen "Sin: … · Favoritos: …" (§4.4): las listas ya llevan los gustos sumados. */
+  resumen: string
+}) {
+  const comidas = (dia.comidas ?? []).filter((c) => !!c)
+  const dictados = comidas.reduce((n, c) => n + (c.alimentos ?? []).length, 0)
+  const compacta = dictados > ALIMENTOS_DIETA_COMPACTA
+  const pendientes = (dia.pendientes ?? []).filter((p) => !!p)
+  const avisos = (dia.avisos ?? []).filter((a) => !!a && typeof a.texto === 'string')
+  const noEntendido = (dia.no_entendido ?? []).filter((n) => !!n)
+  return (
+    <View>
+      <Text style={s.p}>{DESCRIPCION_MODO[dia.modo] ?? DESCRIPCION_MODO.parcial}</Text>
+      {dia.provisional ? (
+        <Text style={[s.small, { marginBottom: 3 }]}>
+          Provisional: nos falta la cantidad de algún alimento, así que estos gramos pueden cambiar.
+        </Text>
+      ) : null}
+      {diabetes ? (
+        <View style={s.nota} wrap={false}>
+          <Text>{NOTA_DIABETES}</Text>
+        </View>
+      ) : null}
+      {diabetes ? (
+        <View style={s.nota} wrap={false}>
+          <Text>{NOTA_DIABETES_DIETA}</Text>
+        </View>
+      ) : null}
+      {cardiaca ? (
+        <View style={s.nota} wrap={false}>
+          <Text>{NOTA_CARDIACA}</Text>
+        </View>
+      ) : null}
+
+      {(dia.aplicado ?? []).length > 0 ? (
+        <View style={{ marginBottom: 5 }}>
+          <Text style={s.h3}>Lo que hemos tenido en cuenta</Text>
+          {/* Compactado (§6.2): una sola frase en vez de una viñeta por línea. */}
+          {compacta ? (
+            <Text style={s.small}>{dia.aplicado.map((t) => winAnsi(t)).join(' · ')}</Text>
+          ) : (
+            <Vinetas textos={dia.aplicado.map((t) => winAnsi(t))} />
+          )}
+        </View>
+      ) : null}
+      {(dia.apuntado ?? []).length > 0 ? (
+        <View style={{ marginBottom: 5 }}>
+          <Text style={s.h3}>Apuntado, pero aún no lo aplicamos</Text>
+          {compacta ? (
+            <Text style={s.small}>{dia.apuntado.map((t) => winAnsi(t)).join(' · ')}</Text>
+          ) : (
+            <Vinetas textos={dia.apuntado.map((t) => winAnsi(t))} />
+          )}
+        </View>
+      ) : null}
+
+      {comidas.map((c, i) => (
+        <BloqueComidaCompuesta key={`${c.nombre}-${i}`} comida={c} compacta={compacta} />
+      ))}
+
+      <View style={[s.tarjeta, { paddingVertical: 7, marginBottom: 6 }]} wrap={false}>
+        <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 9.5 }}>
+          {totalesDiaTexto(dia.totales, dia.objetivo)}
+        </Text>
+        <Text style={[s.small, { marginTop: 2 }]}>{planPedidoTexto(dia.objetivo)}</Text>
+      </View>
+
+      {pendientes.length > 0 ? (
+        <Text style={[s.p, { marginBottom: 5 }]}>
+          Pendiente de cantidad:{' '}
+          {lista(pendientes.map((p) => `${winAnsi(p.nombre)} (${winAnsi(p.comida)})`))}.
+        </Text>
+      ) : null}
+
+      {/* Compactado (§6.2): los avisos pierden la caja, no el texto. Se imprimen todos igual. */}
+      {compacta ? (
+        <View style={[s.aviso, { padding: 5, marginBottom: 4 }]}>
+          {avisos.map((a, i) => (
+            <View key={`${a.codigo}-${i}`} style={{ flexDirection: 'row', marginBottom: 2 }}>
+              <Text style={{ width: 10, color: C.acento }}>{'•'}</Text>
+              <Text style={{ flex: 1, fontSize: 9, lineHeight: 1.25 }}>{winAnsi(a.texto)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        avisos.map((a, i) => (
+          <View key={`${a.codigo}-${i}`} style={s.aviso} wrap={false}>
+            <Text>{winAnsi(a.texto)}</Text>
+          </View>
+        ))
+      )}
+
+      {/* Compactado (§6.2): los fragmentos sin entender se juntan en una sola frase. */}
+      {compacta && noEntendido.length > 0 ? (
+        <Text style={[s.small, { marginTop: 2 }]}>
+          No hemos entendido: {noEntendido.map((n) => `«${winAnsi(n.texto)}»`).join(', ')}.
+        </Text>
+      ) : (
+        noEntendido.map((n, i) => (
+          <Text key={`ne-${i}`} style={[s.small, { marginTop: 2 }]}>
+            No hemos entendido: «{winAnsi(n.texto)}»
+            {n.sugerencia ? ` (${winAnsi(n.sugerencia)})` : ''}.
+          </Text>
+        ))
+      )}
+      {(dia.notas ?? []).map((n, i) => (
+        <Text key={`nd-${i}`} style={[s.small, { marginTop: 2 }]}>
+          {winAnsi(n)}
+        </Text>
+      ))}
+      {resumen.length > 0 ? <Text style={[s.small, { marginTop: 6 }]}>{resumen}</Text> : null}
+      <Text style={[s.small, { marginTop: 6 }]}>{NOTA_FIJA_DIETA}</Text>
     </View>
   )
 }
@@ -497,15 +813,23 @@ function porSecciones(
   }))
 }
 
-/** `3 días` / `1 día` / `—` si el generador no ha podido acotarlo. */
+/**
+ * `3 días` / `1 día` / `—` si el generador no ha podido acotarlo. **v1.3 (§6.1):** los alimentos que
+ * no están en nuestra base llegan con `dura_dias: 0`, que no es "cero días" sino "no lo sabemos".
+ */
 function duracionTexto(dias: number | null | undefined): string {
+  if (dias === 0) return SIN_DATO
   const n = num(dias)
   if (n === SIN_DATO) return SIN_DATO
   return dias === 1 ? '1 día' : `${n} días`
 }
 
-/** `2 x bandeja aprox. 1 kg`. La "x" va en ASCII: el aspa tipográfica no existe en WinAnsi. */
+/**
+ * `2 x bandeja aprox. 1 kg`. La "x" va en ASCII: el aspa tipográfica no existe en WinAnsi.
+ * **v1.3 (§6.1):** con `envases: 0` (alimento propio, sin formato de venta) se imprime `—`.
+ */
 function comprarTexto(item: ItemCompra): string {
+  if (item.envases === 0) return SIN_DATO
   const cuantos = num(item.envases)
   const formato = winAnsi(item.envase_descripcion ?? '')
   if (cuantos === SIN_DATO && formato.trim().length === 0) return SIN_DATO
@@ -1086,6 +1410,12 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
   )
 
   const hayMenu = (ejemplos?.entreno?.comidas ?? []).length > 0
+  // v1.3 (SPEC-dieta-propia §6.2): con el día compuesto, "Ejemplo de menú" pasa a ser "Tu menú, con
+  // lo tuyo dentro" y el pie de todas las páginas lleva la marca "con tus comidas". Sin él, el PDF
+  // es idéntico al de la v1.2.
+  const dieta: DiaCompuesto | null =
+    datos.dieta_propia && (datos.dieta_propia.comidas ?? []).length > 0 ? datos.dieta_propia : null
+  const repartoDistinto = dieta !== null && (dieta.modo === 'completa' || dieta.modo === 'parcial')
   // §4.4b: la página de la compra solo existe si el generador ha dejado la lista en `ejemplos.compra`.
   const compra: ListaCompra | null =
     hayMenu && ejemplos?.compra && (ejemplos.compra.items ?? []).length > 0 ? ejemplos.compra : null
@@ -1159,7 +1489,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           Antes la portada gastaba media página en blanco y la página 2 repetía sexo, edad, altura y
           peso (QA §6). Ahora el plan se resume de un vistazo aquí y el documento tiene una página
           menos. ---------- */}
-      <Marco fecha={fecha} ajustado={ajustado}>
+      <Marco fecha={fecha} ajustado={ajustado} conTusComidas={dieta !== null}>
         <View>
           <Text style={{ fontFamily: 'Helvetica-Bold', fontSize: 30, color: C.acento }}>
             Báscula
@@ -1325,7 +1655,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
       </Marco>
 
       {/* ---------- Página 2: avisos del caso, macros, agua y método ---------- */}
-      <Marco fecha={fecha} ajustado={ajustado}>
+      <Marco fecha={fecha} ajustado={ajustado} conTusComidas={dieta !== null}>
         {destacados.length > 0 ? (
           <Seccion titulo="Avisos para tu caso">
             {destacados.map((a) => (
@@ -1473,7 +1803,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           tarjeta del ciclo (§4.3b) o con la banda de plan ajustado (§4.3), el marco se desbordaba
           y la sección se partía, dejando su último párrafo solo en una página vacía al 85 %.
           `sinCortes` para que, si alguna vez no cabe, viaje entera. */}
-      <Marco fecha={fecha} ajustado={ajustado}>
+      <Marco fecha={fecha} ajustado={ajustado} conTusComidas={dieta !== null}>
         <Seccion titulo="Cómo lo calculamos" sinCortes>
           <Text style={s.p}>
             Tu metabolismo basal (las calorías que gastarías en reposo) sale de la ecuación{' '}
@@ -1493,6 +1823,8 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
         </Seccion>
 
         <Seccion titulo="Reparto por comidas">
+          {/* §5.1 (v1.3): con comidas dictadas el reparto de la tabla ya no es el que se sigue. */}
+          {repartoDistinto ? <Text style={s.p}>{NOTA_REPARTO_DIETA}</Text> : null}
           <View style={s.tablaCabecera}>
             <Text style={[s.cabeceraCelda, { flex: 2.4 }]}>COMIDA</Text>
             <Text style={[s.cabeceraCelda, { flex: 0.9, textAlign: 'right' }]}>%</Text>
@@ -1547,8 +1879,15 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
           </Text>
         </Seccion>
 
-        <Seccion titulo="Ejemplo de menú">
-          {hayMenu ? (
+        <Seccion titulo={dieta ? TITULO_DIETA : 'Ejemplo de menú'}>
+          {dieta ? (
+            <BloqueDietaPropia
+              dia={dieta}
+              diabetes={inputs.condiciones.includes('diabetes')}
+              cardiaca={inputs.condiciones.includes('cardiaca')}
+              resumen={resumenAlimentosLargo}
+            />
+          ) : hayMenu ? (
             <View>
               {diasIguales ? (
                 <BloqueDia dia={ejemplos.entreno} titulo="Un día tipo" />
@@ -1591,7 +1930,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
 
       {/* ---------- Página 3b: lista de la compra (§4.4b). Sin menú o sin lista, no se imprime. ---------- */}
       {compra ? (
-        <Marco fecha={fecha} ajustado={ajustado}>
+        <Marco fecha={fecha} ajustado={ajustado} conTusComidas={dieta !== null}>
           {/* `fixed`: con una lista muy larga (vegano, 6 comidas, 3.000 kcal) no hay forma de que
               quepa en una página, y §4.4b pide poder imprimirla suelta. Si se parte, el título y el
               subtítulo se repiten arriba: la segunda hoja se sostiene sola en el súper. */}
@@ -1640,7 +1979,7 @@ export function PlanDocument({ datos }: { datos: DatosPdf }) {
       ) : null}
 
       {/* ---------- Página 4: peso objetivo, consejos y referencias ---------- */}
-      <Marco fecha={fecha} ajustado={ajustado}>
+      <Marco fecha={fecha} ajustado={ajustado} conTusComidas={dieta !== null}>
         <Seccion titulo="Peso objetivo y cronograma">
           <View style={[s.tarjeta, { marginBottom: 10 }]}>
             {resultado.peso_objetivo?.mostrar_central &&

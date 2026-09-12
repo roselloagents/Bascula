@@ -164,6 +164,13 @@ describe('textos de cada línea', () => {
     expect(textoDura(linea({ dura_dias: 1 }))).toBe('te dura 1 día')
   })
 
+  // v1.3 (SPEC-dieta-propia §6.1): los alimentos dictados que no están en nuestra base llegan sin
+  // formato de venta; "0 × " y "te dura 0 días" serían dos datos inventados.
+  it('deja "—" en Comprar y en Dura cuando el alimento no tiene formato de venta', () => {
+    expect(textoComprar(linea({ envases: 0, envase_descripcion: '' }))).toBe('—')
+    expect(textoDura(linea({ dura_dias: 0 }))).toBe('—')
+  })
+
   it('rotula el modo sencillo con el número de alimentos, o sin él si aún no hay lista', () => {
     expect(textoModoSencillo(11)).toBe('Modo sencillo: 11 alimentos')
     expect(textoModoSencillo(1)).toBe('Modo sencillo: 1 alimento')

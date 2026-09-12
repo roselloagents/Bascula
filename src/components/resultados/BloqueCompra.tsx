@@ -82,6 +82,9 @@ export function BloqueCompra({ ejemplos }: { ejemplos: Ejemplos }) {
                           <span className="cifra compra-dato">{textoCantidadSemana(item)}</span>
                           <span className="compra-secundario">{textoCantidadDia(item)}</span>
                         </td>
+                        {/* v1.3 (SPEC-dieta-propia §6.1): un alimento dictado que no está en nuestra
+                            base llega sin formato de venta (`envases: 0`, `dura_dias: 0`) y estas dos
+                            celdas se quedan en "—"; lo demás de la línea se pinta igual. */}
                         <td data-etiqueta="Comprar">
                           <span className="compra-dato">{textoComprar(item)}</span>
                         </td>

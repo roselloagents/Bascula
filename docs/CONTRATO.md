@@ -186,6 +186,88 @@ export function nombreFicheroPdf(datos: DatosPdf): string
   §2.6c quedarían "antes del principio" y la huella del plan cambiaría sola.
 - Flujo y copy: `docs/SPEC-ux-comidas-pdf.md` §1-2. Diseño: `docs/DESIGN-brief.md`.
 
+## Campos nuevos de la v1.3 (todos opcionales, nada rompe)
+
+La v1.3 ("Cuéntanos cómo comes", `docs/SPEC-dieta-propia.md`) añade un servicio HTTP propio y un día
+compuesto alrededor de lo que la persona dicta o escribe. **Ningún campo existente cambia de forma ni de
+tipo** y el código que no lea los nuevos sigue funcionando igual.
+
+**Regla que manda sobre todo lo demás: el motor no lee nada de esto.** `calcular` no recibe el texto, ni
+la interpretación, ni el día compuesto: kcal, macros, agua, reparto por comidas, cronograma y proyección
+son exactamente los mismos con dieta propia y sin ella (la invariante S33 del barrido se extiende a estos
+campos). `firmaDeInputs` **tampoco cambia**: los gustos dictados entran en `alimentos_excluidos` y
+`alimentos_favoritos`, que ya estaban fuera de la huella, así que el ajuste manual guardado y los pesajes
+sobreviven a una interpretación.
+
+### Tipos (`src/engine/types.ts`, sección "v1.3")
+
+| Tipo | Quién lo escribe | Quién lo lee |
+|---|---|---|
+| `DietaInterpretada` (con `ComidaPropia`, `AlimentoPropio`, `MacrosPropio`, `GustoPropio`, `HabitoPropio`, `EstadoAlimentoPropio`, `GrupoAprox`, `TipoHabito`) | el servicio `api/` (Claude), ya post-validado (§3.5); las correcciones por fila, la UI | `src/meals/dieta` y la UI |
+| `DiaCompuesto` (con `ComidaCompuesta`, `AlimentoAjustado`, `ModoComposicion`, `OrigenComida`) | `componerDia` en el navegador | la UI (§5.4), la compra (§6.1) y el PDF (§6.2) |
+| `DatosPdf.dieta_propia?: DiaCompuesto` | la UI | **solo el PDF** |
+
+`MacrosPropio` extiende `Macros` con `fibra` y `alcohol` (g por 100 g en `macros_100g`; gramos absolutos
+en `aporte` y en los totales). Las kcal de un alimento salen siempre de `macros_100g.kcal`, nunca de
+4/4/9, igual que en el resto del generador (§3.0).
+
+### Tres funciones nuevas, exportadas desde `src/meals/index.ts`
+
+```ts
+export function generarComidas(inputs: Inputs, resultado: Resultado, huecos: Comida[], variante?: number): EjemploComida[]
+export function componerDia(interpretada: DietaInterpretada, inputs: Inputs, resultado: Resultado, variante?: number): DiaCompuesto
+export function compraDeDia(compuesto: DiaCompuesto, opcionalCiclo?: SeccionOpcionalCompra): ListaCompra
+```
+
+- `generarComidas` monta **solo los huecos que se le pasan** (mismo `Comida` que `resultado.comidas`, con
+  el objetivo ya repartido), con el mismo banco, el mismo perfil dietético y el mismo `offset` que
+  `generarEjemplos`. Es el motor de menús de siempre, sin la envoltura del día entero.
+- `componerDia` es **pura y determinista** (SPEC-dieta-propia §4): mismas entradas, mismo `DiaCompuesto`
+  bit a bit. Conserva las comidas dictadas (ajustando los gramos solo si hace falta), monta los huecos que
+  falten con `generarComidas` y emite los avisos de §4.4 en su orden de prioridad.
+- `compraDeDia` devuelve una `ListaCompra` con la forma de siempre. Los alimentos dictados que no están en
+  `foods.json` van con `alimento_id: 'propio:{slug}:{estado}'`, `envases: 0`, `envase_descripcion: ''` y
+  `dura_dias: 0`: **la pantalla y el PDF imprimen "—"** en "Comprar" y en "Dura" (`textoComprar` /
+  `textoDura` en `src/components/resultados/compra.ts`, `comprarTexto` / `duracionTexto` en
+  `src/pdf/PlanDocument.tsx`). Con composición activa, la lista que se pasa a la pantalla y al PDF es la de
+  esta función, no la de `generarListaCompra`.
+
+### Persistencia (solo en el dispositivo)
+
+- `bascula:dieta:v1` = `{ version: 1, texto, interpretada: DietaInterpretada, fecha: 'YYYY-MM-DD',
+  activa: boolean, gustos_sumados: { excluidos: string[]; favoritos: string[] } }`. No depende de
+  `firmaPlan`: con otro plan se vuelve a componer, porque `componerDia` es pura. "Empezar de cero" la
+  borra; "Editar tus datos", no. `cargarDieta` tolera basura.
+- `bascula:dieta:borrador:v1` = el texto del cuadro mientras se escribe (debounce de 500 ms). Se borra con
+  "Empezar de cero" y al validar una interpretación.
+
+### Servicio `api/` (contrato HTTP)
+
+Node 24 con `@anthropic-ai/sdk` y `zod`, sin build (TypeScript de sintaxis borrable), detrás del mismo
+nginx en `/api/*` y en una red interna: **la clave nunca llega al navegador**. Respuestas JSON UTF-8 con
+`Cache-Control: no-store`; los errores son `{ "error": { "codigo": string, "mensaje": string } }`.
+
+| Ruta | Entrada | Salida |
+|---|---|---|
+| `GET /api/salud` | — | `{ ok: true, version: '1.3.0' }` (es el `HEALTHCHECK`) |
+| `GET /api/capacidades` | — | `{ interpretar: boolean, modelo: string \| null, token: string \| null }` |
+| `POST /api/dieta/interpretar` | `{ texto: string (10–4 000), comidas_plan: string[] (2–6) }`, ≤ 16 KB, cabecera `X-Bascula-Token` | `DietaInterpretada` + `modelo: string` |
+
+Códigos de error: `400 TEXTO_INVALIDO`, `401 TOKEN_INVALIDO`, `403 ORIGEN_NO_ADMITIDO`,
+`404 NO_EXISTE`, `405 METODO_NO_ADMITIDO`, `413 CUERPO_GRANDE`, `415 TIPO_NO_ADMITIDO`,
+`422 SIN_CONTENIDO`, `429 CUOTA_IP` / `CUOTA_GLOBAL` / `PRESUPUESTO`, `502 MODELO_NO_DISPONIBLE`,
+`503 SIN_CLAVE`, `504 TIEMPO_AGOTADO`. **No viaja ningún otro dato del usuario** (ni sexo, ni edad, ni
+peso, ni objetivo) y el servidor no guarda ni registra el texto. Sin `ANTHROPIC_API_KEY`,
+`capacidades` devuelve `interpretar: false` y la pantalla dice que la función no está disponible. El resto
+—presupuesto en euros, cuotas por IP, token efímero, tiempos 90/75/60— está en `SPEC-dieta-propia.md` §2,
+§3 y §7.
+
+**Reparto del trabajo (cuatro agentes en paralelo).** Backend: `api/**`, `docker/**`, `docker-compose.yml`,
+`Dockerfile`, `vite.config.ts` y los scripts de `package.json`. Comidas: `src/meals/dieta/**`, las tres
+funciones de arriba y `src/data/**` (los dos alimentos `extra` de §3.6). UI: `src/dieta/**`, `src/App.tsx`,
+`src/components/**` y `src/styles/dieta.css`. PDF: `src/pdf/**`, `scripts/pdf-sample.mjs`, la compra con
+"—" y esta documentación. Las fronteras de carpeta son las de siempre.
+
 ## Campos nuevos de la v1.2 (todos opcionales, nada rompe)
 
 `src/engine/types.ts` gana lo siguiente. **Ningún campo existente cambia de forma ni de tipo** y el código

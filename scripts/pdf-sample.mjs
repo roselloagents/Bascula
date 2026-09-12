@@ -26,12 +26,19 @@ try {
   const { MUESTRA_COMPLETA, MUESTRA_MINIMA } = await servidor.ssrLoadModule(
     '/src/pdf/__fixtures__/muestra.ts',
   )
+  // v1.3 (SPEC-dieta-propia §6.2): una muestra más con el día compuesto ("Tu menú, con lo tuyo
+  // dentro"), para poder revisar el bloque en papel sin dictar nada ni llamar al servicio.
+  const { MUESTRA_DIETA_COMPLETA, MUESTRA_DIETA_MAXIMA } = await servidor.ssrLoadModule(
+    '/src/pdf/__fixtures__/dieta-propia.ts',
+  )
   const { renderToFile } = await import('@react-pdf/renderer')
 
   mkdirSync(salida, { recursive: true })
   for (const [nombre, datos] of [
     ['plan-muestra.pdf', MUESTRA_COMPLETA],
     ['plan-muestra-minima.pdf', MUESTRA_MINIMA],
+    ['plan-muestra-dieta.pdf', MUESTRA_DIETA_COMPLETA],
+    ['plan-muestra-dieta-maxima.pdf', MUESTRA_DIETA_MAXIMA],
   ]) {
     const ruta = resolve(salida, nombre)
     await renderToFile(elementoPlan(datos), ruta)

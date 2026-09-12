@@ -16,6 +16,9 @@ export {
   textoModoSencillo,
 } from '../../meals/compra'
 
+/** Guion largo de "no hay dato", el mismo que usa el PDF (§6.1). */
+const SIN_DATO = '—'
+
 export interface GrupoCompra {
   seccion: SeccionSuper
   /** Etiqueta visible de la sección ("Carnicería y charcutería"). */
@@ -44,12 +47,18 @@ export function agruparPorSeccion(items: readonly ItemCompra[]): GrupoCompra[] {
   }))
 }
 
-/** "2 × bandeja ≈ 1 kg". */
+/**
+ * "2 × bandeja ≈ 1 kg". **v1.3 (SPEC-dieta-propia §6.1):** los alimentos dictados que no están en
+ * nuestra base llegan con `envases: 0` y sin formato de venta; ahí no hay nada que comprar "0 veces",
+ * así que la celda se queda en el guion largo.
+ */
 export function textoComprar(item: ItemCompra): string {
+  if (item.envases === 0) return SIN_DATO
   return `${entero(item.envases)} × ${item.envase_descripcion}`
 }
 
-/** "te dura 5 días" / "te dura 1 día". */
+/** "te dura 5 días" / "te dura 1 día" / "—" con `dura_dias: 0` (§6.1: no lo sabemos). */
 export function textoDura(item: ItemCompra): string {
+  if (item.dura_dias === 0) return SIN_DATO
   return item.dura_dias === 1 ? 'te dura 1 día' : `te dura ${entero(item.dura_dias)} días`
 }

@@ -1,6 +1,6 @@
-# Báscula (RS Agents) — Especificación de UX, comidas y PDF v1.2
+# Báscula (RS Agents) — Especificación de UX, comidas y PDF v1.3
 
-Documento normativo complementario a `SPEC-calculo.md`. Cubre el cuestionario (wizard), la pantalla de resultados, el generador de ejemplos de comidas y la estructura del PDF exportable. Todo el copy está en español de España, tono cercano y honesto, sin paternalismo. Ningún mensaje afirma cosas que la ciencia no respalda (p. ej. nunca se dice que más comidas "aceleran el metabolismo", ni que el somatotipo determina tus macros).
+Documento normativo complementario a `SPEC-calculo.md` y a `SPEC-dieta-propia.md` (v1.3: en lo que la persona nos cuenta de sus propias comidas manda aquella; el menú propuesto sigue siendo el de aquí). Cubre el cuestionario (wizard), la pantalla de resultados, el generador de ejemplos de comidas y la estructura del PDF exportable. Todo el copy está en español de España, tono cercano y honesto, sin paternalismo. Ningún mensaje afirma cosas que la ciencia no respalda (p. ej. nunca se dice que más comidas "aceleran el metabolismo", ni que el somatotipo determina tus macros).
 
 Convención de referencias: `[Paso N]` remite al algoritmo de `SPEC-calculo.md`; `[Código]` remite a la tabla de mensajes de la sección 4 de ese documento.
 
@@ -984,6 +984,15 @@ no ha cambiado, así que se recupera el ajuste manual tal cual.
 
 Este mismo bloque aparece en el PDF (§4.4).
 
+**v1.3 — "Cuéntanos cómo comes".** Encima de este bloque va la tarjeta "¿Ya tienes tus comidas o tus
+costumbres?", y **mientras hay una composición activa este bloque entero lo sustituye** "Tu menú, con lo
+tuyo dentro": las comidas dictadas se conservan con los gramos ajustados a tu plan y los huecos los monta
+este mismo generador con el resto. Todo eso —cuándo se ofrece, el copy literal, las etiquetas "tuya" y
+"propuesta", los avisos y cómo se corrige cada alimento— está en
+[`docs/SPEC-dieta-propia.md`](SPEC-dieta-propia.md) §5; el algoritmo que compone el día, en su §4. El
+menú propuesto que describe esta sección **no desaparece**: se vuelve a él con "Ver el menú propuesto", y
+es lo único que existe para quien no cuenta nada.
+
 ### 2.5b Lista de la compra semanal
 
 Va **justo debajo del bloque de ejemplos de menú y de sus equivalencias**, plegada por defecto en móvil con el encabezado "Tu lista de la compra de la semana". Se muestra **siempre que haya menú** (con `menu_sencillo` activo o no); si el generador no ha producido menú (§3.1, `renal` o `hepatica`), este bloque tampoco aparece. Las reglas de cálculo, las fórmulas y los textos fijos están en §3.7; la pantalla no recalcula nada: pinta `ejemplos.compra` tal cual.
@@ -1000,6 +1009,12 @@ Va **justo debajo del bloque de ejemplos de menú y de sus equivalencias**, pleg
   opcionales que no forman parte del plan, y el copy de la nota lo dice.
 - Al pie, las tres notas fijas de `compra.notas`, en el orden en que vienen.
 - Botón secundario "Ver otro ejemplo" (§2.5): al cambiar el menú cambia también la lista, porque se recalcula desde el mismo `Ejemplos`.
+
+**v1.3 — "Cuéntanos cómo comes".** Con una composición activa, la lista que se pinta aquí (y en el PDF)
+es la del día compuesto, agrupada como dice [`docs/SPEC-dieta-propia.md`](SPEC-dieta-propia.md) §6.1: las
+mismas cuatro columnas y las mismas notas, más una nota propia, y **"—" en "Comprar" y en "Dura"** para
+los alimentos dictados que no están en nuestra base (llegan con `envases: 0` y `dura_dias: 0`, que no es
+"cero envases" sino "no lo sabemos"). El resto de esta sección no cambia.
 
 ### 2.6 Peso objetivo y cronograma
 
@@ -1158,7 +1173,11 @@ Se muestra **siempre**, a todo el mundo, sin depender de ninguna respuesta, y ap
 
 ### 3.0 Contrato de datos de `foods.json` (normativo)
 
-`foods.json` es la única fuente de alimentos del generador. Cada entrada tiene este esquema y estas garantías; cualquier alimento nuevo debe cumplirlas antes de entrar en la base:
+`foods.json` es la única fuente de alimentos del generador. Son **107 alimentos** (101 del plan + 6 extra):
+los 101 que entran en los menús más los 6 con tag `extra`, que nunca entran en ninguna `FoodQuery` —los 4
+de la tarjeta del ciclo (v1.2) y los 2 de la v1.3 (proteína de suero en polvo y kéfir), que existen para
+emparejar lo que la persona dicta (`SPEC-dieta-propia.md` §3.6)—. Cada entrada tiene este esquema y estas
+garantías; cualquier alimento nuevo debe cumplirlas antes de entrar en la base:
 
 | Campo | Tipo | Significado |
 |---|---|---|
@@ -1898,6 +1917,14 @@ páginas porque es una página de texto, sin tablas ni gráficas. Si no cabe, pa
 - Nota: "Son ejemplos para orientarte, no un menú obligatorio. Puedes sustituir cualquier alimento por otro de la misma familia sin descuadrar tus macros de forma relevante: mira la tabla de equivalencias."
 - Si el generador no ha producido menú (`renal` o `hepatica`, §3.1), la página contiene solo la tabla de reparto y el texto de derivación de §3.1; no se imprime ningún gramaje de alimento.
 - La tabla de reparto sale de `resultado.comidas` (un único array; en la v1 no hay reparto de día de entreno y de día de descanso, `[Paso 16]`), y usa el campo `hora` de cada comida como etiqueta de referencia y `peri` para marcar la toma de alrededor del entrenamiento.
+- **v1.3 — "Cuéntanos cómo comes".** Con `DatosPdf.dieta_propia`, esta sección pasa a titularse **"Tu menú,
+  con lo tuyo dentro"** y la pinta el bloque de [`docs/SPEC-dieta-propia.md`](SPEC-dieta-propia.md) §6.2:
+  la descripción del modo, "Lo que hemos tenido en cuenta", "Apuntado", las comidas etiquetadas **tuya** o
+  **propuesta**, los totales por comida y del día con "Tu plan pedía: …", las notas por condición, todos
+  los avisos, los pendientes y la nota fija. La tabla de reparto de arriba lleva entonces su nota de §5.1,
+  el pie de todas las páginas añade la marca "con tus comidas" y la página de la compra usa la lista de
+  §6.1. Sin ese campo el PDF es **idéntico** al de la v1.2, incluido este título. Las equivalencias y el
+  resumen "Sin: … · Favoritos: …" se siguen imprimiendo igual.
 
 ### 4.4b Página — Lista de la compra semanal
 
@@ -2047,6 +2074,17 @@ viven en `SPEC-calculo.md` o en `verify-vectors.mjs` se registran en el §7 de a
 
 
 ---
+
+### v1.3 — "Cuéntanos cómo comes" (2026-09-12)
+
+Decisión K. La especificación normativa es [`docs/SPEC-dieta-propia.md`](SPEC-dieta-propia.md); aquí solo
+queda lo que cambia en este documento.
+
+| # | Sev. | Dónde | Resumen de lo aplicado |
+|---|---|---|---|
+| K-1 | major | §2.5, §2.5b | La pantalla de resultados gana la tarjeta "¿Ya tienes tus comidas o tus costumbres?" y, con una composición activa, el bloque "Tu menú, con lo tuyo dentro" **sustituye** al de ejemplos de menú y la compra pasa a ser la del día compuesto (§6.1 de la spec nueva), con "—" en "Comprar" y en "Dura" para lo que no está en nuestra base. El menú propuesto no desaparece: se vuelve a él sin perder nada. |
+| K-2 | major | §4.4, §4.4b | Con `DatosPdf.dieta_propia`, la sección "Ejemplo de menú" del PDF pasa a "Tu menú, con lo tuyo dentro" (§6.2 de la spec nueva): etiquetas tuya/propuesta, totales del día contra lo que pedía el plan, notas por condición, todos los avisos, pendientes y nota fija; nota de §5.1 sobre la tabla de reparto y marca "con tus comidas" en el pie. Sin ese campo el PDF es idéntico al de la v1.2. El tope de 10 páginas se mantiene: con más de 30 alimentos dictados el bloque compacta. |
+| K-3 | minor | §3.0 | `foods.json` pasa a **107 alimentos** (101 del plan + 6 con tag `extra`): los 2 nuevos —proteína de suero en polvo y kéfir— existen para emparejar lo dictado y **no entran en ningún menú**, como el resto de `extra`. |
 
 ### v1.2.1 — buscador y grupos plegables del paso 14 (2026-09-08)
 
