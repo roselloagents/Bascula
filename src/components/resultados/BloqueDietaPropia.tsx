@@ -59,6 +59,9 @@ const ESTADO_TEXTO: Record<AlimentoAjustado['estado'], string> = {
   listo: '',
 }
 
+/** Qué quiere decir el distintivo "provisional" de la cabecera (§5.4). */
+const TITULO_PROVISIONAL = 'nos falta la cantidad de algún alimento'
+
 /** Avisos que se ven sin desplegar nada (§5.4). */
 const AVISOS_VISIBLES = 3
 /** Segundos que dura el aviso efímero antes de desaparecer (§5.4). */
@@ -124,8 +127,11 @@ function Desvio({
   const d = desvioDe(valor, objetivo, unidad, macro)
   if (d === null) return null
   return (
+    // `role="img"`: `aria-label` no vale en un `span` sin rol (ARIA 1.2 §5.2.8.6) y NVDA lo
+    // ignoraba, así que se leía "+4,2 g" sin decir de qué macro ni respecto a qué (§5.4).
     <span
       className={`dieta-desvio ${d.sube ? 'dieta-desvio-sube' : 'dieta-desvio-baja'}`}
+      role="img"
       aria-label={d.etiqueta}
     >
       {d.texto}
@@ -168,8 +174,11 @@ function macrosDelEnvase(
 function FilaAlimento({ alimento, modo, onGuardar, onQuitar }: PropsFila) {
   const contable = esContable(alimento)
   const [abierta, setAbierta] = useState(false)
+  // "Cambiar" edita lo DICTADO, no la cuenta ajustada que se pinta en la fila.
   const [cantidad, setCantidad] = useState(
-    contable ? String(alimento.cantidad_unidades ?? 1) : String(alimento.gramos ?? ''),
+    contable && alimento.unidad
+      ? String(Math.max(1, Math.round((alimento.gramos ?? 0) / alimento.unidad.gramos)))
+      : String(alimento.gramos ?? ''),
   )
   const [envase, setEnvase] = useState({ kcal: '', prot: '', carb: '', fat: '', fibra: '' })
   const pendiente = alimento.estado_ajuste === 'pendiente'
@@ -193,6 +202,9 @@ function FilaAlimento({ alimento, modo, onGuardar, onQuitar }: PropsFila) {
       cambios.macros_100g = macros
       cambios.origen_macros = 'envase'
     }
+    // "No has dicho la cantidad" deja de ser verdad en cuanto la dice: la nota se va con el
+    // estado que la justificaba (§5.4).
+    if (pendiente && (cambios.gramos ?? 0) > 0) cambios.nota = undefined
     setAbierta(false)
     if (Object.keys(cambios).length === 0) return
     // Completar un pendiente mueve los gramos de todo el día: se dice (§5.4).
@@ -212,6 +224,11 @@ function FilaAlimento({ alimento, modo, onGuardar, onQuitar }: PropsFila) {
       <span className="dieta-alimento-nombre">
         {alimento.nombre}
         {detalle !== '' ? <span className="dieta-nota"> · {detalle}</span> : null}
+        {/* Lo que la persona nos dijo, en pequeño: sin esto la fila enseñaba 360 g y un "−40 g"
+            sin decir nunca que ella había dicho 400 (el PDF sí lo imprime). */}
+        {!pendiente && alimento.delta_g !== 0 ? (
+          <span className="dieta-nota"> (antes {entero(alimento.gramos ?? 0)} g)</span>
+        ) : null}
       </span>
 
       <span className="dieta-etiquetas">
@@ -243,7 +260,7 @@ function FilaAlimento({ alimento, modo, onGuardar, onQuitar }: PropsFila) {
       {alimento.nota ? <p className="dieta-nota">{alimento.nota}</p> : null}
 
       {pendiente ? (
-        <div className="dieta-pendiente">
+        <div className="dieta-pendiente" key="pendiente">
           <CampoNumero
             etiqueta={`${alimento.nombre}: ¿cuántos gramos?`}
             unidad={contable && alimento.unidad ? alimento.unidad.nombre : 'g'}
@@ -256,7 +273,9 @@ function FilaAlimento({ alimento, modo, onGuardar, onQuitar }: PropsFila) {
           </button>
         </div>
       ) : (
-        <div className="dieta-acciones-fila">
+        // `key` distinta: al completar un pendiente React reutilizaba el hueco del DOM y el foco
+        // se quedaba encima de "Esto no lo como", el botón destructivo (§5.4).
+        <div className="dieta-acciones-fila" key="normal">
           <button
             type="button"
             className="dieta-cambiar"
@@ -473,6 +492,8 @@ export function BloqueDietaPropia({
   const titulo = useRef<HTMLHeadingElement>(null)
   const deshacer = useRef<HTMLButtonElement>(null)
   const editar = useRef<HTMLButtonElement>(null)
+  /** Dónde estaba el foco antes de que apareciera el aviso efímero, para devolverlo. */
+  const focoPrevio = useRef<HTMLElement | null>(null)
 
   // Al validar una interpretación el bloque se lleva el foco y el scroll (§5.3).
   useEffect(() => {
@@ -481,10 +502,35 @@ export function BloqueDietaPropia({
     titulo.current?.focus()
   }, [foco])
 
+  /** Devuelve el foco a donde estaba, si ese elemento sigue en el documento. */
+  const devolverFoco = () => {
+    const previo = focoPrevio.current
+    focoPrevio.current = null
+    if (previo === null || !previo.isConnected) {
+      // La fila puede haber desaparecido con el alimento: el título del bloque es el ancla estable.
+      titulo.current?.focus({ preventScroll: true })
+      return
+    }
+    previo.focus({ preventScroll: true })
+  }
+
+  /** Muestra el aviso efímero recordando antes dónde estaba el foco. */
+  const mostrarEfimero = (aviso: { texto: string; deshacer: () => void }) => {
+    const activo = document.activeElement
+    focoPrevio.current = activo instanceof HTMLElement ? activo : null
+    setEfimero(aviso)
+  }
+
+  // El aviso se lleva el foco a "Deshacer" —está al final del documento y si no, la acción es
+  // irreversible en la práctica— pero se autodestruye a los 6 s: sin devolver el foco, quien usa
+  // teclado o lector de pantalla acababa en el `body`, al principio del documento (WCAG 2.4.3).
   useEffect(() => {
     if (efimero === null) return
     deshacer.current?.focus()
-    const temporizador = window.setTimeout(() => setEfimero(null), SEGUNDOS_DESHACER * 1000)
+    const temporizador = window.setTimeout(() => {
+      devolverFoco()
+      setEfimero(null)
+    }, SEGUNDOS_DESHACER * 1000)
     return () => window.clearTimeout(temporizador)
   }, [efimero])
 
@@ -507,7 +553,7 @@ export function BloqueDietaPropia({
     const sitio = localizar(nombreComida, visible)
     if (sitio === null) return
     onCorregir(sitio.comida, sitio.alimento, { retirado: true })
-    setEfimero({
+    mostrarEfimero({
       texto: `Fuera ${nombre}. Hemos recalculado.`,
       deshacer: () => onCorregir(sitio.comida, sitio.alimento, { retirado: false }),
     })
@@ -530,7 +576,13 @@ export function BloqueDietaPropia({
           <span className="dieta-distintivos">
             <span className="etiqueta-ajustado">con tus comidas</span>
             {compuesto.provisional ? (
-              <span className="dieta-origen dieta-origen-provisional">provisional</span>
+              <span
+                className="dieta-origen dieta-origen-provisional"
+                title={TITULO_PROVISIONAL}
+                aria-label={`provisional: ${TITULO_PROVISIONAL}`}
+              >
+                provisional
+              </span>
             ) : null}
           </span>
         </h2>
@@ -566,7 +618,7 @@ export function BloqueDietaPropia({
                 ? (id, nombre) => {
                     const corto = nombreCorto(id) ?? nombre
                     onExcluirAlimento(id)
-                    setEfimero({
+                    mostrarEfimero({
                       texto: `Fuera ${corto}. Hemos rehecho el menú y la compra.`,
                       deshacer: () => onDeshacerExclusion?.(id),
                     })
@@ -643,6 +695,7 @@ export function BloqueDietaPropia({
             ref={deshacer}
             onClick={() => {
               efimero.deshacer()
+              devolverFoco()
               setEfimero(null)
             }}
           >

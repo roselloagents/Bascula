@@ -25,6 +25,8 @@ interface PropsMenu {
   onDeshacerExclusion?: (id: string) => void
   /** Enlace "Cambiar" del resumen: lleva al paso de alimentos del cuestionario. */
   onCambiarAlimentos?: () => void
+  /** Contador de foco: al volver del menú compuesto, el foco va al h2 (SPEC-dieta-propia §5.4). */
+  foco?: number
 }
 
 /** Segundos que dura el aviso de "Fuera {alimento}" antes de desaparecer (§2.5). */
@@ -37,6 +39,7 @@ export function BloqueMenus({
   onExcluirAlimento,
   onDeshacerExclusion,
   onCambiarAlimentos,
+  foco,
 }: PropsMenu) {
   // El aviso efímero se cierra solo a los 6 s; el cambio, no. Vive aquí y no en `App` porque es
   // presentación pura: ni el plan ni el borrador dependen de que se vea o no.
@@ -73,6 +76,7 @@ export function BloqueMenus({
     <Seccion
       titulo="Un día de ejemplo"
       descripcion="Los gramajes ya están escalados a tus macros. Pesa en crudo salvo que ponga otra cosa."
+      foco={foco}
     >
       {/* Distintivo de modo sencillo (§3.7): el número sale de la lista de la compra, que ya lo
           trae contado (`alimentos_distintos`); la pantalla no cuenta alimentos por su cuenta. */}

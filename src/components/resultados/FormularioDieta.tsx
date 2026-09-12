@@ -8,6 +8,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { DietaInterpretada } from '../../engine/types'
 import {
   ErrorApi,
+  ERROR_TEXTO,
   TEXTO_MAX,
   TEXTO_MIN,
   esCancelado,
@@ -139,8 +140,9 @@ export function FormularioDieta({
   useEffect(() => () => peticion.current?.abort(), [])
 
   const largo = texto.trim().length
+  const pasado = largo > TEXTO_MAX
   const escuchando = dictado.estado === 'escuchando'
-  const puede = largo >= TEXTO_MIN && largo <= TEXTO_MAX && !escuchando
+  const puede = largo >= TEXTO_MIN && !pasado && !escuchando
 
   const cancelarPeticion = () => {
     peticion.current?.abort()
@@ -150,7 +152,9 @@ export function FormularioDieta({
   const enviar = () => {
     if (enviando) return
     if (!puede) {
-      setError(AVISO_CORTO)
+      // Los dos motivos son distintos y el copy también: con 4 800 caracteres decirle "cuéntanos
+      // al menos una cosa" era justo lo contrario del problema (§5.3).
+      setError(largo > TEXTO_MAX ? ERROR_TEXTO : AVISO_CORTO)
       return
     }
     const control = new AbortController()
@@ -232,7 +236,11 @@ export function FormularioDieta({
             if (error !== '') setError('')
           }}
         />
-        <p className="dieta-contador cifra" id={idContador}>
+        <p
+          className={`dieta-contador cifra${pasado ? ' dieta-contador-pasado' : ''}`}
+          id={idContador}
+          aria-live="polite"
+        >
           {conEspacios(texto.length)} / {conEspacios(TEXTO_MAX)}
         </p>
       </div>

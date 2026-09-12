@@ -62,6 +62,13 @@
   text-align: right;
 }
 
+/* Pasado el tope, el contador avisa ANTES de pulsar: el botón se queda sin efecto y el error
+   llega después (SPEC-dieta-propia §5.3). */
+.dieta-contador-pasado {
+  color: var(--aviso);
+  font-weight: 600;
+}
+
 .dieta-pista,
 .dieta-privacidad {
   color: var(--tinta-suave);

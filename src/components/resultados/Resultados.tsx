@@ -30,6 +30,9 @@ import { TarjetaDietaPropia } from './TarjetaDietaPropia'
 import { BloqueDietaPropia, ESTADO_MENU_PROPUESTO } from './BloqueDietaPropia'
 import { ofreceDietaPropia, textoListo } from './dieta'
 
+/** Segundos que el anuncio de la dieta se queda en pantalla si nadie hace nada (§5.4). */
+const SEGUNDOS_ESTADO = 8
+
 interface ResultadosProps {
   inputs: InputCalculo
   /** Plan que se está viendo: el recomendado, o el ajustado si el usuario movió las palancas. */
@@ -93,7 +96,16 @@ export function Resultados({
   const [formularioAbierto, setFormularioAbierto] = useState(false)
   // Contador que lleva el foco y el scroll al bloque compuesto al validar (§5.3).
   const [focoDieta, setFocoDieta] = useState(0)
+  // El mismo mecanismo al revés: al volver al menú propuesto, el foco va a su h2 (§5.4).
+  const [focoMenu, setFocoMenu] = useState(0)
   const [estadoDieta, setEstadoDieta] = useState('')
+  // El anuncio describe un estado; cuando ese estado cambia, el anuncio deja de ser verdad. Se
+  // vacía en cada acción y, si nadie hace nada, solo a sí mismo a los 8 s (§5.4).
+  useEffect(() => {
+    if (estadoDieta === '') return
+    const temporizador = window.setTimeout(() => setEstadoDieta(''), SEGUNDOS_ESTADO * 1000)
+    return () => window.clearTimeout(temporizador)
+  }, [estadoDieta])
 
   const ofrece = onDieta !== undefined && ofreceDietaPropia(inputs, ejemplos)
   const activa = ofrece && compuesto !== null && dieta !== null
@@ -177,17 +189,26 @@ export function Resultados({
           dieta={dieta}
           comidasPlan={comidasPlan}
           onValidada={validada}
-          onActivar={() => onActivarDieta?.()}
-          onBorrar={() => onBorrarDieta?.()}
-          onFormulario={setFormularioAbierto}
+          onActivar={() => {
+            setEstadoDieta('')
+            onActivarDieta?.()
+          }}
+          onBorrar={() => {
+            setEstadoDieta('')
+            onBorrarDieta?.()
+          }}
+          onFormulario={(abierto) => {
+            if (abierto) setEstadoDieta('')
+            setFormularioAbierto(abierto)
+          }}
         />
       ) : null}
 
-      {estadoDieta !== '' ? (
-        <p className="nota nota-recuadro" role="status">
-          {estadoDieta}
-        </p>
-      ) : null}
+      {/* La región vive SIEMPRE, también vacía: si se monta y se desmonta, el lector de pantalla
+          no llega a anunciar el mensaje nuevo (§5.4). */}
+      <p className={estadoDieta === '' ? 'visualmente-oculto' : 'nota nota-recuadro'} role="status">
+        {estadoDieta}
+      </p>
 
       {activa && compuesto && dieta ? (
         <BloqueDietaPropia
@@ -197,17 +218,24 @@ export function Resultados({
           ejemplos={ejemplos}
           comidasPlan={comidasPlan}
           foco={focoDieta}
-          onCorregir={(comida, alimento, cambios) => onCorregirDieta?.(comida, alimento, cambios)}
+          onCorregir={(comida, alimento, cambios) => {
+            setEstadoDieta('')
+            onCorregirDieta?.(comida, alimento, cambios)
+          }}
           onValidada={validada}
           onOtroEjemplo={onOtroEjemplo}
           onVerPropuesto={() => {
             setEstadoDieta(ESTADO_MENU_PROPUESTO)
+            setFocoMenu((n) => n + 1)
             onVerPropuesto?.()
           }}
           onExcluirAlimento={onExcluirAlimento}
           onDeshacerExclusion={onDeshacerExclusion}
           onCambiarAlimentos={onCambiarAlimentos}
-          onFormulario={setFormularioAbierto}
+          onFormulario={(abierto) => {
+            if (abierto) setEstadoDieta('')
+            setFormularioAbierto(abierto)
+          }}
         />
       ) : (
         <BloqueMenus
@@ -217,6 +245,7 @@ export function Resultados({
           onExcluirAlimento={onExcluirAlimento}
           onDeshacerExclusion={onDeshacerExclusion}
           onCambiarAlimentos={onCambiarAlimentos}
+          foco={focoMenu}
         />
       )}
       <BloqueEquivalencias inputs={inputs} ejemplos={ejemplos} />

@@ -59,6 +59,9 @@ export function TarjetaDietaPropia({
   const micro = hayDictado(ventana)
 
   const abrir = () => {
+    // Sin `disabled` el botón no pierde el foco mientras se piden las capacidades: si el servicio
+    // no está, el `role="status"` de "no disponible" se anuncia al lado (§5.2 y §5.3).
+    if (apertura.estado === 'pidiendo') return
     onFormulario?.(true)
     apertura.abrir()
   }
@@ -130,7 +133,6 @@ export function TarjetaDietaPropia({
             className="btn btn-secundario"
             ref={entrada}
             aria-busy={pidiendo}
-            disabled={pidiendo}
             onClick={abrir}
           >
             {micro ? <IconoMicro tam={20} /> : null}

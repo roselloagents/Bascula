@@ -1,5 +1,6 @@
 // Piezas compartidas por la pantalla de resultados.
 
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import type { AvisoTexto } from '../../engine/types'
 import { IconoAviso, IconoNota } from '../ui/Iconos'
@@ -10,13 +11,25 @@ interface SeccionProps {
   descripcion?: ReactNode
   children: ReactNode
   icono?: ReactNode
+  /**
+   * Contador que, al cambiar, lleva el scroll y el foco al `h2` (SPEC-dieta-propia §5.4: al volver
+   * al menú propuesto el foco tiene que caer aquí, no en el `body`). Sin esta prop el título no es
+   * enfocable y la sección se comporta como siempre.
+   */
+  foco?: number
 }
 
-export function Seccion({ titulo, descripcion, children, icono }: SeccionProps) {
+export function Seccion({ titulo, descripcion, children, icono, foco }: SeccionProps) {
+  const titular = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (foco === undefined || foco <= 0) return
+    titular.current?.scrollIntoView({ block: 'start' })
+    titular.current?.focus({ preventScroll: true })
+  }, [foco])
   return (
     <section className="seccion">
       <header className="seccion-cabecera">
-        <h2>
+        <h2 ref={titular} tabIndex={foco === undefined ? undefined : -1}>
           {icono ? <span className="seccion-icono">{icono}</span> : null}
           {titulo}
         </h2>

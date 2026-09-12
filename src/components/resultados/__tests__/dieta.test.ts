@@ -205,6 +205,8 @@ describe('formulario (§5.3)', () => {
     expect(html).toContain('Desayuno siempre 250 g de kéfir con 25 g de almendras.')
     expect(html).toContain('/ 4 000')
     expect(html).toContain('aria-describedby=')
+    // El contador se anuncia solo: con 4 800 caracteres hay que verlo venir antes de pulsar.
+    expect(html).toContain('aria-live="polite"')
     expect(html).toContain('Puedes contarnos una sola comida o el día entero')
     expect(html).toContain('Al dictar, tu navegador usa el servicio de voz de Google')
     expect(html).toContain('Para entenderlo, el texto viaja a nuestro servidor')
@@ -282,8 +284,17 @@ describe('bloque compuesto (§5.4)', () => {
     expect(html).toContain('en crudo')
     expect(html).toContain('aria-label="Cambiar Pechuga de pollo (cruda, sin piel)"')
     expect(html).toContain('aria-label="Quitar Pechuga de pollo (cruda, sin piel) de mis comidas"')
-    // Contable: las unidades acompañan al nombre, y los gramos siguen siendo la cifra de la fila.
-    expect(html).toContain('5 × huevo M')
+    // Contable: la cuenta que se pinta es la de los gramos FINALES (165 g = 3 huevos), no la
+    // dictada (5): la fila no puede contradecirse a sí misma (§5.4).
+    expect(html).toContain('165 g')
+    expect(html).toContain('3 × huevo M')
+    expect(html).not.toContain('5 × huevo M')
+    // Y se dice de dónde viene ese gramaje: "(antes N g)", como en el PDF.
+    expect(html).toContain('(antes 275 g)')
+    // El distintivo "provisional" se explica sin bajar tres comidas.
+    expect(html).toContain('nos falta la cantidad de algún alimento')
+    // La desviación necesita un rol que admita `aria-label` (ARIA 1.2 §5.2.8.6).
+    expect(html).toContain('class="dieta-desvio dieta-desvio-baja" role="img"')
     expect(html).toContain('Esto no lo como')
   })
 
