@@ -265,8 +265,9 @@ export interface OpcionesInterpretar {
   /** `output_config.effort`; sin él, `ESFUERZO_POR_DEFECTO`. */
   esfuerzo?: Esfuerzo
   ahora?: () => number
-  /** Se llama tras CADA llamada al modelo, reintento incluido. */
-  alFacturar?: (euros: number, uso: UsoModelo | null) => void
+  /** Se llama tras CADA llamada al modelo, reintento incluido. Con `estimado` a true la llamada
+   *  se agotó por tiempo y el coste es una estimación (Anthropic la cobra igual). */
+  alFacturar?: (euros: number, uso: UsoModelo | null, estimado?: boolean) => void
 }
 
 export type ResultadoInterpretar =
@@ -322,9 +323,17 @@ export async function interpretarTexto(
       )
     } catch (error) {
       if (clienteSeFue()) return { estado: 'abortado', intentos }
-      return porTiempo.aborted
-        ? { estado: 'tiempo', intentos }
-        : { estado: 'modelo', motivo: mensajeDeError(error), intentos }
+      if (!porTiempo.aborted) {
+        return { estado: 'modelo', motivo: mensajeDeError(error), intentos }
+      }
+      // Se agotó el tiempo: Anthropic cobra la llamada aunque nosotros nos hayamos ido, así que
+      // se suma una estimación al presupuesto en vez de contarla como gratis (§7).
+      opciones.alFacturar?.(
+        costeEuros(opciones.modelo, usoEstimadoInterpretar(opciones.sistema, contenido)),
+        null,
+        true,
+      )
+      return { estado: 'tiempo', intentos }
     }
 
     // Se factura ANTES de mirar nada más: la llamada ya está hecha y Anthropic ya la ha cobrado,
@@ -354,6 +363,15 @@ export async function interpretarTexto(
   }
 
   return { estado: 'modelo', motivo: 'no_valida', intentos }
+}
+
+/** Caracteres por token, a ojo, para la estimación de una llamada agotada por tiempo. */
+const CARACTERES_POR_TOKEN_INTERPRETAR = 4
+
+/** Uso estimado de una llamada que no llegó a responder: toda la entrada y media salida. */
+export function usoEstimadoInterpretar(sistema: string, mensaje: string): UsoModelo {
+  const entrada = Math.ceil((sistema.length + mensaje.length) / CARACTERES_POR_TOKEN_INTERPRETAR)
+  return { input_tokens: entrada, output_tokens: Math.round(MAX_TOKENS / 2) }
 }
 
 type Leido = { ok: true; datos: SalidaModelo } | { ok: false; resumen: string }

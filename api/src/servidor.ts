@@ -209,6 +209,7 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
 
     let euros = 0
     let uso: UsoModelo | null = null
+    let estimado = false
     const resultado = await interpretarTexto({
       cliente: cliente as ClienteModelo,
       modelo: config.modelo,
@@ -220,9 +221,10 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
       senalCliente: abortador.signal,
       limiteMs: entrada + MS_PRESUPUESTO,
       ahora,
-      alFacturar: (coste, usoLlamada) => {
+      alFacturar: (coste, usoLlamada, esEstimado) => {
         euros += coste
         uso = usoLlamada
+        if (esEstimado === true) estimado = true
         limites.registrarCoste(coste)
       },
     })
