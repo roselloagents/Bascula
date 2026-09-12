@@ -609,4 +609,81 @@ export interface DatosPdf {
   /** Pesajes del seguimiento local (SPEC-ux §2.6c y §4.5b). `undefined` o vacío ⇒ el PDF no
    *  imprime el bloque de seguimiento. Nunca se envían a ningún servidor. */
   pesajes?: Pesaje[]
+  /** v1.3 (SPEC-dieta-propia §6.2): la dieta propia ajustada. Ausente ⇒ el PDF imprime el menú
+   *  propuesto como hasta la v1.2. Presente ⇒ la sección "Ejemplo de menú" pasa a ser
+   *  "Tus comidas, ajustadas a tus números" y la compra es la de esa dieta. */
+  dieta_propia?: DietaAjustada
+}
+
+// ---------- v1.3: dieta propia dictada (docs/SPEC-dieta-propia.md) ----------
+// El motor NO lee nada de esta sección. `DietaInterpretada` la devuelve el servicio `api/` (Claude);
+// `DietaAjustada` la calcula `src/dieta/ajuste.ts` en el navegador, de forma pura y determinista.
+
+/** Un alimento tal y como lo ha entendido el modelo (SPEC-dieta-propia §3.4). */
+export interface AlimentoPropio {
+  /** Fragmento del texto del que sale ("100 g de arroz basmati pesado en seco"). */
+  texto: string
+  /** Nombre que se enseña ("Arroz basmati (seco)"). */
+  nombre: string
+  /** `id` de foods.json si es el mismo alimento en el mismo estado; si no, null. */
+  alimento_id: string | null
+  /** Gramos que dijo la persona (ya convertidos). null = no lo dijo. */
+  gramos: number | null
+  /** Solo si la persona habló en unidades ("5 huevos", "un scoop"). */
+  unidad?: { nombre: string; gramos: number }
+  cantidad_unidades?: number | null
+  /** Por 100 g. Del catálogo si hay `alimento_id` (el servidor los impone); estimados si no. */
+  macros_100g: Macros
+  origen_macros: 'catalogo' | 'estimado'
+  /** false = el ajuste no lo toca (especias, verdura de hoja, bebidas sin kcal…). */
+  ajustable: boolean
+  confianza: 'alta' | 'media' | 'baja'
+  nota?: string
+}
+
+export interface ComidaPropia {
+  nombre: string
+  alimentos: AlimentoPropio[]
+}
+
+/** Respuesta de `POST /api/dieta/interpretar` (SPEC-dieta-propia §2.3 y §3.4). */
+export interface DietaInterpretada {
+  comidas: ComidaPropia[]
+  no_entendido: { texto: string; sugerencia?: string }[]
+  notas: string[]
+}
+
+/** Un alimento después del ajuste de gramos (SPEC-dieta-propia §4.8). */
+export interface AlimentoAjustado extends AlimentoPropio {
+  estado: 'variable' | 'fijo' | 'pendiente'
+  /** Gramos finales. Igual a `gramos` en fijos; 0 en pendientes. */
+  gramos_ajustados: number
+  delta_g: number
+  cambio: 'sube' | 'baja' | 'igual'
+  factor: number
+  /** Aporte real con `gramos_ajustados`. */
+  aporte: Macros
+}
+
+export interface ComidaAjustada {
+  nombre: string
+  alimentos: AlimentoAjustado[]
+  totales: Macros
+  /** % de las kcal del día que se lleva esta comida (0–100, 1 decimal). */
+  pct_kcal: number
+}
+
+/** Salida de `ajustarDieta` (SPEC-dieta-propia §4.8). */
+export interface DietaAjustada {
+  comidas: ComidaAjustada[]
+  totales: Macros
+  objetivo: Macros
+  /** totales − objetivo, kcal entera y macros con 1 decimal. */
+  desvio: Macros
+  avisos: { codigo: string; texto: string }[]
+  pendientes: { comida: string; nombre: string }[]
+  no_entendido: DietaInterpretada['no_entendido']
+  notas: string[]
+  /** Número de alimentos que el algoritmo ha podido mover. */
+  n_variables: number
 }
