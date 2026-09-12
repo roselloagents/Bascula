@@ -43,6 +43,7 @@ npm run test:api        # vitest: el cliente de Anthropic va INYECTADO, ningún 
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Sin ella no se interpreta (`503 SIN_CLAVE`). Solo llega como `environment` en tiempo de ejecución: nunca como `ARG`. |
 | `BASCULA_MODELO` | `claude-sonnet-5` | Lista blanca: `claude-sonnet-5`, `claude-haiku-4-5`, `claude-opus-5`. Cualquier otro se ignora (se avisa en el log) y se usa el de por defecto. |
+| `BASCULA_ESFUERZO` | `low` | `output_config.effort` de la llamada: `low`, `medium` o `high`. Medido en producción con `medium`: 29-36 s por interpretación. |
 | `BASCULA_TOPE_EUROS_DIA` | `4` | Presupuesto diario (UTC) de TODAS las llamadas al modelo, reintentos incluidos. Tope duro. |
 | `BASCULA_TOPE_GLOBAL_DIA` | `400` | Interpretaciones por día. |
 | `BASCULA_TOPE_IP_DIA` | `40` | Interpretaciones por IP y día (IPv6 agregada por /64). |

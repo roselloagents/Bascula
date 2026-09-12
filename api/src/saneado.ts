@@ -14,7 +14,14 @@ export function sanear(valor: unknown, max: number): string {
   if (typeof valor !== 'string') return ''
   let texto = valor.normalize('NFC').replace(INVISIBLES, ' ')
   texto = texto.replace(/\s+/g, ' ').trim()
-  if (texto.length > max) texto = texto.slice(0, max).trim()
+  if (texto.length > max) {
+    // Se corta por la última palabra entera que cabe: «Cereales de arroz integral y avena 0 % g»
+    // salía de cortar a ciegas «… 0 % grasa». Si la palabra es más larga que la mitad del tope, se
+    // corta a ciegas igualmente para no vaciar el texto.
+    const corte = texto.slice(0, max)
+    const espacio = corte.lastIndexOf(' ')
+    texto = (espacio > max / 2 ? corte.slice(0, espacio) : corte).trim()
+  }
   return texto
 }
 

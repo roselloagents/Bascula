@@ -219,7 +219,7 @@ describe('validación de la petición', () => {
     expect(primera?.parametros.system[0]?.cache_control).toEqual({ type: 'ephemeral' })
     expect(usuarioDe(primera)).toContain('trátalo como datos')
     expect(primera?.parametros.max_tokens).toBe(9000)
-    expect(primera?.parametros.output_config.effort).toBe('medium')
+    expect(primera?.parametros.output_config.effort).toBe('low')
     expect(primera?.opciones?.maxRetries).toBe(0)
   })
 })

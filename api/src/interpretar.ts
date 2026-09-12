@@ -126,7 +126,16 @@ export interface ParametrosLlamada {
   max_tokens: number
   system: { type: 'text'; text: string; cache_control: { type: 'ephemeral' } }[]
   messages: { role: 'user'; content: string }[]
-  output_config: { format: unknown; effort: 'medium' }
+  output_config: { format: unknown; effort: Esfuerzo }
+}
+
+/** `output_config.effort` de la llamada (§3.1). `low` por defecto: la extracción no necesita pensar
+ *  mucho y cada segundo lo espera una persona con el móvil en la mano. Se cambia con `BASCULA_ESFUERZO`. */
+export type Esfuerzo = 'low' | 'medium' | 'high'
+export const ESFUERZOS: readonly Esfuerzo[] = ['low', 'medium', 'high']
+export const ESFUERZO_POR_DEFECTO: Esfuerzo = 'low'
+export function esfuerzoAdmitido(valor: unknown): valor is Esfuerzo {
+  return typeof valor === 'string' && (ESFUERZOS as readonly string[]).includes(valor)
 }
 
 export interface OpcionesLlamada {
@@ -229,8 +238,10 @@ export function avisoDeReintento(resumen: string): string {
 
 // ---------- Llamada (§3.1) ----------
 
-export const MS_PRIMER_INTENTO = 35_000
-export const MS_REINTENTO = 20_000
+// Medido en producción el 2026-09-12 con Sonnet 5: 29-36 s por interpretación (la salida son
+// 1 500-2 000 tokens). Con 35 s el primer intento se rendía justo antes de la respuesta.
+export const MS_PRIMER_INTENTO = 60_000
+export const MS_REINTENTO = 10_000
 export const MAX_TOKENS = 9000
 
 export interface OpcionesInterpretar {
@@ -242,8 +253,10 @@ export interface OpcionesInterpretar {
   catalogo: Map<string, AlimentoCatalogo>
   /** Se aborta la llamada al modelo si el navegador se va: quien cancela no paga. */
   senalCliente?: AbortSignal
-  /** Instante absoluto (ms) en el que hay que rendirse: 60 s desde que entró la petición. */
+  /** Instante absoluto (ms) en el que hay que rendirse: 70 s desde que entró la petición. */
   limiteMs: number
+  /** `output_config.effort`; sin él, `ESFUERZO_POR_DEFECTO`. */
+  esfuerzo?: Esfuerzo
   ahora?: () => number
   /** Se llama tras CADA llamada al modelo, reintento incluido. */
   alFacturar?: (euros: number, uso: UsoModelo | null) => void
@@ -296,7 +309,7 @@ export async function interpretarTexto(
           max_tokens: MAX_TOKENS,
           system: sistema,
           messages: [{ role: 'user', content: contenido }],
-          output_config: { format: formato, effort: 'medium' },
+          output_config: { format: formato, effort: opciones.esfuerzo ?? ESFUERZO_POR_DEFECTO },
         },
         { signal: senal, timeout: espera, maxRetries: 0 },
       )

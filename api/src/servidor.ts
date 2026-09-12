@@ -10,9 +10,12 @@ import { cargarCatalogo } from './catalogo.ts'
 import { validarEntrada } from './esquema.ts'
 import type { ClienteModelo, UsoModelo } from './interpretar.ts'
 import {
-  construirSistema,
-  interpretarTexto,
+  ESFUERZO_POR_DEFECTO,
+  type Esfuerzo,
   MODELO_POR_DEFECTO,
+  construirSistema,
+  esfuerzoAdmitido,
+  interpretarTexto,
   modeloAdmitido,
 } from './interpretar.ts'
 import type { Limites } from './limites.ts'
@@ -23,11 +26,12 @@ export const VERSION = '1.3.0'
 /** Tope del cuerpo de `/api/dieta/interpretar` (§7). nginx corta antes, a 64 KB. */
 export const MAX_CUERPO = 16 * 1024
 /** Presupuesto total del servidor: 35 s del primer intento + 20 s del reintento, con holgura. */
-export const MS_PRESUPUESTO = 60_000
+export const MS_PRESUPUESTO = 70_000
 
 export interface Config {
   clave: string | null
   modelo: string
+  esfuerzo: Esfuerzo
   topeEurosDia: number
   topeGlobalDia: number
   topeIpDia: number
@@ -48,6 +52,15 @@ export function configDesdeEntorno(
     else
       avisar(`BASCULA_MODELO "${pedido}" no está en la lista blanca; se usa ${MODELO_POR_DEFECTO}.`)
   }
+  const esfuerzoPedido = (entorno.BASCULA_ESFUERZO ?? '').trim()
+  let esfuerzo: Esfuerzo = ESFUERZO_POR_DEFECTO
+  if (esfuerzoPedido !== '') {
+    if (esfuerzoAdmitido(esfuerzoPedido)) esfuerzo = esfuerzoPedido
+    else
+      avisar(
+        `BASCULA_ESFUERZO "${esfuerzoPedido}" no es low, medium ni high; se usa ${ESFUERZO_POR_DEFECTO}.`,
+      )
+  }
   const clave = (entorno.ANTHROPIC_API_KEY ?? '').trim()
   const origenes = (entorno.BASCULA_ORIGENES ?? 'https://bascula.rsagents.es')
     .split(',')
@@ -56,6 +69,7 @@ export function configDesdeEntorno(
   return {
     clave: clave === '' ? null : clave,
     modelo,
+    esfuerzo,
     topeEurosDia: numeroEntorno(entorno.BASCULA_TOPE_EUROS_DIA, 4),
     topeGlobalDia: numeroEntorno(entorno.BASCULA_TOPE_GLOBAL_DIA, 400),
     topeIpDia: numeroEntorno(entorno.BASCULA_TOPE_IP_DIA, 40),
@@ -181,6 +195,7 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
     const resultado = await interpretarTexto({
       cliente: cliente as ClienteModelo,
       modelo: config.modelo,
+      esfuerzo: config.esfuerzo,
       sistema,
       texto: datos.texto,
       comidasPlan: datos.comidas_plan,

@@ -77,6 +77,7 @@ navegador ──/api/*──▶ nginx (web) ──proxy──▶ bascula-api:878
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Sin ella `/api/capacidades` devuelve `interpretar: false` y `/api/dieta/interpretar` responde 503. |
 | `BASCULA_MODELO` | `claude-sonnet-5` | Debe estar en la lista blanca de §3.1; si no, arranca con el de por defecto y lo dice en el log. |
+| `BASCULA_ESFUERZO` | `low` | `output_config.effort` de la interpretación (`low`, `medium`, `high`). Medido en producción: con `medium`, 29–36 s por interpretación; `low` es el valor por defecto porque cada segundo lo espera una persona. |
 | `BASCULA_TOPE_EUROS_DIA` | `4` | Presupuesto diario (UTC) de TODAS las llamadas al modelo, con `usage` y la tabla de precios de §3.1. Tope duro. |
 | `BASCULA_TOPE_GLOBAL_DIA` | `400` | Interpretaciones por día (tope secundario). |
 | `BASCULA_TOPE_IP_DIA` | `40` | Interpretaciones por IP y día (IPv6 agregada por /64). |
@@ -217,8 +218,9 @@ Entrada (`application/json`, ≤ 16 KB, cabecera `X-Bascula-Token` obligatoria):
 - Errores: `400 TEXTO_INVALIDO`; `401 TOKEN_INVALIDO`; `403 ORIGEN_NO_ADMITIDO`; `413 CUERPO_GRANDE`;
   `415 TIPO_NO_ADMITIDO`; `422 SIN_CONTENIDO` (ni comidas, ni gustos, ni hábitos); `429 CUOTA_IP` / `CUOTA_GLOBAL` /
   `PRESUPUESTO`; `503 SIN_CLAVE`; `502 MODELO_NO_DISPONIBLE`; `504 TIEMPO_AGOTADO`.
-- **Presupuesto de tiempo** (de fuera adentro): nginx 90 s > cliente 75 s > servidor 60 s en total = primer intento
-  35 s + único reintento 20 s (si no cabe, 504 sin intentarlo). `maxRetries: 0` en el SDK; el reintento es manual y
+- **Presupuesto de tiempo** (de fuera adentro): nginx 90 s > cliente 75 s > servidor 70 s en total = primer intento
+  60 s + único reintento 10 s (si no cabe, 504 sin intentarlo). Medido el 2026-09-12: una interpretación tarda 29–36 s
+  con Sonnet 5 en `medium`; con 35 s de primer intento la primera llamada real se rindió justo antes de la respuesta. `maxRetries: 0` en el SDK; el reintento es manual y
   auditable (§3.1). El servidor escucha `req.on('close')` y **aborta** la llamada al modelo con `AbortSignal` si el
   navegador se va: quien cancela no paga.
 
@@ -238,7 +240,8 @@ Entrada (`application/json`, ≤ 16 KB, cabecera `X-Bascula-Token` obligatoria):
 | `claude-haiku-4-5` | 1 | 5 | 1,25 | 0,1 |
 | `claude-opus-5` | 5 | 25 | 6,25 | 0,5 |
 
-  `max_tokens: 9000`, `output_config.effort: 'medium'`, pensamiento adaptativo por defecto (no se envía `thinking`).
+  `max_tokens: 9000`, `output_config.effort` = `BASCULA_ESFUERZO` (`low` por defecto), pensamiento adaptativo por
+  defecto (no se envía `thinking`).
   Sin `tool_choice` forzado ni prefill.
 - `system` es un array de **un bloque** con `cache_control: { type: 'ephemeral' }`: instrucciones + catálogo
   compacto, serializado una vez al arrancar (prefijo estable). Sonnet 5 cachea desde 1 024 tokens; el bloque ronda
@@ -601,6 +604,144 @@ Tests obligatorios (`src/meals/__tests__/dieta-componer.test.ts`), deterministas
   al 10 % con diabetes; cada aviso disparado por un caso; `retirado` ignorado; idempotencia; "Ver otro ejemplo"
   cambia solo los huecos montados.
 
+## 4bis. Huecos propuestos por la IA (decisión L, 2026-09-12, tercer audio del dueño)
+
+**Feedback:** "¿No es mejor que la IA genere las dietas en base a todos los inputs, con un formato obligatorio, en vez de
+mil plantillas? Alguien puede querer solo pollo y arroz: hay que hacérsela, aunque luego recomiendes otras cosas, o
+preguntarle si de verdad quiere solo eso."
+
+**Decisión L.** Cuando la IA está disponible, los **huecos** del día (§4.1) los propone el modelo con TODO el contexto y
+con reglas de dietista; el algoritmo determinista de §4.2 **cuadra los gramos** de cada hueco a su objetivo y calcula
+los macros reales; los avisos de §4.4 se emiten igual. El generador de plantillas queda como **respaldo** (sin clave,
+sin red, propuesta inválida o vacía, o hueco que no cuadra). El modelo puede devolver hasta **dos preguntas** de vuelta
+con respuestas rápidas; responder añade texto al contexto y vuelve a proponer. Regla de oro: **el modelo elige y
+describe; los números los pone el algoritmo del navegador.**
+
+### 4bis.1 Contrato: `POST /api/dieta/proponer`
+
+Entrada (`application/json`, ≤ 32 KB, `X-Bascula-Token` y origen como §2.3, misma cuota y presupuesto que interpretar):
+
+```json
+{
+  "huecos": [{ "nombre": "Comida", "hora": "14:00", "peri": false,
+               "objetivo": { "kcal": 620, "prot": 48, "carb": 62, "fat": 20 }, "sin_hidratos": false }],
+  "contexto": {
+    "texto": "…lo dictado, tal cual…",
+    "comidas_propias": [{ "nombre": "Desayuno", "alimentos": ["Kéfir natural entero 250 g", "Almendras 25 g"] }],
+    "gustos": [{ "texto": "no me gusta el brócoli", "tipo": "no_gusta", "alimento_ids": ["brocoli"] }],
+    "habitos": [{ "texto": "ceno sin hidratos", "tipo": "sin_hidratos", "comida": "Cena", "valor": null }],
+    "perfil": { "base": "omnivoro", "restricciones": ["sin_lactosa"], "low_carb": false,
+                "excluidos": ["brocoli"], "favoritos": ["salmon"] },
+    "condiciones": ["diabetes"], "menu_sencillo": false,
+    "respuestas": [{ "pregunta": "¿Metemos alguna verdura que sí te guste?", "respuesta": "Solo en la cena" }],
+    "variante": 0
+  }
+}
+```
+
+- 1–6 huecos con `objetivo` numérico (kcal 100–2 500, macros 0–300); `comidas_propias` ≤ 8 con ≤ 15 líneas de ≤ 60
+  caracteres; `gustos`/`habitos` con el esquema de §3.4 (≤ 20 / ≤ 12); `perfil.excluidos`/`favoritos` ids del catálogo
+  (los desconocidos se descartan); `condiciones` solo `diabetes`, `cardiaca`, `hipertension` (el resto no viaja);
+  `respuestas` ≤ 4 de ≤ 200 caracteres; `variante` 0–20. **No viaja** sexo, edad, peso, objetivo ni kcal totales.
+- Salida `200`: `{ "comidas": ComidaPropia[], "consejo": string | null, "preguntas": PreguntaIA[], "modelo": string }`
+  con **una `ComidaPropia` por hueco, en el mismo orden y con el mismo nombre** (§3.4; los alimentos pasan por la
+  post-validación de §3.5, incluidas macros del catálogo, unidad, estado y saneado). `PreguntaIA = { texto: string
+  (≤ 140), opciones: string[] (2–3 de ≤ 30) }`, máximo 2. `consejo` ≤ 240 caracteres o null.
+- Errores como §2.3 más `422 PROPUESTA_VACIA` (algún hueco sin alimentos válidos tras la post-validación).
+- Tiempos y presupuesto como §2.3 (35 + 20 s; `maxRetries: 0`; abort al cerrar; se cobra cada llamada). El servidor
+  reutiliza `ClienteModelo`, la lista blanca y `costeEuros` de `api/src/interpretar.ts`; el prompt vive en
+  `api/src/proponer.ts` y el esquema en `api/src/esquema.ts` (`EsquemaPropuesta`, sin restricciones de longitud,
+  `nullable` en opcionales).
+
+### 4bis.2 Reglas del prompt de propuesta (además de §3.3 reglas 4–9 y 14, que aplican tal cual)
+
+1. **Papel.** "Eres el dietista de Báscula. Para cada comida que falta propones alimentos concretos con gramos
+   aproximados que se acerquen al objetivo de esa comida. No calculas: los gramos exactos los cuadra la aplicación.
+   Cada comida lleva entre 2 y 5 alimentos."
+2. **Plato.** Comida principal (`Comida`, `Cena`): una fuente de proteína, una verdura (≥ 150 g), una grasa de adición
+   y, salvo `low_carb` o `sin_hidratos` en ese hueco, una fuente de hidrato. `Desayuno`, `Media mañana`, `Merienda`,
+   `Recena`: fruta o lácteo cuando encajen, sin obligar a verdura. Guía de raciones de casa: proteína cruda 100–250 g,
+   cereal crudo 40–120 g o cocido 100–300 g, verdura 150–300 g, aceite 5–15 g, frutos secos 15–40 g, fruta 120–200 g.
+3. **Catálogo primero.** Preferir alimentos con `alimento_id` (así la compra lleva formato de Mercadona). Fuera del
+   catálogo solo si el contexto lo pide o es un alimento español habitual que falta; siempre con `macros_100g` y
+   `fibra` estimados y `origen_macros: 'estimado'`.
+4. **Respetar siempre:** base, restricciones, `excluidos` (no pueden aparecer), `favoritos` (al menos uno en algún
+   hueco si encaja, sin repetirlo en todos), hábitos del hueco (`sin_hidratos`: ninguna fuente de hidrato; `ligera` /
+   `abundante` ya vienen en el objetivo), `menu_sencillo` (≤ 6 alimentos distintos entre todos los huecos, repitiendo
+   los de `comidas_propias` cuando se pueda), `diabetes` (hidratos integrales, sin zumos ni azúcares), `cardiaca` e
+   `hipertension` (sin embutidos ni conservas saladas). No repetir en un hueco un alimento de `comidas_propias` del
+   mismo día salvo `menu_sencillo`; variar entre huecos. `variante` N > 0: "Propuesta distinta de las anteriores en al
+   menos dos alimentos por comida" (va en el mensaje `user`, no en `system`).
+5. **Peticiones extremas** ("solo pollo y arroz", "sin verdura", "solo batidos"): se **respetan** en la propuesta.
+   `consejo` lleva una frase honesta ("Solo pollo y arroz cuadra en calorías y proteína, pero te deja sin fibra, potasio
+   ni vitamina C") y, si la respuesta cambiaría la propuesta, una `pregunta` con 2–3 opciones cortas ("¿Metemos alguna
+   verdura que sí te guste?" → ["No, así está bien", "Sí, dime cuáles", "Solo en la cena"]). Nunca preguntas retóricas;
+   nunca más de dos. Con `respuestas` previas, se obedecen y no se repite la misma pregunta.
+6. **Formato obligatorio** (esquema estricto). Nombres cortos en español, mayúscula inicial.
+
+### 4bis.3 Composición con propuesta (cambios sobre §4.3)
+
+- `componerDia(interpretada, inputs, resultado, variante, propuesta?)`: con `propuesta` (ya post-validada por el servidor
+  y con una comida por hueco), **cada hueco se cuadra** con el solver de §4.2 en modo `completa` **por comida**
+  (objetivo = el del hueco tras §4.3.2, cajas de §4.2.2, redondeo, cierre) y la comida se etiqueta
+  `origen: 'propuesta_ia'`, con sus alimentos como `AlimentoAjustado[]` (la fila se pinta como una comida `propia`, con
+  "estimado" cuando toque, pero **sin** "Cambiar" ni "Esto no lo como": lo que se corrige es la propuesta entera con
+  "Otra propuesta" o respondiendo a la pregunta) y `ejemplo: null`. Si un hueco viene vacío, no valida, o tras el cuadre
+  queda fuera de **±15 %** en kcal o proteína, ese hueco cae al generador de plantillas (`origen: 'propuesta'`) y se
+  apunta **"Para {comida} no nos ha convencido la propuesta y hemos usado la nuestra."**
+- `Montador` gana el parámetro `propuesta` y `montarHuecos` decide hueco a hueco; `generarComidas` no cambia.
+- Avisos de §4.4 sobre el día completo, más `DIETA_CONSEJO_IA` (informativo, primero de los informativos) con el `consejo`.
+- `DiaCompuesto` gana `preguntas: PreguntaIA[]`, `consejo_ia: string | null` y `origen_huecos: 'ia' | 'plantillas' | 'mixto' | null`.
+- "Ver otro ejemplo" → con IA, `variante + 1` y **una llamada nueva** a `/api/dieta/proponer` (cuenta como interpretación
+  en la cuota); sin IA, como hoy.
+
+### 4bis.4 Tipos y persistencia
+
+```ts
+export type OrigenComida = 'propia' | 'propuesta' | 'propuesta_ia'
+export interface PreguntaIA { texto: string; opciones: string[] }
+export interface PropuestaIA { comidas: ComidaPropia[]; consejo: string | null; preguntas: PreguntaIA[] }
+export interface RespuestaIA { pregunta: string; respuesta: string }
+// DiaCompuesto gana: preguntas: PreguntaIA[]; consejo_ia: string | null; origen_huecos: 'ia' | 'plantillas' | 'mixto' | null
+// DietaGuardada gana: propuesta?: { variante: number; huecos_clave: string; propuesta: PropuestaIA; respuestas: RespuestaIA[] }
+```
+
+`huecos_clave` es `JSON.stringify` de los huecos (nombres + objetivos redondeados) con los que se pidió la propuesta:
+si el plan cambia (ajuste de macros, "Editar tus datos", una corrección de fila que mueva el resto) y la clave ya no
+coincide, la propuesta guardada **no se reutiliza**: se pide otra al mostrar el bloque (una llamada) y, mientras llega,
+los huecos se montan con plantillas y el bloque lo dice (**"Pidiendo una propuesta a la IA…"**, `aria-busy`). Sin IA
+disponible se queda con plantillas sin más aviso que la línea de §4bis.5.
+
+### 4bis.5 Pantalla
+
+- Distintivo **"propuesta IA"** en las comidas de ese origen (junto a la hora, mismo estilo que "propuesta") y, bajo la
+  descripción del bloque, la línea **"Las comidas marcadas «propuesta IA» las ha montado Claude con lo que nos contaste;
+  los gramos los cuadramos nosotros."** Cuando alguna propuesta cayó a plantillas, la nota apuntada de §4bis.3.
+- **Tarjeta de pregunta** encima de las comidas, solo si hay `preguntas`: h3 **"Una pregunta antes de seguir"**, el
+  texto de la pregunta, sus opciones como botones secundarios, un campo de texto corto **"Otra respuesta"** con botón
+  **"Responder"**, y botón plano **"Seguir así"** (cierra la tarjeta sin llamar). Responder guarda la respuesta en
+  `DietaGuardada.propuesta.respuestas`, la añade al `texto` guardado como línea nueva **"{pregunta}: {respuesta}"** y
+  vuelve a pedir la propuesta (una llamada; el bloque entra en `aria-busy` con **"Pidiendo una propuesta a la IA…"**).
+  Máximo dos preguntas por propuesta; tras responder, las nuevas preguntas (si las hay) sustituyen a las anteriores.
+- `consejo_ia` se pinta como `.nota nota-recuadro` antes de los avisos de §4.4.
+- El botón **"Ver otro ejemplo"** pasa a decir **"Otra propuesta"** cuando los huecos son de IA.
+- Sin IA (capacidades `false`, error de red o 5xx al proponer): todo funciona como §4.3; si en esta sesión hubo
+  propuesta de IA y ahora no, línea pequeña **"Menú montado con nuestras plantillas: la IA no está disponible ahora."**
+- Estados de error al proponer: los mismos textos de §5.3 en un `role="alert"` dentro del bloque, sin perder lo que
+  había (la última propuesta válida o las plantillas).
+- PDF (§6.2): las comidas `propuesta_ia` se imprimen como las `propia` (gramos finales, "estimado") con la etiqueta
+  **"propuesta IA"**, y `consejo_ia` como nota; las preguntas **no** se imprimen.
+
+### 4bis.6 Coste, límites y tests
+
+Una propuesta ≈ 4 500 tokens de entrada (catálogo cacheable) + 1 000–2 500 de salida → ≈ 0,04 € con Sonnet 5; misma
+cuota y presupuesto que interpretar; en modo `solo_contexto` es una sola llamada para 3–6 huecos. Tests: `api/`
+(esquema, post-validación por hueco, `PROPUESTA_VACIA`, huecos desordenados o con nombre distinto → se reordenan por
+nombre y el que falte queda vacío, respuestas previas en el prompt, coste sumado, abort); `src/meals/__tests__/
+dieta-propuesta.test.ts` (cuadre por hueco con el solver, ±15 % → plantillas, `origen_huecos`, preguntas y consejo
+copiados, determinismo); componentes (distintivo, tarjeta de pregunta y sus tres acciones, `aria-busy`, línea sin IA,
+"Otra propuesta"); PDF con un fixture de propuesta IA.
+
 ## 5. Pantalla de resultados
 
 ### 5.1 Dónde y cuándo
@@ -910,3 +1051,5 @@ caracteres) y dos etiquetas.
 | 2026-09-12 | Revisión adversaria de la spec (tres lentes, 69 hallazgos: 11 críticos, 34 mayores, 24 menores). Aplicado: penalización asimétrica y avisos de grasa baja, fibra, vegetales, aceite y alcohol; fibra y alcohol en los macros; estado y grupo del alimento; cierre guiado por la función; redondeo dentro de la caja y topes de ración; textos de aviso según el solver; pendientes primero y estado provisional; notas clínicas por condición y umbral de hidratos con diabetes; IP real tras Traefik; red interna y servicio `bascula-api`; resolver y `error_page` JSON; token efímero; presupuesto en euros con cuotas persistidas; `maxRetries: 0` y reintento único; tiempos 90/75/60; abort al cerrar; sin `sexo`; esquema sin restricciones y con `nullable`; saneado total; `.dockerignore`; healthcheck sin curl; conmutador sin borrar; edición por fila; privacidad honesta sobre el dictado y sobre Anthropic; nota WebView; mapa de errores de voz; accesibilidad del dictado, del foco y del cargador; borrador persistido; compra agrupada y sin columnas inventadas; descubribilidad; copy revisado. **Descartado:** transcripción de respaldo en servidor; `unidad_g` del huevo 55 → 50 (afecta al menú propuesto y a sus vectores; pendiente). |
 | 2026-09-12 | Revisión de cierre de la v1.3 (tres revisores, 29 hallazgos). **Backend:** `messages.create` en vez de `messages.parse` y facturación nada más resolver cada llamada (el fallo de formato ya no salía gratis); `resumirError` de verdad en el reintento; `limit_req_status 429` en nginx (por defecto era 503 y caía en `@api_caida`); `413` con cuerpo `chunked`; `403` sin `Origin` ni `Sec-Fetch-Site`; `X-Real-IP` solo desde red privada; topes a `0` aceptados; `comidas_plan` saneado y serializado como datos y valla de comillas triples neutralizada; `.dockerignore` con `**/.env` y los tests fuera de la imagen; `Origin` deducido en `probar-interpretar.mjs`. **Algoritmo:** caja de los contables derivada de los gramos (el factor se salía de [0,5 , 1,75]); redondeo a la unidad más cercana; `sin_hidratos` montado de verdad por la vía low-carb y comprobado contra el plato; `apuntadoNoCabe` con el motivo; `DIETA_GRASA_ALTA` solo nombra grasa relevante; regla del tope de ración escrita tal y como está implementada. **Pantalla:** la cuenta de unidades es la de los gramos finales (pantalla y PDF), "(antes N g)" en la fila, `role="status"` que se vacía, foco al h2 al volver al menú propuesto, foco devuelto tras el aviso efímero, error propio para el texto largo, contador con `aria-live`, `role="img"` en la desviación, botón de entrada sin `disabled`, `key` del bloque de acciones, nota del pendiente borrada, `title` en "provisional", y la regresión de `prefers-reduced-motion` de `base.css` retirada. **Docs:** contadores de `foods.json` a 107 en CONTRATO. |
 | 2026-09-12 | Segundo audio del dueño: lo dictado es **contexto**. Reescritura de §0, §3.3 (gustos y hábitos), §3.4, §4 (composición del día: comidas dictadas + huecos montados por el generador con el resto del plan; modos completa / parcial / solo contexto; hábitos aplicados o apuntados), §5 (bloque compuesto con etiquetas tuya/propuesta, "Lo que hemos tenido en cuenta", gustos sumados al paso 14), §6 y §8. |
+| 2026-09-12 | Tercer audio del dueño: **decisión L**, §4bis (la IA propone los huecos con todo el contexto y reglas de dietista, el algoritmo cuadra los gramos, plantillas como respaldo, hasta dos preguntas de vuelta). Pendiente de implementar en un segundo workflow tras verificar la v1.3 en producción. |
+| 2026-09-12 | v1.3.1 tras la primera interpretación real en producción (504 a los 35 s; la segunda tardó 29 s): primer intento 60 s + reintento 10 s (total 70 s), `BASCULA_ESFUERZO` (`low` por defecto) y recorte de nombres por palabra entera en el saneado. |
