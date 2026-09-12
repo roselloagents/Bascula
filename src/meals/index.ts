@@ -138,6 +138,16 @@ interface Contexto {
    * consultas opcionales (verdura, fruta, grasa, segunda proteína) se omiten, como ya hacían.
    */
   permitirExcluidos: boolean
+  /**
+   * Toma marcada "sin hidratos" por una costumbre dictada (SPEC-dieta-propia §4.3.2): se monta por
+   * la vía low-carb aunque el perfil no lo sea, para que la plantilla no traiga ancla de hidrato.
+   */
+  lowCarbToma: boolean
+}
+
+/** ¿Esta toma se monta como low-carb? Por el perfil o por la costumbre dictada de §4.3.2. */
+function esLowCarb(ctx: Contexto): boolean {
+  return ctx.perfil.banco === 'low_carb' || ctx.lowCarbToma
 }
 
 interface ComidaResuelta {
@@ -394,7 +404,7 @@ function resolverPlantilla(
       ctx,
       i + rotHc,
       rotarPorFavoritos,
-      ctx.perfil.banco !== 'low_carb',
+      !esLowCarb(ctx),
       enElPlato,
     ),
   )
@@ -407,7 +417,7 @@ function resolverPlantilla(
   )
   const fruta = anota(elegirAlimento(p.fruta, ctx, i + rotV, rotVegetal >= 0, false, enElPlato))
   // Una FoodQuery obligatoria sin alimentos válidos descarta la plantilla (§3.2).
-  if (p.ancla_carbohidrato && !carbohidrato && ctx.perfil.banco !== 'low_carb') return null
+  if (p.ancla_carbohidrato && !carbohidrato && !esLowCarb(ctx)) return null
   if (p.verdura && !verdura) return null
   if (p.fruta && !fruta) return null
   // Cereal normal de respaldo, solo en low-carb: lo usa `escalarComida` si el ancla low-carb no
@@ -526,7 +536,7 @@ function construirPlato(
         for (const rotHc of ROTACIONES_HC) {
           const resuelta = resolverPlantilla(plantilla, ctx, rotProteina, rotVegetal, rotHc)
           if (!resuelta) continue
-          const porciones = escalarComida(objetivo, resuelta, ctx.perfil.banco === 'low_carb')
+          const porciones = escalarComida(objetivo, resuelta, esLowCarb(ctx))
           const desvKcal =
             objetivo.kcal > 0
               ? Math.abs(kcalPublicada(porciones) - objetivo.kcal) / objetivo.kcal
@@ -669,6 +679,8 @@ interface DiaConstruido {
 interface OpcionesDia {
   /** Reparto por comidas del motor (`resultado.comidas`) o el reconstruido desde `Ejemplos`. */
   comidas: readonly Comida[]
+  /** Tomas que hay que montar sin hidratos (SPEC-dieta-propia §4.3.2); por índice de `comidas`. */
+  sinHidratos?: readonly boolean[]
   perfil: PerfilDietetico
   offset: number
   priorizarFibra: boolean
@@ -720,6 +732,7 @@ function construirDia(o: OpcionesDia): DiaConstruido {
     // no en toda la base, que es lo que rompería el tope de 12 alimentos y la promesa del modo.
     permitidos: bancoSencillo ? idsPermitidosSemana(bancoSencillo) : null,
     permitirExcluidos: false,
+    lowCarbToma: false,
   }
   // Vía de escape de §3.2 (el cereal normal del low-carb): en modo sencillo se permite en UNA
   // sola toma, la de más hidrato del reparto. Sin este tope la patata ganaba en las tres comidas
@@ -732,7 +745,11 @@ function construirDia(o: OpcionesDia): DiaConstruido {
   const comidas: ComidaResuelta[] = []
   for (const comida of o.comidas) {
     if (o.sencillo) ctx.hcAlterno = ctx.indiceComida === indiceEscape ? escapeSencillo : null
-    comidas.push(construirComida(comida, ctx, banco, usadas))
+    // Una toma "sin hidratos" se monta con el banco low-carb, que es el único cuyas plantillas no
+    // llevan ancla de carbohidrato: puntuar por kcal y proteína no basta para quitarla (§4.3.2).
+    ctx.lowCarbToma = o.sinHidratos?.[ctx.indiceComida] === true
+    const bancoToma = ctx.lowCarbToma && !o.sencillo ? BANCOS.low_carb : banco
+    comidas.push(construirComida(comida, ctx, bancoToma, usadas))
     ctx.indiceComida += 1
     // Las proteínas se reservan dentro del día; verduras y frutas se liberan si se agotan.
     if (ctx.usados.size > 24) ctx.usados.clear()
@@ -1058,6 +1075,7 @@ function rehacerConBancoNormal(
     hcAlterno: hcAlternoDe(perfil, null),
     permitidos,
     permitirExcluidos: false,
+    lowCarbToma: false,
   }
   return construirComida(comida, ctx, plantillasRespaldo(perfil.banco, comida), new Set())
 }
@@ -1282,6 +1300,7 @@ function montarHuecos(
   resultado: Resultado,
   huecos: readonly Comida[],
   variante: number,
+  sinHidratos: readonly boolean[] = [],
 ): { comidas: EjemploComida[]; notas: string[] } {
   if (huecos.length === 0) return { comidas: [], notas: [] }
   const perfil = perfilDeResultado(resultado, inputs)
@@ -1291,6 +1310,7 @@ function montarHuecos(
   const offset = sencillo ? 0 : inputs.n_comidas + inputs.edad + Math.max(0, Math.trunc(variante))
   const dia = construirDia({
     comidas: huecos,
+    sinHidratos,
     perfil,
     offset,
     priorizarFibra: false,
@@ -1352,8 +1372,10 @@ export function generarComidas(
   resultado: Resultado,
   huecos: readonly Comida[],
   variante = 0,
+  sinHidratos: readonly boolean[] = [],
 ): EjemploComida[] {
-  return montarHuecos(inputs, resultado, huecos, Math.max(0, Math.trunc(variante))).comidas
+  return montarHuecos(inputs, resultado, huecos, Math.max(0, Math.trunc(variante)), sinHidratos)
+    .comidas
 }
 
 /**
@@ -1368,8 +1390,8 @@ export function componerDia(
   variante = 0,
 ): DiaCompuesto {
   const v = Math.max(0, Math.trunc(variante))
-  return componerDiaCon(interpretada, inputs, resultado, v, (huecos, variante2) =>
-    montarHuecos(inputs, resultado, huecos, variante2),
+  return componerDiaCon(interpretada, inputs, resultado, v, (huecos, variante2, sinHidratos) =>
+    montarHuecos(inputs, resultado, huecos, variante2, sinHidratos),
   )
 }
 

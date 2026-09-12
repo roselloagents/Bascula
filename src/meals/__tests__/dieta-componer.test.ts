@@ -2,6 +2,7 @@
 // Deterministas bit a bit: ninguna aserción depende de la fecha, del azar ni del orden de un `Set`.
 import { describe, expect, it } from 'vitest'
 import type {
+  AlimentoAjustado,
   AlimentoPropio,
   DiaCompuesto,
   DietaInterpretada,
@@ -9,6 +10,7 @@ import type {
   Macros,
   Resultado,
 } from '../../engine/types'
+import { alimentoPorId } from '../../data/foods'
 import { componerDia, generarComidas } from '../index'
 import type { EntradaAjuste, Pieza, Variable } from '../dieta/ajuste'
 import { ajustar, cajaDe, estadoDe, funcionCompleta } from '../dieta/ajuste'
@@ -220,7 +222,15 @@ describe('§4.1.2 y §4.3.2 — solo contexto', () => {
     expect(dia.apuntado).toEqual([])
   })
 
-  it('deja la cena en 10 g de hidratos y traslada sus kcal a las demás', () => {
+  it('la cena montada no lleva NINGÚN alimento del grupo carbohidrato', () => {
+    const cena = dia.comidas[2]
+    const grupos = (cena.ejemplo?.alimentos ?? []).map((a) => alimentoPorId(a.id)?.grupo)
+    expect(grupos).not.toContain('carbohidrato')
+    // Y si la promesa no se cumpliera, la costumbre saldría de "aplicado" (§4.5).
+    expect(dia.aplicado).toContain('Cena sin hidratos')
+  })
+
+  it('deja la cena en 10 g de hidratos de objetivo y traslada sus kcal a las demás', () => {
     const cena = dia.comidas[2]
     expect(cena.objetivo!.carb).toBeLessThanOrEqual(10)
     const plan = fixtureDieta('solo_contexto').resultado.comidas
@@ -283,6 +293,23 @@ describe('§4.5 — hábitos que se apuntan en vez de aplicarse', () => {
       '«desayuno a las siete»: las horas del reparto son orientativas, muévelas sin miedo',
     ])
     expect(dia.aplicado).toEqual(['Cena: la tuya, cada día'])
+  })
+})
+
+describe('§4.5 — una costumbre que no cabe dice por qué', () => {
+  it('con un solo hueco a montar, "ceno sin hidratos" se apunta con el motivo', () => {
+    const d = interpretada({
+      comidas: [
+        { nombre: 'Desayuno', alimentos: [delCatalogo('kefir_entero', 250, '250 g de kéfir')] },
+        { nombre: 'Comida', alimentos: [delCatalogo('pechuga_pollo', 200, '200 g de pollo')] },
+      ],
+      habitos: [{ texto: 'ceno sin hidratos', tipo: 'sin_hidratos', comida: 'Cena', valor: null }],
+    })
+    const dia = componerDia(d, PLAN_1780.inputs, PLAN_1780.resultado)
+    expect(dia.apuntado).toContain(
+      '«ceno sin hidratos»: no lo aplicamos porque esa comida se quedaría demasiado pequeña; cuéntanos también otra comida y lo movemos',
+    )
+    expect(dia.aplicado).not.toContain('Cena sin hidratos')
   })
 })
 
@@ -576,6 +603,55 @@ describe('§4 — los seis fixtures son estables', () => {
     }
     for (const f of FIXTURES_DIETA)
       expect(DIAS_COMPUESTOS[f.clave].modo, f.clave).toBe(modos[f.clave])
+  })
+
+  it('ningún alimento dictado se sale del factor [0,5 , 1,75] (§4.2.2)', () => {
+    // Comprobación NO circular: el factor se mide contra los gramos DICTADOS, no contra la caja
+    // que calcula `cajaDe` (que es quien podría estar mal).
+    const casos: { clave: string; alimentos: AlimentoAjustado[] }[] = FIXTURES_DIETA.map((f) => ({
+      clave: f.clave,
+      alimentos: DIAS_COMPUESTOS[f.clave].comidas.flatMap((c) => c.alimentos),
+    }))
+    // Un contable cuyos gramos NO son múltiplo de su unidad: 83 g de huevo son 1,5 huevos y §3.5
+    // deduce 2 unidades. Es el caso que rompía la invariante cuando la caja salía de las unidades.
+    const plan = planDieta({ kcal: 3200, prot: 200, carb: 330, fat: 110 })
+    const suelto = interpretada({
+      comidas: [
+        { nombre: 'Desayuno', alimentos: [delCatalogo('almendras', 25, '25 g de almendras')] },
+        {
+          nombre: 'Comida',
+          alimentos: [
+            delCatalogo('pechuga_pollo', 200, '200 g de pollo'),
+            delCatalogo('arroz_blanco_crudo', 100, '100 g de arroz'),
+          ],
+        },
+        { nombre: 'Cena', alimentos: [delCatalogo('huevo_entero', 83, '83 g de huevo')] },
+      ],
+    })
+    casos.push({
+      clave: 'huevo 83 g',
+      alimentos: componerDia(suelto, plan.inputs, plan.resultado).comidas.flatMap(
+        (c) => c.alimentos,
+      ),
+    })
+    for (const caso of casos) {
+      for (const a of caso.alimentos) {
+        if (a.estado_ajuste !== 'variable') continue
+        const dictados = a.gramos ?? 0
+        const factor = dictados > 0 ? a.gramos_ajustados / dictados : 1
+        expect(factor, `${caso.clave}/${a.nombre}`).toBeGreaterThanOrEqual(0.5)
+        expect(factor, `${caso.clave}/${a.nombre}`).toBeLessThanOrEqual(1.75)
+      }
+    }
+  })
+
+  it('un alimento dictado por encima de su ración típica no se recorta por el tope (§4.2.2)', () => {
+    // Decisión de esta revisión: el tope de ración impide SUBIR, nunca obliga a bajar lo que la
+    // persona ya come. 100 g de almendras (tope de ración 50 g) siguen siendo el techo de la caja.
+    const caja = cajaDe(delCatalogo('almendras', 100, '100 g de almendras'))
+    expect(caja.hi).toBe(100)
+    expect(caja.hiRed).toBe(100)
+    expect(caja.limiteArriba).toBe('racion')
   })
 
   it('todos los alimentos dictados salen dentro de su caja', () => {

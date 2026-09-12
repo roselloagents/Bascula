@@ -116,7 +116,7 @@ export function itemDeCompra(id: string, nombre: string, gramosSemana: number): 
   const gramos_dia = redondea1(gramos_semana / 7)
 
   const fila = formatoCompra(id)
-  // `mercadona.json` cubre los 105 alimentos de `foods.json` (lo comprueba
+  // `mercadona.json` cubre los 107 alimentos de `foods.json` (lo comprueba
   // `src/data/__tests__/mercadona.test.ts`); esta rama solo evita que un alimento nuevo sin
   // ficha desaparezca en silencio de la lista.
   const envase_g = fila && fila.envase_g > 0 ? fila.envase_g : Math.max(1, gramos_semana)

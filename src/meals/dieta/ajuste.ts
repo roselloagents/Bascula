@@ -164,10 +164,16 @@ export function cajaDe(a: AlimentoPropio): Variable {
   const u = unidadDe(a)
   if (u !== null) {
     const n = Math.max(1, Math.round(a.cantidad_unidades ?? 1))
-    const loU = Math.max(1, Math.ceil(FACTOR_MIN * n - EPS))
-    const porFactor = Math.floor(FACTOR_MAX * n + EPS)
+    // Los dos extremos salen de los GRAMOS dictados, no del número de unidades: §3.5 recalcula
+    // `cantidad_unidades` redondeando y no toca `gramos`, así que en cuanto los gramos no son
+    // múltiplo de la unidad, una caja en unidades se sale del factor por los dos lados.
+    const loU = Math.max(1, Math.ceil((FACTOR_MIN * gramos) / u - EPS))
+    const porFactor = Math.floor((FACTOR_MAX * gramos) / u + EPS)
     const porRacion = Math.max(1, Math.floor(tope / u + EPS))
-    const hiU = Math.max(Math.min(porFactor, porRacion), n, loU)
+    // El extremo superior tampoco baja de lo dictado (misma regla que en gramos), pero nunca pasa
+    // del factor máximo.
+    const contieneDictado = Math.min(Math.ceil(gramos / u - EPS), Math.max(porFactor, loU))
+    const hiU = Math.max(Math.min(porFactor, porRacion), contieneDictado, loU)
     return {
       gramos,
       unidadG: u,
@@ -337,11 +343,15 @@ function descenso(
   }
 }
 
-/** Redondeo a báscula dentro de la caja (§4.2.6). */
+/**
+ * Redondeo a báscula dentro de la caja (§4.2.6). En un contable se lleva a la unidad MÁS CERCANA
+ * (como `redondearGramos` del menú propuesto): escalar las unidades por la razón sobre los gramos
+ * dictados se saltaba la unidad más próxima cuando `gramos ≠ unidades · unidad_g`.
+ */
 export function enRejilla(v: Variable, gramos: number): number {
   const bruto =
     v.unidadG !== null
-      ? Math.round(v.unidades * (v.gramos > 0 ? gramos / v.gramos : 1)) * v.unidadG
+      ? Math.max(1, Math.round(gramos / v.unidadG)) * v.unidadG
       : Math.round(gramos / v.paso) * v.paso
   return limpio(Math.min(v.hiRed, Math.max(v.loRed, bruto)))
 }

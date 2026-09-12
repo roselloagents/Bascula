@@ -43,6 +43,7 @@ import {
   apuntadoFrecuencia,
   apuntadoHorario,
   apuntadoNComidas,
+  apuntadoNoCabe,
   apuntadoOtro,
   apuntadoSinBase,
   avisoAlcohol,
@@ -58,10 +59,16 @@ import {
   avisoProteinaCorta,
 } from './textos'
 
-/** Lo que `componerDia` necesita del generador de menús: los huecos montados y sus notas. */
+/**
+ * Lo que `componerDia` necesita del generador de menús: los huecos montados y sus notas.
+ * `sinHidratos` marca, hueco a hueco, las tomas a las que se ha aplicado ese hábito (§4.3.2): el
+ * generador tiene que montarlas por la vía low-carb, porque puntúa por kcal y proteína y, sin la
+ * marca, metía igualmente el ancla de hidrato con su ración mínima.
+ */
 export type Montador = (
   huecos: readonly Comida[],
   variante: number,
+  sinHidratos: readonly boolean[],
 ) => { comidas: EjemploComida[]; notas: string[] }
 
 /** Umbrales de los avisos de §4.4. */
@@ -76,6 +83,17 @@ const UMBRAL_FIBRA = 0.7
 const GRAMOS_VEGETALES = 300
 /** Hidrato que se le deja a un hueco con el hábito `sin_hidratos` (§4.3.2). */
 const HC_SIN_HIDRATOS = 10
+/**
+ * La promesa "{Comida} sin hidratos" se da por cumplida cuando en el plato no hay ningún alimento
+ * del grupo `carbohidrato` (pan, arroz, pasta, patata, boniato…). Los hidratos que aportan la
+ * verdura y la fruta no la rompen: lo que la persona lee —y ve— es que no hay guarnición.
+ */
+function sinHidratosDeVerdad(ejemplo: EjemploComida): boolean {
+  return !ejemplo.alimentos.some((a) => alimentoPorId(a.id)?.grupo === 'carbohidrato')
+}
+/** Grasa mínima (g, o fracción de la del día) para que un alimento se nombre en DIETA_GRASA_ALTA. */
+const GRASA_RELEVANTE_G = 3
+const GRASA_RELEVANTE_PCT = 0.05
 const FACTOR_LIGERA = 0.7
 const FACTOR_ABUNDANTE = 1.3
 
@@ -326,6 +344,7 @@ export function componerDiaCon(
       if (f.estado === 'fijo') {
         lista.push({
           ...a,
+          cantidad_unidades: unidadesFinales(a, dictados),
           estado_ajuste: 'fijo',
           gramos_ajustados: dictados,
           delta_g: 0,
@@ -341,6 +360,7 @@ export function componerDiaCon(
       const delta = redondea1(finales - dictados)
       lista.push({
         ...a,
+        cantidad_unidades: unidadesFinales(a, finales),
         estado_ajuste: 'variable',
         gramos_ajustados: finales,
         delta_g: delta,
@@ -393,6 +413,8 @@ export function componerDiaCon(
   const pesosEfectivos = sumaPesos > 0 ? pesos : aMontar.map(() => 1)
 
   const dictadasPorNombre = new Set(dictadas.map((d) => normalizarNombre(d.nombre)))
+  const sinHidratos = aMontar.map(() => false)
+  const porConfirmar: { hueco: number; aplicado: string; apuntado: string }[] = []
   for (const h of interpretada.habitos) {
     aplicarHabito(h, {
       huecos,
@@ -403,6 +425,8 @@ export function componerDiaCon(
       dictadasPorNombre,
       aplicado,
       apuntado,
+      sinHidratos,
+      porConfirmar,
     })
   }
 
@@ -421,7 +445,17 @@ export function componerDiaCon(
     peri: huecos[i].peri,
   }))
 
-  const montado = montar(comidasAMontar, variante)
+  const montado = montar(comidasAMontar, variante, sinHidratos)
+
+  // §4.5: lo prometido se comprueba contra lo montado. Si la toma sigue trayendo hidratos (banco
+  // sencillo, plantillas sin salida), la costumbre pasa de "aplicado" a "apuntado".
+  for (const p of porConfirmar) {
+    const ejemplo = montado.comidas[p.hueco]
+    if (ejemplo !== undefined && sinHidratosDeVerdad(ejemplo)) continue
+    const i = aplicado.indexOf(p.aplicado)
+    if (i >= 0) aplicado.splice(i, 1)
+    apuntado.push(p.apuntado)
+  }
 
   // ----- §4.6: el día, en el orden del plan y con las extras al final -----
   const comidas: ComidaCompuesta[] = []
@@ -505,6 +539,19 @@ export function componerDiaCon(
 
 // ---------- Piezas de la composición ----------
 
+/**
+ * La cuenta de unidades que se PUBLICA es la de los gramos finales (§5.4 pide la forma "5 huevos M
+ * (275 g)", con su gramaje): el solver trabaja en unidades, pero sin esto la fila enseñaba las
+ * unidades dictadas junto a los gramos ajustados y se contradecía. `gramos` sigue guardando lo
+ * dictado, que es lo que lee "Cambiar".
+ */
+function unidadesFinales(a: AlimentoPropio, gramos: number): number | null | undefined {
+  const u = a.unidad?.gramos
+  if (typeof u !== 'number' || !Number.isFinite(u) || u <= 0) return a.cantidad_unidades
+  if (!(gramos > 0)) return a.cantidad_unidades
+  return Math.max(1, Math.round(gramos / u))
+}
+
 function enLimite(v: Variable, gramos: number): AlimentoAjustado['en_limite'] {
   const tolerancia = v.paso / 2
   if (gramos >= v.hiRed - tolerancia) return v.limiteArriba
@@ -552,6 +599,10 @@ interface ContextoHabito {
   dictadasPorNombre: ReadonlySet<string>
   aplicado: string[]
   apuntado: string[]
+  /** Huecos (índice dentro de `aMontar`) a los que se ha aplicado `sin_hidratos`. */
+  sinHidratos: boolean[]
+  /** Promesas que hay que comprobar contra lo realmente montado (§4.5): nunca prometer de más. */
+  porConfirmar: { hueco: number; aplicado: string; apuntado: string }[]
 }
 
 /** §4.3.2 y §4.5: un hábito se aplica a un hueco montado o se apunta. */
@@ -589,7 +640,7 @@ function aplicarHabito(h: HabitoPropio, c: ContextoHabito): void {
   const j =
     clave === null ? -1 : c.aMontar.findIndex((i) => normalizarNombre(c.huecos[i].nombre) === clave)
   if (j < 0 || c.aMontar.length < 2) {
-    c.apuntado.push(apuntadoOtro(h.texto))
+    c.apuntado.push(apuntadoNoCabe(h.texto))
     return
   }
   const copia = c.reparto.map((p) => ({ ...p }))
@@ -620,18 +671,24 @@ function aplicarHabito(h: HabitoPropio, c: ContextoHabito): void {
     copia[j].fat *= FACTOR_ABUNDANTE
   }
   if (!trasladar(copia, j, delta, c.pesos)) {
-    c.apuntado.push(apuntadoOtro(h.texto))
+    c.apuntado.push(apuntadoNoCabe(h.texto))
     return
   }
   const saltarCarb = h.tipo === 'sin_hidratos'
   for (let i = 0; i < copia.length; i++) {
     if (!respetaSuelos(copia[i], c.lowCarb, saltarCarb && i === j)) {
-      c.apuntado.push(apuntadoOtro(h.texto))
+      c.apuntado.push(apuntadoNoCabe(h.texto))
       return
     }
   }
   for (let i = 0; i < copia.length; i++) c.reparto[i] = copia[i]
-  c.aplicado.push(aplicadoHabitoHueco(c.huecos[c.aMontar[j]].nombre, h.tipo))
+  const texto = aplicadoHabitoHueco(c.huecos[c.aMontar[j]].nombre, h.tipo)
+  c.aplicado.push(texto)
+  if (h.tipo === 'sin_hidratos') {
+    c.sinHidratos[j] = true
+    // La promesa "Cena sin hidratos" solo vale si la cena montada los lleva de verdad.
+    c.porConfirmar.push({ hueco: j, aplicado: texto, apuntado: apuntadoNoCabe(h.texto) })
+  }
 }
 
 /** Redondeo del reparto con el último hueco absorbiendo la diferencia (§4.3.2). */
@@ -735,6 +792,11 @@ function construirAvisos(e: EntradaAvisos): { codigo: string; texto: string }[] 
     const conRecorrido = planos
       .filter((a, i) => {
         if (a.estado_ajuste !== 'variable') return false
+        // Solo se señala lo que sube la grasa DE VERDAD: sin esto, cuando los alimentos grasos ya
+        // estaban en su mínimo, el aviso acababa pidiendo recortar el arroz por sus 0,8 g.
+        if (a.aporte.fat < GRASA_RELEVANTE_G && a.aporte.fat < GRASA_RELEVANTE_PCT * M.fat) {
+          return false
+        }
         const v = cajaDeAlimento(i)
         return v !== undefined && a.gramos_ajustados > v.loRed + v.paso / 2
       })

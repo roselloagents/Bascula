@@ -153,3 +153,12 @@ export function apuntadoHorario(texto: string): string {
 export function apuntadoOtro(texto: string): string {
   return `«${texto}»`
 }
+
+/**
+ * Una costumbre que no cabe: no hay otro hueco al que trasladar las kcal, o hacerlo dejaría esa
+ * comida por debajo del suelo de §4.2.4. Sin esto la persona veía su instrucción más tajante
+ * desobedecida y solo su propia cita, sin motivo (§4.5).
+ */
+export function apuntadoNoCabe(texto: string): string {
+  return `«${texto}»: no lo aplicamos porque esa comida se quedaría demasiado pequeña; cuéntanos también otra comida y lo movemos`
+}

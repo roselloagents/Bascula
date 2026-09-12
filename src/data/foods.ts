@@ -1,6 +1,7 @@
 // Base de alimentos del generador de menús (docs/SPEC-ux-comidas-pdf.md §3.0).
-// `foods.json` es copia literal de `docs/foods.json`: 105 alimentos con macros por 100 g
-// (101 del plan + los 4 con tag `extra` de la tarjeta del ciclo, v1.2).
+// `foods.json` es copia literal de `docs/foods.json`: 107 alimentos con macros por 100 g
+// (101 del plan + los 6 con tag `extra`: 4 de la tarjeta del ciclo de la v1.2 y 2 de las comidas
+// dictadas de la v1.3).
 // Este módulo solo aporta el tipado y los índices; no transforma ningún número.
 import datos from './foods.json'
 
