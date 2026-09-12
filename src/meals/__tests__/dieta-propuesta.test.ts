@@ -624,3 +624,38 @@ describe('§4bis.3 — la grasa de adición propuesta se queda en raciones de co
     expect(aceite?.gramos_ajustados).toBe(4)
   })
 })
+
+describe('DIETA_SIN_VEGETALES cuenta la verdura de todo el día (§4.4)', () => {
+  /** Gramos de verdura y fruta de un día compuesto, mirando cada fila como la mira el aviso. */
+  function vegetalesDe(dia: DiaCompuesto): number {
+    let total = 0
+    for (const c of dia.comidas) {
+      for (const a of c.alimentos) {
+        if (a.grupo_aprox === 'verdura' || a.grupo_aprox === 'fruta') total += a.gramos_ajustados
+      }
+      for (const a of c.ejemplo?.alimentos ?? []) {
+        const grupo = alimentoPorId(a.id)?.grupo
+        if (grupo === 'verdura' || grupo === 'fruta') total += a.gramos
+      }
+    }
+    return total
+  }
+
+  it('en un día mixto la verdura del hueco de plantillas también cuenta', () => {
+    // La comida la propone la IA (con 200 g de judía verde) y la cena, ridícula, cae a plantillas.
+    const dia = componerDia(
+      DESAYUNO_SOLO,
+      PLAN_1780.inputs,
+      PLAN_1780.resultado,
+      0,
+      con(PROPUESTA_IA_PARCIAL, RIDICULA('Cena')),
+    )
+    expect(dia.origen_huecos).toBe('mixto')
+    const hayAviso = dia.avisos.some((a) => a.codigo === 'DIETA_SIN_VEGETALES')
+    expect(hayAviso).toBe(vegetalesDe(dia) < 300)
+    // Y con la judía verde de la IA más la verdura que siempre trae una cena de plantillas, el
+    // día pasa de 300 g: el aviso NO puede saltar.
+    expect(vegetalesDe(dia)).toBeGreaterThanOrEqual(300)
+    expect(hayAviso).toBe(false)
+  })
+})

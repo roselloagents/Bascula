@@ -607,6 +607,7 @@ export function componerDiaCon(
     pendientes,
     ajustados,
     propuestos: deLaIa.map((c) => c?.alimentos ?? []),
+    plantillas: comidas.flatMap((c) => (c.origen === 'propuesta' && c.ejemplo ? [c.ejemplo] : [])),
     variables,
     variableDe,
     resuelto: ajuste.resuelto,
@@ -1030,6 +1031,8 @@ interface EntradaAvisos {
    * (§4.4) tienen que contarlas, y sin esto un día entero de IA no emitía ni un aviso.
    */
   propuestos: readonly AlimentoAjustado[][]
+  /** Los huecos montados con plantillas: su verdura y su fruta también son del día (§4.4). */
+  plantillas: readonly EjemploComida[]
   variables: readonly Variable[]
   /** Índice en `variables` de cada alimento del día aplanado; -1 si es fijo o pendiente. */
   variableDe: readonly number[]
@@ -1139,9 +1142,20 @@ function construirAvisos(e: EntradaAvisos): { codigo: string; texto: string }[] 
   // plantillas, que siempre traen verdura. Con huecos de IA eso ya no se puede dar por hecho: un
   // día de "solo pollo y arroz" se iba sin un aviso. Con IA cambia también el texto (§4bis.3).
   if (e.modo === 'completa' || hayIa) {
-    const vegetales = delDia
-      .filter((a) => a.grupo_aprox === 'verdura' || a.grupo_aprox === 'fruta')
-      .reduce((t, a) => t + a.gramos_ajustados, 0)
+    // Verdura y fruta de todo el día: lo dictado, lo propuesto por la IA y lo montado con
+    // plantillas (estos últimos por el `grupo` del catálogo, que es lo único que traen). Sin la
+    // última parte, un día mixto avisaba de "casi no hay verdura" con 250 g de zanahoria en la cena.
+    const vegetales =
+      delDia
+        .filter((a) => a.grupo_aprox === 'verdura' || a.grupo_aprox === 'fruta')
+        .reduce((t, a) => t + a.gramos_ajustados, 0) +
+      e.plantillas
+        .flatMap((c) => c.alimentos)
+        .filter((a) => {
+          const grupo = alimentoPorId(a.id)?.grupo
+          return grupo === 'verdura' || grupo === 'fruta'
+        })
+        .reduce((t, a) => t + a.gramos, 0)
     if (vegetales < GRAMOS_VEGETALES) {
       avisos.push({
         codigo: 'DIETA_SIN_VEGETALES',
