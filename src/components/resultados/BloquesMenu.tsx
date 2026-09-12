@@ -9,16 +9,11 @@ import { NOTA_MENU, NOTA_SENCILLO_SIN_OTRO_EJEMPLO, NOTA_VERDURA_FRUTA } from '.
 import { entero } from '../utiles/formato'
 import { textoModoSencillo } from './compra'
 import { Seccion } from './comun'
+import { NotasCondicion } from './NotasCondicion'
 
 /** [SPEC] SPEC-ux §3.1: texto que sustituye a los menús con condición renal o hepática. */
 const TEXTO_SIN_MENU =
   'No te proponemos menús de ejemplo. Con tu condición, la elección concreta de alimentos (potasio, fósforo, sodio y tipo de proteína) cambia mucho el resultado y debe hacerla un/a dietista-nutricionista especializado/a. Tus calorías y tus macros siguen siendo una referencia orientativa que puedes llevarle.'
-
-/** [SPEC] SPEC-ux §3.1: notas fijas sobre el bloque de menús. */
-const NOTA_DIABETES =
-  'Estos gramajes de hidratos son un ejemplo: si usas insulina o pastillas que bajan el azúcar, revisa la dosis con tu equipo médico antes de cambiar tu forma de comer.'
-const NOTA_CARDIACA =
-  'Cocina sin sal añadida y evita embutidos y conservas: con tu condición el sodio importa más que los gramos exactos.'
 
 interface PropsMenu {
   inputs: InputCalculo
@@ -88,12 +83,9 @@ export function BloqueMenus({
         </p>
       ) : null}
 
-      {inputs.condiciones.includes('diabetes') ? (
-        <p className="nota nota-recuadro">{NOTA_DIABETES}</p>
-      ) : null}
-      {inputs.condiciones.includes('cardiaca') ? (
-        <p className="nota nota-recuadro">{NOTA_CARDIACA}</p>
-      ) : null}
+      {/* Las notas fijas por condición las comparten este bloque y el de la dieta propia
+          (SPEC-dieta-propia §5.1): mismo texto, un solo sitio. */}
+      <NotasCondicion condiciones={inputs.condiciones} />
 
       <ol className="lista-menu">
         {jornada.comidas.map((comida) => (

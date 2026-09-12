@@ -7,6 +7,7 @@ import { Confirmacion } from '../ui/Confirmacion'
 import { Plegable } from '../ui/Controles'
 import { IconoAtras, IconoFlecha } from '../ui/Iconos'
 import { leerNumero } from '../utiles/formato'
+import { cargarDieta } from '../../dieta/almacen'
 import {
   aInputs,
   anclarPlan,
@@ -103,6 +104,9 @@ export function Wizard({
   // "Empezar de cero" borra todas las respuestas: se pide confirmación antes (el botón está en
   // todas las pantallas y un toque accidental tiraba el cuestionario entero).
   const [confirmarReinicio, setConfirmarReinicio] = useState(false)
+  // v1.3 (§5.1): la última cláusula del mensaje del final solo se dice si hay algo guardado de
+  // "Cuéntanos cómo comes". Se lee una vez al montar: el cuestionario no lo cambia.
+  const [hayDieta] = useState(() => cargarDieta() !== null)
   const contenedor = useRef<HTMLDivElement>(null)
 
   const pasos = pasosVisibles(borrador)
@@ -243,7 +247,8 @@ export function Wizard({
 
         {esUltimo && planGuardado ? (
           <p className="nota nota-plan-guardado">
-            Tu plan sigue guardado en este móvil, con tu ajuste manual y tus pesajes.
+            Tu plan sigue guardado en este móvil, con tu ajuste manual, tus pesajes
+            {hayDieta ? ' y lo que nos contaste de tus comidas' : ''}.
           </p>
         ) : null}
 

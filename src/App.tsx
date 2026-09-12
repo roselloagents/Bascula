@@ -6,10 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { calcular, textoError, textosAvisos } from './engine'
 import type {
   AjusteMacros,
+  AlimentoPropio,
   AvisoTexto,
   CodigoExclusion,
+  DiaCompuesto,
+  DietaInterpretada,
   Ejemplos,
   InputCalculo,
+  ListaCompra,
   Pesaje,
   Resultado,
 } from './engine/types'
@@ -39,23 +43,43 @@ import {
   guardarAjuste,
 } from './components/resultados/ajuste'
 import { cargarPesajes, guardarPesajes } from './components/resultados/seguimiento'
+import { ofreceDietaPropia } from './components/resultados/dieta'
+import {
+  borrarBorradorDieta,
+  borrarDieta,
+  cargarDieta,
+  guardarDieta,
+  retirarGustos,
+  sumarGustos,
+  VERSION_DIETA,
+  type DietaGuardada,
+} from './dieta/almacen'
 import { Logotipo } from './components/ui/Iconos'
 import { CLAIM, MARCA, PIE } from './components/utiles/copy'
+import { hoyIso } from './components/utiles/formato'
+
+interface FaseResultados {
+  nombre: 'resultados'
+  inputs: InputCalculo
+  /** Plan recomendado por el motor, tal cual: los límites del ajuste salen de aquí. */
+  base: Resultado
+  /** Plan que se muestra: el recomendado, o el que devuelve `ajustarMacros` (§2.2b). */
+  resultado: Resultado
+  ejemplos: Ejemplos
+  avisos: AvisoTexto[]
+  ajuste: AjusteMacros | null
+  /** v1.3: lo que la persona nos contó, activo o no (SPEC-dieta-propia §5.5). */
+  dieta: DietaGuardada | null
+  /** El día compuesto, solo mientras la composición está activa. */
+  compuesto: DiaCompuesto | null
+  /** La compra de ese día: sustituye a `ejemplos.compra` en pantalla y en el PDF (§5.5). */
+  compraDieta: ListaCompra | null
+}
 
 type Fase =
   | { nombre: 'wizard' }
   | { nombre: 'calculando' }
-  | {
-      nombre: 'resultados'
-      inputs: InputCalculo
-      /** Plan recomendado por el motor, tal cual: los límites del ajuste salen de aquí. */
-      base: Resultado
-      /** Plan que se muestra: el recomendado, o el que devuelve `ajustarMacros` (§2.2b). */
-      resultado: Resultado
-      ejemplos: Ejemplos
-      avisos: AvisoTexto[]
-      ajuste: AjusteMacros | null
-    }
+  | FaseResultados
   | { nombre: 'excluido'; codigo: CodigoExclusion; aviso: AvisoTexto; errores?: string[] }
 
 export default function App() {
@@ -140,9 +164,17 @@ export default function App() {
           if (!ajuste) borrarAjuste()
           const ajustado = aplicarAjuste(resultado, ajuste)
 
-          const { generarEjemplos } = await menus
+          const { generarEjemplos, componerDia, compraDeDia } = await menus
           const ejemplos = generarEjemplos(inputs, ajustado)
           const avisos = textosAvisos(ajustado, inputs)
+          // v1.3 (§5.5): lo que la persona contó vive en este móvil y no depende de `firmaPlan`;
+          // con otro plan simplemente se vuelve a componer, porque `componerDia` es puro.
+          const dieta = cargarDieta()
+          const compone = dieta !== null && dieta.activa && ofreceDietaPropia(inputs, ejemplos)
+          const compuesto = compone ? componerDia(dieta.interpretada, inputs, ajustado, 0) : null
+          const compraDieta = compuesto
+            ? compraDeDia(compuesto, ejemplos.compra?.opcional_ciclo)
+            : null
           setCamposMarcados([])
           guardarSesion({ paso: null, planGenerado: true, firmaPlan: firma })
           setFase({
@@ -153,6 +185,9 @@ export default function App() {
             ejemplos,
             avisos,
             ajuste,
+            dieta,
+            compuesto,
+            compraDieta,
           })
         } catch {
           setFase({
@@ -166,28 +201,41 @@ export default function App() {
   }
 
   /**
+   * Rehace todo lo que cuelga del plan: menú, equivalencias, compra y —si la composición de §5.4
+   * está activa— el día compuesto y su lista de la compra. Es el único sitio donde se llama a
+   * `componerDia`: nunca en el render de un hijo (§5.5). El módulo de menús sigue siendo diferido.
+   */
+  const rehacer = (
+    inputs: InputCalculo,
+    resultado: Resultado,
+    dieta: DietaGuardada | null,
+    v: number,
+    extra: Partial<FaseResultados> = {},
+  ) => {
+    void import('./meals').then(({ generarEjemplos, componerDia, compraDeDia }) => {
+      const ejemplos = generarEjemplos(inputs, resultado, v)
+      const compone = dieta !== null && dieta.activa && ofreceDietaPropia(inputs, ejemplos)
+      const compuesto = compone ? componerDia(dieta.interpretada, inputs, resultado, v) : null
+      const compraDieta = compuesto ? compraDeDia(compuesto, ejemplos.compra?.opcional_ciclo) : null
+      setFase((previa) =>
+        previa.nombre === 'resultados'
+          ? { ...previa, ...extra, inputs, resultado, ejemplos, dieta, compuesto, compraDieta }
+          : previa,
+      )
+    })
+  }
+
+  /**
    * Panel "Ajusta tus macros" (§2.2b): el motor rehace el plan y aquí se rehace todo lo que
    * depende de él —reparto, menú, lista de la compra, cronograma, proyección y PDF—.
    */
   const cambiarAjuste = (ajuste: AjusteMacros | null) => {
     if (fase.nombre !== 'resultados') return
-    const { inputs, base } = fase
+    const { inputs, base, dieta } = fase
     const ajustado = aplicarAjuste(base, ajuste)
     guardarAjuste(ajuste)
     const avisos = textosAvisos(ajustado, inputs)
-    void import('./meals').then(({ generarEjemplos }) => {
-      setFase((previa) =>
-        previa.nombre === 'resultados'
-          ? {
-              ...previa,
-              resultado: ajustado,
-              ejemplos: generarEjemplos(inputs, ajustado, variante),
-              avisos,
-              ajuste,
-            }
-          : previa,
-      )
-    })
+    rehacer(inputs, ajustado, dieta, variante, { avisos, ajuste })
   }
 
   /**
@@ -198,29 +246,20 @@ export default function App() {
    * el ajuste manual guardado y los pesajes siguen en pie.
    */
   const cambiarAlimentos = (excluidos: string[]) => {
+    if (fase.nombre !== 'resultados') return
     setBorrador((previo) => ({
       ...previo,
       alimentos_excluidos: excluidos,
       alimentos_favoritos: previo.alimentos_favoritos.filter((id) => !excluidos.includes(id)),
     }))
-    setFase((previa) => {
-      if (previa.nombre !== 'resultados') return previa
-      const inputs: InputCalculo = {
-        ...previa.inputs,
-        alimentos_excluidos: excluidos,
-        alimentos_favoritos: (previa.inputs.alimentos_favoritos ?? []).filter(
-          (id) => !excluidos.includes(id),
-        ),
-      }
-      return { ...previa, inputs }
-    })
-    void import('./meals').then(({ generarEjemplos }) => {
-      setFase((previa) =>
-        previa.nombre === 'resultados'
-          ? { ...previa, ejemplos: generarEjemplos(previa.inputs, previa.resultado, variante) }
-          : previa,
-      )
-    })
+    const inputs: InputCalculo = {
+      ...fase.inputs,
+      alimentos_excluidos: excluidos,
+      alimentos_favoritos: (fase.inputs.alimentos_favoritos ?? []).filter(
+        (id) => !excluidos.includes(id),
+      ),
+    }
+    rehacer(inputs, fase.resultado, fase.dieta, variante)
   }
 
   const excluirAlimento = (id: string) => {
@@ -235,19 +274,105 @@ export default function App() {
     cambiarAlimentos((fase.inputs.alimentos_excluidos ?? []).filter((x) => x !== id))
   }
 
-  /** "Ver otro ejemplo" (§2.5): otra plantilla del mismo banco, sin volver a llamar al motor. */
+  /**
+   * "Ver otro ejemplo" (§2.5): otra plantilla del mismo banco, sin volver a llamar al motor. Con
+   * la composición activa (§5.4) cambia solo lo montado: lo dictado es determinista y no se mueve.
+   */
   const otroEjemplo = () => {
     if (fase.nombre !== 'resultados') return
     const siguiente = variante + 1
     setVariante(siguiente)
-    const { inputs, resultado } = fase
-    void import('./meals').then(({ generarEjemplos }) => {
-      setFase((previa) =>
-        previa.nombre === 'resultados'
-          ? { ...previa, ejemplos: generarEjemplos(inputs, resultado, siguiente) }
-          : previa,
-      )
-    })
+    rehacer(fase.inputs, fase.resultado, fase.dieta, siguiente)
+  }
+
+  // ---- v1.3: "Cuéntanos cómo comes" (SPEC-dieta-propia §5.5) ----
+
+  /**
+   * Una interpretación nueva: se guarda, sus gustos se suman a las listas del paso 14 (retirando
+   * los del audio anterior) y el día se compone. `firmaDeInputs` no cambia: las listas de
+   * alimentos están fuera de la huella, así que el plan, el ajuste manual y los pesajes siguen.
+   */
+  const interpretacionNueva = (texto: string, interpretada: DietaInterpretada) => {
+    if (fase.nombre !== 'resultados') return
+    const listas = sumarGustos(
+      fase.inputs.alimentos_excluidos ?? [],
+      fase.inputs.alimentos_favoritos ?? [],
+      fase.dieta?.gustos_sumados ?? null,
+      interpretada,
+    )
+    const dieta: DietaGuardada = {
+      version: VERSION_DIETA,
+      texto,
+      interpretada,
+      fecha: hoyIso(),
+      activa: true,
+      gustos_sumados: listas.gustos_sumados,
+    }
+    guardarDieta(dieta)
+    // El borrador ya no hace falta: el texto vive en la dieta guardada y "Editar lo que conté"
+    // lo devuelve al cuadro.
+    borrarBorradorDieta()
+    setBorrador((previo) => ({
+      ...previo,
+      alimentos_excluidos: listas.excluidos,
+      alimentos_favoritos: listas.favoritos,
+    }))
+    const inputs: InputCalculo = {
+      ...fase.inputs,
+      alimentos_excluidos: listas.excluidos,
+      alimentos_favoritos: listas.favoritos,
+    }
+    rehacer(inputs, fase.resultado, dieta, variante)
+  }
+
+  /** Correcciones de §5.4: cambian la `DietaInterpretada` guardada y recomponen, sin API. */
+  const corregirDieta = (comida: number, alimento: number, cambios: Partial<AlimentoPropio>) => {
+    if (fase.nombre !== 'resultados' || fase.dieta === null) return
+    const previa = fase.dieta
+    const comidas = previa.interpretada.comidas.map((c, i) =>
+      i !== comida
+        ? c
+        : {
+            ...c,
+            alimentos: c.alimentos.map((a, j) => (j !== alimento ? a : { ...a, ...cambios })),
+          },
+    )
+    const dieta: DietaGuardada = {
+      ...previa,
+      interpretada: { ...previa.interpretada, comidas },
+    }
+    guardarDieta(dieta)
+    rehacer(fase.inputs, fase.resultado, dieta, variante)
+  }
+
+  /** "Ver mi menú con lo mío" y "Ver el menú propuesto": el conmutador de §5.2 y §5.4. */
+  const activarDieta = (activa: boolean) => () => {
+    if (fase.nombre !== 'resultados' || fase.dieta === null) return
+    const dieta: DietaGuardada = { ...fase.dieta, activa }
+    guardarDieta(dieta)
+    rehacer(fase.inputs, fase.resultado, dieta, variante)
+  }
+
+  /** "Borrar lo que conté" (§5.2): también retira de las listas los gustos que sumó el audio. */
+  const borrarDietaPropia = () => {
+    if (fase.nombre !== 'resultados') return
+    const listas = retirarGustos(
+      fase.inputs.alimentos_excluidos ?? [],
+      fase.inputs.alimentos_favoritos ?? [],
+      fase.dieta?.gustos_sumados ?? null,
+    )
+    borrarDieta()
+    setBorrador((previo) => ({
+      ...previo,
+      alimentos_excluidos: listas.excluidos,
+      alimentos_favoritos: listas.favoritos,
+    }))
+    const inputs: InputCalculo = {
+      ...fase.inputs,
+      alimentos_excluidos: listas.excluidos,
+      alimentos_favoritos: listas.favoritos,
+    }
+    rehacer(inputs, fase.resultado, null, variante)
   }
 
   const excluirDesdeWizard = (codigo: CodigoExclusion) => {
@@ -260,6 +385,8 @@ export default function App() {
     // El ajuste pertenece a un plan que ya no existe. Los pesajes NO se borran: son el historial
     // del usuario en este dispositivo y sobreviven a un cuestionario nuevo.
     borrarAjuste()
+    // "Empezar de cero" se lleva también lo que la persona nos contó y su borrador (§5.5).
+    borrarDieta()
     setBorrador(borradorInicial())
     setPasoInicial('sexo')
     setCamposMarcados([])
@@ -325,7 +452,11 @@ export default function App() {
             inputs={fase.inputs}
             resultado={fase.resultado}
             base={fase.base}
-            ejemplos={fase.ejemplos}
+            // §5.5: con la composición activa, la compra que ven la pantalla y el PDF es la del
+            // día compuesto. `fase.ejemplos` se queda intacto para poder volver al menú propuesto.
+            ejemplos={
+              fase.compraDieta ? { ...fase.ejemplos, compra: fase.compraDieta } : fase.ejemplos
+            }
             avisos={fase.avisos}
             ajuste={fase.ajuste}
             pesajes={pesajes}
@@ -336,6 +467,13 @@ export default function App() {
             onExcluirAlimento={excluirAlimento}
             onDeshacerExclusion={deshacerExclusion}
             onCambiarAlimentos={irAlPasoDeAlimentos}
+            dieta={fase.dieta}
+            compuesto={fase.compuesto}
+            onDieta={interpretacionNueva}
+            onActivarDieta={activarDieta(true)}
+            onVerPropuesto={activarDieta(false)}
+            onBorrarDieta={borrarDietaPropia}
+            onCorregirDieta={corregirDieta}
           />
         ) : null}
 

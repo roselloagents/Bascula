@@ -395,3 +395,55 @@
   color: var(--tinta-media);
   font-size: var(--t-sm);
 }
+
+/* ---- Piezas que faltaban para el bloque compuesto (§5.4) --------------- */
+
+/* "Lo que hemos tenido en cuenta" y "Apuntado…" cuando caben sin plegar. */
+.dieta-aplicado {
+  margin-top: var(--e-8);
+}
+
+.dieta-subtitulo {
+  margin: 0;
+  color: var(--tinta-media);
+  font-family: var(--texto);
+  font-size: var(--t-sm);
+  font-weight: 700;
+}
+
+/* "% de tus kcal" en la cabecera de cada comida del día compuesto. */
+.dieta-pct {
+  color: var(--tinta-suave);
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* "Cambiar" y "Esto no lo como" van juntos bajo el nombre, nunca bajo los gramos. */
+.dieta-acciones-fila {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--e-4);
+}
+
+/* Enlace de descubribilidad de la cabecera (§5.1): plano, bajo las kcal. */
+.cabecera-enlace-dieta {
+  margin: var(--e-6) 0 0;
+}
+
+/* Línea de §5.1 bajo el título del paso 14: va dentro de la intro, en su propia línea. */
+.pantalla-intro-extra {
+  display: block;
+  margin-top: var(--e-4);
+  color: var(--tinta-suave);
+}
+
+/* Formulario de §5.3: el bloque entero, para separarlo de la descripción de la tarjeta. */
+.dieta-formulario {
+  margin-top: var(--e-8);
+}
+
+.dieta-formulario > * + * {
+  margin-top: var(--e-6);
+}

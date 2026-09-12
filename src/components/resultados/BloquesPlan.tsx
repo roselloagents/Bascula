@@ -47,7 +47,22 @@ function sufijoObjetivo(resultado: Resultado): string {
   return ''
 }
 
-export function Cabecera({ inputs, resultado, avisos }: PropsBloque) {
+/** [SPEC] SPEC-dieta-propia §5.1, enlace de descubribilidad bajo las kcal. */
+const ENLACE_DIETA = '¿Ya tienes tus comidas o tus costumbres? Cuéntanoslas'
+
+/** [SPEC] SPEC-dieta-propia §5.1, nota sobre la tabla de reparto con comidas dictadas. */
+const NOTA_REPARTO_DIETA =
+  'Este reparto es el que te proponíamos; tus comidas van por otros porcentajes, los tienes más abajo.'
+
+export function Cabecera({
+  inputs,
+  resultado,
+  avisos,
+  enlaceDieta = false,
+}: PropsBloque & {
+  /** v1.3: el enlace a la tarjeta de "Cuéntanos cómo comes" (§5.1), solo si se ofrece. */
+  enlaceDieta?: boolean
+}) {
   const reconvertido = inputs.objetivo !== resultado.objetivo_efectivo
   const avisoReconversion = avisos.find((a) => CODIGOS_RECONVERSION.includes(a.codigo))
   const [grasaMin, grasaMax] = resultado.grasa.rango
@@ -65,6 +80,15 @@ export function Cabecera({ inputs, resultado, avisos }: PropsBloque) {
         {OBJETIVO_TITULO[resultado.objetivo_efectivo]}
         {sufijoObjetivo(resultado)}
       </p>
+
+      {/* Descubribilidad (§5.1): un enlace plano que baja a la tarjeta y le da el foco. */}
+      {enlaceDieta ? (
+        <p className="cabecera-enlace-dieta">
+          <a className="btn-plano" href="#tarjeta-dieta">
+            {ENLACE_DIETA} <span aria-hidden="true">→</span>
+          </a>
+        </p>
+      ) : null}
 
       {reconvertido && avisoReconversion ? (
         <p className="cabecera-ajuste">
@@ -267,7 +291,14 @@ export function BloqueAgua({ inputs, resultado, avisos }: PropsBloque) {
   )
 }
 
-export function BloqueComidas({ resultado, avisos }: PropsBloque) {
+export function BloqueComidas({
+  resultado,
+  avisos,
+  notaDieta = false,
+}: PropsBloque & {
+  /** v1.3 (§5.1): con comidas dictadas, este reparto ya no es el que se sigue. */
+  notaDieta?: boolean
+}) {
   const comidas = resultado.comidas
   // La fila de totales sale del motor (`macros` y `kcal_cierre`), no de sumar la tabla: el
   // CONTRATO prohíbe mostrar un número que no venga del motor.
@@ -281,6 +312,7 @@ export function BloqueComidas({ resultado, avisos }: PropsBloque) {
 
   return (
     <Seccion titulo="Cómo repartir el día">
+      {notaDieta ? <p className="nota nota-recuadro">{NOTA_REPARTO_DIETA}</p> : null}
       <AvisoSiExiste avisos={avisos} codigo="WARN_PROTEINA_POR_TOMA" />
       <AvisoSiExiste avisos={avisos} codigo="WARN_PROTEINA_TOMA_ALTA" />
 

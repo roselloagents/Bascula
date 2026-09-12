@@ -28,6 +28,10 @@ type Modo = 'excluir' | 'favorito'
 const INTRO =
   'Márcalos y no aparecerán ni en tus menús ni en tu lista de la compra. Y si hay alguno que te encanta, márcalo como favorito y lo pondremos primero. Esto no cambia ni una caloría de tu plan: solo cambia qué comes.'
 
+/** [SPEC] SPEC-dieta-propia §5.1, línea bajo el título del paso 14. */
+const LINEA_DIETA =
+  '¿Ya tienes tus comidas hechas o tus costumbres claras? Puedes saltarte esto: al final podrás contárnoslas y montamos el menú alrededor.'
+
 const MODOS: { valor: Modo; icono: string; titulo: string }[] = [
   { valor: 'excluir', icono: '✕', titulo: 'No me gusta' },
   { valor: 'favorito', icono: '★', titulo: 'Favorito' },
@@ -116,7 +120,12 @@ export function PasoAlimentos({ b, set }: PropsPaso) {
   return (
     <Pantalla
       titulo="¿Hay alimentos que no quieres ver en tu menú?"
-      intro={INTRO}
+      intro={
+        <>
+          {INTRO}
+          <span className="pantalla-intro-extra">{LINEA_DIETA}</span>
+        </>
+      }
       ayuda="Solo te enseñamos los alimentos que encajan con cómo comes: si eres vegana no verás pollo, y si evitas el gluten no verás pan de trigo. Marcar o desmarcar aquí no toca tus calorías ni tus macros; rehacemos el menú, las equivalencias y la lista de la compra, nada más."
     >
       <div className="segmentado-barra">
