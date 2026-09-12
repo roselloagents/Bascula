@@ -3,6 +3,7 @@
 // (el SDK las quita del JSON Schema y las valida en cliente, y una salida útil fallaría el `parse`).
 // Los opcionales del tipo del front son obligatorios y `nullable()` aquí.
 import * as z from 'zod/v4'
+import { sanear } from './saneado.ts'
 
 // ---------- Entrada ----------
 
@@ -26,9 +27,11 @@ export function validarEntrada(cuerpo: unknown): Entrada | null {
   if (!leido.success) return null
   const texto = leido.data.texto.trim()
   if (texto.length < TEXTO_MIN || texto.length > TEXTO_MAX) return null
-  const comidas = leido.data.comidas_plan.map((n) => n.trim())
-  if (comidas.length < 2 || comidas.length > 6) return null
-  if (comidas.some((n) => n.length === 0 || n.length > COMIDA_MAX)) return null
+  if (leido.data.comidas_plan.length < 2 || leido.data.comidas_plan.length > 6) return null
+  // Los nombres de comida se interpolan en el mensaje `user`: se sanean como todo lo que viene de
+  // fuera (control chars, espacios colapsados, NFC) antes de tocar el prompt (§7).
+  const comidas = leido.data.comidas_plan.map((n) => sanear(n, COMIDA_MAX))
+  if (comidas.some((n) => n === '')) return null
   return { texto, comidas_plan: comidas }
 }
 

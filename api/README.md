@@ -22,8 +22,12 @@ y `/api/dieta/interpretar` responde `503 SIN_CLAVE`. Es el modo en el que se des
 
 ```bash
 curl http://127.0.0.1:8787/api/salud          # {"ok":true,"version":"1.3.0"}
-curl http://127.0.0.1:8787/api/capacidades    # {"interpretar":false,"modelo":null,"token":null}
+# `/api/capacidades` exige `Origin` de la lista (o `Sec-Fetch-Site` del propio sitio): sin ninguna
+# de las dos cabeceras son 403 (§7). `/api/salud` no lleva ese control (es el HEALTHCHECK).
+curl -H 'Origin: http://localhost:5173' http://127.0.0.1:8787/api/capacidades
 node api/scripts/probar-interpretar.mjs       # prueba de punta a punta (necesita clave)
+# Contra producción el script deduce el Origin de la url; se puede forzar con BASCULA_ORIGEN=…
+node api/scripts/probar-interpretar.mjs https://bascula.rsagents.es
 ```
 
 ## Comprobaciones

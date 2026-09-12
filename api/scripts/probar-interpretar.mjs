@@ -1,8 +1,11 @@
 // Prueba manual del servicio (SPEC-dieta-propia §9.4): pide capacidades, manda el texto del §0 y
 // enseña la respuesta. Uso: node api/scripts/probar-interpretar.mjs [url]
-// La url por defecto es http://127.0.0.1:8787 (sin nginx delante).
+// La url por defecto es http://127.0.0.1:8787 (sin nginx delante). El `Origin` sale de la url que
+// se pasa, para que contra producción no haya que acordarse de nada; con BASCULA_ORIGEN se fuerza.
 const url = (process.argv[2] ?? 'http://127.0.0.1:8787').replace(/\/+$/, '')
-const origen = process.env.BASCULA_ORIGEN ?? 'http://localhost:5173'
+const origen =
+  process.env.BASCULA_ORIGEN ??
+  (process.argv[2] === undefined ? 'http://localhost:5173' : new URL(url).origin)
 
 const TEXTO = [
   'Por las mañanas 250 g de kéfir, 5 g de chía, 25 g de almendras, 18 de nueces, un scoop de',

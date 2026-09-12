@@ -1,11 +1,15 @@
 node_modules
 dist
 .git
-.env
-.env.*
+# `.env` solo ancla en la raíz del contexto: sin `**/` el `api/.env` con la clave de desarrollo
+# viajaría al daemon y a la capa intermedia del `COPY . .` de la etapa builder.
+**/.env
+**/.env.*
+!**/.env.example
 docs
 coverage
 *.md
 .vscode
 .idea
 api/node_modules
+api/src/__tests__

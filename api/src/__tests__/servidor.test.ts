@@ -1,9 +1,11 @@
 // Contrato HTTP de §2, seguridad de §7 y flujo de llamada de §3.1, con el cliente del modelo
 // inyectado: ningún test de este fichero toca la red ni la API de Anthropic.
 import { rmSync } from 'node:fs'
+import type { IncomingMessage } from 'node:http'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { crearLimites } from '../limites.ts'
+import { configDesdeEntorno, ipDe } from '../servidor.ts'
 import { crearToken } from '../token.ts'
 import type { Banco, Llamada } from './ayuda.ts'
 import {
@@ -11,11 +13,11 @@ import {
   arrancarBanco,
   clienteFalso,
   clienteQueEspera,
-  errorDeFormato,
   IP,
   ORIGEN,
   pedirInterpretar,
   respuesta,
+  respuestaMalFormada,
   salida,
   SECRETO,
 } from './ayuda.ts'
@@ -123,6 +125,38 @@ describe('validación de la petición', () => {
     expect(res.status).toBe(403)
   })
 
+  it('sin `Origin` ni `Sec-Fetch-Site` es 403 (§7), pero /api/salud pasa', async () => {
+    const b = await banco({ cliente: clienteFalso([]).cliente })
+    expect((await pedirInterpretar(b, { origen: null })).status).toBe(403)
+    const capacidades = await fetch(`${b.url}/api/capacidades`)
+    expect(capacidades.status).toBe(403)
+    expect((await fetch(`${b.url}/api/salud`)).status).toBe(200)
+  })
+
+  it('sin `Origin` pero con `Sec-Fetch-Site: same-origin` se pasa', async () => {
+    const b = await banco({ cliente: clienteFalso([]).cliente })
+    const res = await fetch(`${b.url}/api/capacidades`, {
+      headers: { 'sec-fetch-site': 'same-origin' },
+    })
+    expect(res.status).toBe(200)
+  })
+
+  it('un cuerpo grande SIN Content-Length (chunked) también recibe 413', async () => {
+    const b = await banco({ cliente: clienteFalso([]).cliente })
+    const res = await pedirInterpretar(b, {
+      // Un `ReadableStream` como cuerpo hace que fetch use `Transfer-Encoding: chunked`.
+      cuerpoCrudo: undefined,
+      cuerpoFlujo: new ReadableStream<Uint8Array>({
+        start(control) {
+          control.enqueue(new TextEncoder().encode('{"texto":"' + 'a'.repeat(48_000) + '"}'))
+          control.close()
+        },
+      }),
+    })
+    expect(res.status).toBe(413)
+    expect(await res.json()).toMatchObject({ error: { codigo: 'CUERPO_GRANDE' } })
+  })
+
   it('un cuerpo de más de 16 KB es 413', async () => {
     const b = await banco({ cliente: clienteFalso([]).cliente })
     const res = await pedirInterpretar(b, {
@@ -165,7 +199,7 @@ describe('validación de la petición', () => {
 
   it('sin comidas, ni gustos, ni hábitos es 422 SIN_CONTENIDO', async () => {
     const b = await banco({
-      cliente: clienteFalso([respuesta({ parsed_output: salida() })]).cliente,
+      cliente: clienteFalso([respuesta({ salida: salida() })]).cliente,
     })
     const res = await pedirInterpretar(b)
     expect(res.status).toBe(422)
@@ -173,7 +207,7 @@ describe('validación de la petición', () => {
   })
 
   it('el camino feliz devuelve la dieta y el modelo', async () => {
-    const falso = clienteFalso([respuesta({ parsed_output: DESAYUNO })])
+    const falso = clienteFalso([respuesta({ salida: DESAYUNO })])
     const b = await banco({ cliente: falso.cliente })
     const res = await pedirInterpretar(b)
     expect(res.status).toBe(200)
@@ -193,7 +227,7 @@ describe('validación de la petición', () => {
 describe('cuotas y presupuesto (§7)', () => {
   it('pasado el tope por IP es 429 CUOTA_IP', async () => {
     const b = await banco({
-      cliente: clienteFalso([respuesta({ parsed_output: DESAYUNO }), respuesta()]).cliente,
+      cliente: clienteFalso([respuesta({ salida: DESAYUNO }), respuesta()]).cliente,
       config: { topeIpDia: 1 },
     })
     expect((await pedirInterpretar(b)).status).toBe(200)
@@ -204,7 +238,7 @@ describe('cuotas y presupuesto (§7)', () => {
 
   it('pasado el tope global es 429 CUOTA_GLOBAL aunque la IP sea otra', async () => {
     const b = await banco({
-      cliente: clienteFalso([respuesta({ parsed_output: DESAYUNO })]).cliente,
+      cliente: clienteFalso([respuesta({ salida: DESAYUNO })]).cliente,
       config: { topeIpDia: 50, topeGlobalDia: 1 },
     })
     expect((await pedirInterpretar(b, { ip: '203.0.113.1' })).status).toBe(200)
@@ -215,8 +249,8 @@ describe('cuotas y presupuesto (§7)', () => {
 
   it('el presupuesto en euros suma TODAS las llamadas, reintento incluido', async () => {
     const falso = clienteFalso([
-      errorDeFormato(),
-      respuesta({ parsed_output: DESAYUNO, usage: { input_tokens: 4500, output_tokens: 9000 } }),
+      respuestaMalFormada({ usage: { input_tokens: 4500, output_tokens: 9000 } }),
+      respuesta({ salida: DESAYUNO, usage: { input_tokens: 4500, output_tokens: 9000 } }),
     ])
     const b = await banco({
       cliente: falso.cliente,
@@ -224,8 +258,8 @@ describe('cuotas y presupuesto (§7)', () => {
     })
     expect((await pedirInterpretar(b)).status).toBe(200)
     expect(falso.llamadas).toHaveLength(2)
-    // La llamada que falló el formato no trae `usage`; la buena cuesta 0,099 € > 0,05 €.
-    expect(b.limites.estado().euros).toBeGreaterThan(0.05)
+    // La llamada que falló el formato TAMBIÉN está hecha y cobrada: cuenta (0,099 € cada una).
+    expect(b.limites.estado().euros).toBeCloseTo(0.198, 3)
     const segunda = await pedirInterpretar(b)
     expect(segunda.status).toBe(429)
     expect(await segunda.json()).toMatchObject({ error: { codigo: 'PRESUPUESTO' } })
@@ -238,7 +272,7 @@ describe('respuesta del modelo (§3.1)', () => {
       respuesta({
         stop_reason: 'refusal',
         stop_details: { category: 'cyber' },
-        parsed_output: null,
+        texto: '',
       }),
     ])
     const b = await banco({ cliente: falso.cliente })
@@ -250,35 +284,37 @@ describe('respuesta del modelo (§3.1)', () => {
   })
 
   it('`max_tokens` es 502 sin reintento', async () => {
-    const falso = clienteFalso([respuesta({ stop_reason: 'max_tokens', parsed_output: null })])
+    const falso = clienteFalso([respuesta({ stop_reason: 'max_tokens', texto: '' })])
     const b = await banco({ cliente: falso.cliente })
     expect((await pedirInterpretar(b)).status).toBe(502)
     expect(falso.llamadas).toHaveLength(1)
   })
 
   it('una salida que no valida se reintenta UNA vez, con el error en el mensaje user', async () => {
-    const falso = clienteFalso([errorDeFormato('comidas.0.nombre: Required')])
+    const falso = clienteFalso([respuestaMalFormada()])
     const b = await banco({ cliente: falso.cliente })
     const res = await pedirInterpretar(b)
     expect(res.status).toBe(502)
     expect(falso.llamadas).toHaveLength(2)
     expect(usuarioDe(falso.llamadas[1])).toContain('no cumplía el formato pedido')
+    // El resumen lleva el error REAL de zod, con el campo concreto (§3.1).
+    expect(usuarioDe(falso.llamadas[1])).toContain('comidas')
     // El aviso NUNCA va al system: el prefijo cacheado no cambia entre intentos.
     expect(sistemaDe(falso.llamadas[1])).toBe(sistemaDe(falso.llamadas[0]))
     expect(sistemaDe(falso.llamadas[1])).not.toContain('no cumplía el formato')
   })
 
   it('si el reintento sí valida, la respuesta es 200', async () => {
-    const falso = clienteFalso([errorDeFormato(), respuesta({ parsed_output: DESAYUNO })])
+    const falso = clienteFalso([respuestaMalFormada(), respuesta({ salida: DESAYUNO })])
     const b = await banco({ cliente: falso.cliente })
     expect((await pedirInterpretar(b)).status).toBe(200)
     expect(falso.llamadas).toHaveLength(2)
   })
 
-  it('`parsed_output` null (sin refusal) también dispara el reintento', async () => {
+  it('una respuesta sin JSON (sin refusal) también dispara el reintento', async () => {
     const falso = clienteFalso([
-      respuesta({ parsed_output: null }),
-      respuesta({ parsed_output: DESAYUNO }),
+      respuesta({ texto: 'Lo siento, no puedo.' }),
+      respuesta({ salida: DESAYUNO }),
     ])
     const b = await banco({ cliente: falso.cliente })
     expect((await pedirInterpretar(b)).status).toBe(200)
@@ -286,7 +322,7 @@ describe('respuesta del modelo (§3.1)', () => {
   })
 
   it('sin tiempo de presupuesto no se llama al modelo: 504', async () => {
-    const falso = clienteFalso([respuesta({ parsed_output: DESAYUNO })])
+    const falso = clienteFalso([respuesta({ salida: DESAYUNO })])
     const arranque = Date.now()
     let reloj = arranque
     const b = await banco({
@@ -322,7 +358,7 @@ describe('log (§3.1)', () => {
   it('la línea del log no lleva el texto, ni la salida del modelo, ni la IP', async () => {
     const texto = 'Desayuno 250 g de kéfir y 25 g de almendras, y no me gusta el brócoli.'
     const b = await banco({
-      cliente: clienteFalso([respuesta({ parsed_output: DESAYUNO })]).cliente,
+      cliente: clienteFalso([respuesta({ salida: DESAYUNO })]).cliente,
     })
     const res = await pedirInterpretar(b, {
       cuerpo: { texto, comidas_plan: ['Desayuno', 'Comida', 'Cena'] },
@@ -342,6 +378,45 @@ describe('log (§3.1)', () => {
     expect((leido.ip_hash as string).length).toBe(12)
     expect(leido.uso).toMatchObject({ input_tokens: 4500 })
     expect(typeof leido.coste_eur).toBe('number')
+  })
+})
+
+describe('configuración y IP (§7)', () => {
+  it('un tope a 0 apaga el gasto: no se cae al valor por defecto', () => {
+    const config = configDesdeEntorno(
+      {
+        BASCULA_TOPE_EUROS_DIA: '0',
+        BASCULA_TOPE_GLOBAL_DIA: '0',
+        BASCULA_TOPE_IP_DIA: 'abc',
+        BASCULA_SECRETO: 'x',
+      } as NodeJS.ProcessEnv,
+      () => {},
+    )
+    expect(config.topeEurosDia).toBe(0)
+    expect(config.topeGlobalDia).toBe(0)
+    expect(config.topeIpDia).toBe(40)
+  })
+
+  it('con el tope de euros a 0 la primera petición ya es 429 PRESUPUESTO', async () => {
+    const b = await banco({
+      cliente: clienteFalso([respuesta({ salida: DESAYUNO })]).cliente,
+      config: { topeEurosDia: 0 },
+    })
+    const res = await pedirInterpretar(b)
+    expect(res.status).toBe(429)
+    expect(await res.json()).toMatchObject({ error: { codigo: 'PRESUPUESTO' } })
+  })
+
+  it('`X-Real-IP` solo se cree desde una conexión privada', () => {
+    const conRemota = (remota: string, cabecera: string): string =>
+      ipDe({
+        headers: { 'x-real-ip': cabecera },
+        socket: { remoteAddress: remota },
+      } as unknown as IncomingMessage)
+    expect(conRemota('172.18.0.5', '198.51.100.7')).toBe('198.51.100.7')
+    expect(conRemota('127.0.0.1', '198.51.100.7')).toBe('198.51.100.7')
+    // Desde fuera, la cabecera no manda: la cuota y el `ip_hash` van a la IP real.
+    expect(conRemota('203.0.113.9', '10.0.0.1')).toBe('203.0.113.9')
   })
 })
 

@@ -144,7 +144,11 @@ export function crearAplicacion(opciones: OpcionesServidor = {}): Aplicacion {
       return fallo(res, 413, 'CUERPO_GRANDE')
     }
     const cuerpo = await leerCuerpo(req)
-    if (cuerpo === null) return fallo(res, 413, 'CUERPO_GRANDE')
+    if (cuerpo === null) {
+      // Se contesta primero y se corta la conexión después: si no, el cliente no ve el 413.
+      res.on('finish', () => req.destroy())
+      return fallo(res, 413, 'CUERPO_GRANDE')
+    }
 
     if (!puedeInterpretar) return fallo(res, 503, 'SIN_CLAVE')
 
@@ -284,19 +288,32 @@ export function fallo(res: ServerResponse, codigo: number, codigoError: string):
   })
 }
 
-/** La IP real la pone nginx en `X-Real-IP`; nunca se lee `X-Forwarded-For` (§7). */
+/** Redes privadas de Docker y loopback: solo desde ahí puede venir nuestro nginx. */
+const PRIVADA =
+  /^(?:::1|127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.|f[cd][0-9a-f]{2}:|::ffff:(?:127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.))/i
+
+/**
+ * La IP real la pone nginx en `X-Real-IP`; nunca se lee `X-Forwarded-For` (§7). Defensa en
+ * profundidad: la cabecera solo se cree si la conexión viene de una red privada (nuestro nginx).
+ * Hoy el contenedor no publica puertos ni está en `dokploy-network`, pero si algún día lo
+ * estuviera, la cuota por IP, el token efímero y el `ip_hash` del log no se anularían con una
+ * cabecera inventada.
+ */
 export function ipDe(req: IncomingMessage): string {
+  const remota = req.socket.remoteAddress ?? ''
   const cabecera = req.headers['x-real-ip']
   const valor = Array.isArray(cabecera) ? cabecera[0] : cabecera
-  if (typeof valor === 'string' && valor.trim() !== '') return valor.trim()
-  // Solo en local, sin nginx delante.
-  return req.socket.remoteAddress ?? 'desconocida'
+  if (typeof valor === 'string' && valor.trim() !== '' && (remota === '' || PRIVADA.test(remota))) {
+    return valor.trim()
+  }
+  // Sin nginx delante (desarrollo) o con una conexión que no es de confianza.
+  return remota === '' ? 'desconocida' : remota
 }
 
 /**
  * Control cross-site (§7): `Origin` en la lista, o sin `Origin` con `Sec-Fetch-Site` de la propia
- * página. Sin ninguna de las dos cabeceras (curl, healthcheck, navegadores antiguos) se deja pasar:
- * el control duro es el token y el presupuesto.
+ * página. Lo demás, 403 — también lo que no trae ninguna de las dos cabeceras (curl, scripts):
+ * `/api/salud`, que es el HEALTHCHECK, queda fuera de este control.
  */
 export function origenAdmitido(req: IncomingMessage, origenes: string[]): boolean {
   const origen = req.headers.origin
@@ -304,7 +321,6 @@ export function origenAdmitido(req: IncomingMessage, origenes: string[]): boolea
     return origenes.includes(origen)
   }
   const sitio = req.headers['sec-fetch-site']
-  if (typeof sitio !== 'string' || sitio === '') return true
   return sitio === 'same-origin' || sitio === 'none'
 }
 
@@ -314,7 +330,12 @@ function tipoJson(req: IncomingMessage): boolean {
   return tipo.split(';')[0]?.trim().toLowerCase() === 'application/json'
 }
 
-/** Lee el cuerpo con tope duro; `null` si se pasa de `MAX_CUERPO`. */
+/**
+ * Lee el cuerpo con tope duro; `null` si se pasa de `MAX_CUERPO`. Al pasarse NO se destruye la
+ * petición: se deja de leer y el llamante responde `413` antes de cerrar (con `Transfer-Encoding:
+ * chunked` no hay `Content-Length` que mirar antes, y destruir aquí dejaba al navegador con un
+ * fallo de red en vez del error de §2.3).
+ */
 function leerCuerpo(req: IncomingMessage): Promise<string | null> {
   return new Promise((cumplir) => {
     const trozos: Buffer[] = []
@@ -325,7 +346,7 @@ function leerCuerpo(req: IncomingMessage): Promise<string | null> {
       total += trozo.length
       if (total > MAX_CUERPO) {
         cerrado = true
-        req.destroy()
+        req.pause()
         cumplir(null)
         return
       }
@@ -352,9 +373,16 @@ export function hashIp(ip: string, secreto: string, ahora: number): string {
     .slice(0, 12)
 }
 
+/**
+ * Un `0` es un valor legítimo: es la palanca para apagar el gasto en caliente sin quitar la clave
+ * (`BASCULA_TOPE_EUROS_DIA=0` → `PRESUPUESTO` desde la primera petición). Solo se cae al valor por
+ * defecto lo que no es un número o es negativo. `PORT` nunca se pasa a 0 desde aquí en producción.
+ */
 function numeroEntorno(valor: string | undefined, porDefecto: number): number {
-  const leido = Number((valor ?? '').trim())
-  return Number.isFinite(leido) && leido > 0 ? leido : porDefecto
+  const texto = (valor ?? '').trim()
+  if (texto === '') return porDefecto
+  const leido = Number(texto)
+  return Number.isFinite(leido) && leido >= 0 ? leido : porDefecto
 }
 
 // ---------- Arranque ----------

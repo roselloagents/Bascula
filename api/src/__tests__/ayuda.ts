@@ -33,7 +33,7 @@ export function clienteFalso(guion: (RespuestaModelo | Error)[]): ClienteFalso {
   const llamadas: Llamada[] = []
   const cliente: ClienteModelo = {
     messages: {
-      parse(parametros, opciones) {
+      create(parametros, opciones) {
         llamadas.push({ parametros, opciones })
         const siguiente = guion[llamadas.length - 1]
         if (siguiente === undefined) return Promise.reject(new Error('sin respuesta preparada'))
@@ -50,7 +50,7 @@ export function clienteQueEspera(): ClienteFalso {
   const llamadas: Llamada[] = []
   const cliente: ClienteModelo = {
     messages: {
-      parse(parametros, opciones) {
+      create(parametros, opciones) {
         llamadas.push({ parametros, opciones })
         return new Promise<RespuestaModelo>((_, rechazar) => {
           const senal = opciones?.signal
@@ -70,18 +70,27 @@ function errorDeAborto(): Error {
   return error
 }
 
-/** El error que lanza el SDK cuando la salida no valida contra el esquema de zod. */
-export function errorDeFormato(detalle = 'comidas: Required'): Error {
-  return new Error(`Failed to parse structured output: ZodError: ${detalle}`)
-}
-
-export function respuesta(parcial: Partial<RespuestaModelo> = {}): RespuestaModelo {
+/**
+ * Una respuesta del modelo tal y como llega de la API: la salida estructurada viaja como JSON en el
+ * primer bloque de texto. `salida` es el objeto que se serializa; `texto` permite mandar algo que no
+ * es JSON o que no valida, que es lo que dispara el reintento de §3.1.
+ */
+export function respuesta(
+  parcial: Partial<RespuestaModelo> & { salida?: unknown; texto?: string } = {},
+): RespuestaModelo {
+  const { salida: cuerpo, texto, ...resto } = parcial
+  const escrito = texto ?? JSON.stringify(cuerpo ?? salida())
   return {
     stop_reason: 'end_turn',
     usage: { input_tokens: 4500, output_tokens: 900 },
-    parsed_output: salida(),
-    ...parcial,
+    content: [{ type: 'text', text: escrito }],
+    ...resto,
   }
+}
+
+/** Respuesta cuya salida NO valida contra el esquema (y que, aun así, ya se ha facturado). */
+export function respuestaMalFormada(parcial: Partial<RespuestaModelo> = {}): RespuestaModelo {
+  return respuesta({ texto: '{"comidas": "no es una lista"}', ...parcial })
 }
 
 export function salida(parcial: Partial<SalidaModelo> = {}): SalidaModelo {
@@ -168,6 +177,8 @@ export interface OpcionesPeticion {
   token?: string | null
   cuerpo?: unknown
   cuerpoCrudo?: string
+  /** Cuerpo en flujo: fetch lo manda con `Transfer-Encoding: chunked`, sin `Content-Length`. */
+  cuerpoFlujo?: ReadableStream<Uint8Array>
   tipo?: string | null
   metodo?: string
   ahora?: number
@@ -198,7 +209,8 @@ export async function pedirInterpretar(
   return fetch(`${banco.url}/api/dieta/interpretar`, {
     method: opciones.metodo ?? 'POST',
     headers: cabeceras,
-    body: cuerpo,
+    body: opciones.cuerpoFlujo ?? cuerpo,
+    duplex: opciones.cuerpoFlujo === undefined ? undefined : 'half',
     signal: opciones.senal,
-  })
+  } as RequestInit)
 }
