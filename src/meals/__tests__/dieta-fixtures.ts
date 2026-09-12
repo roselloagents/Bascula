@@ -21,6 +21,7 @@ import type {
   MacrosPropio,
   NComidas,
   Preferencia,
+  PropuestaIA,
   Resultado,
 } from '../../engine/types'
 import { componerDia } from '../index'
@@ -404,4 +405,97 @@ export const DIAS_COMPUESTOS: Record<ClaveFixture, DiaCompuesto> = Object.fromEn
 /** El fixture con esa clave. */
 export function fixtureDieta(clave: ClaveFixture): FixtureDieta {
   return FIXTURES_DIETA.find((f) => f.clave === clave) as FixtureDieta
+}
+
+// ---------- §4bis: propuestas de la IA (decisión L) ----------
+//
+// Son propuestas VÁLIDAS: una `ComidaPropia` por hueco, con el mismo nombre y en el mismo orden en
+// que los pide `huecosParaProponer`, alimentos del catálogo (como manda §4bis.2, regla 3) y gramos
+// aproximados a ojo del modelo —los exactos los cuadra el solver de §4.2, que es justo lo que
+// estos fixtures existen para comprobar—. Respetan excluidos y favoritos del perfil y el hábito
+// `sin_hidratos` de la cena de `SOLO_CONTEXTO`.
+
+/** La propuesta para los dos huecos que deja `DESAYUNO_SOLO` contra `PLAN_1780`: Comida y Cena. */
+export const PROPUESTA_IA_PARCIAL: PropuestaIA = {
+  comidas: [
+    comida('Comida', [
+      delCatalogo('pechuga_pollo', 150, 'Pechuga de pollo'),
+      delCatalogo('arroz_blanco_crudo', 70, 'Arroz blanco'),
+      delCatalogo('judia_verde', 200, 'Judía verde'),
+      delCatalogo('aove', 8, 'Aceite de oliva'),
+    ]),
+    comida('Cena', [
+      delCatalogo('merluza', 220, 'Merluza'),
+      delCatalogo('patata_cocida', 300, 'Patata cocida'),
+      delCatalogo('tomate', 150, 'Tomate'),
+      delCatalogo('aove', 9, 'Aceite de oliva'),
+    ]),
+  ],
+  consejo: 'Tu desayuno ya trae casi toda la grasa del día: la comida y la cena van más ligeras.',
+  preguntas: [
+    {
+      texto: '¿Repetimos el pollo también en la cena?',
+      opciones: ['No, mejor variar', 'Sí, me da igual'],
+    },
+  ],
+}
+
+/** La propuesta para el día entero de `SOLO_CONTEXTO`: sin brócoli, con salmón y cena sin hidratos. */
+export const PROPUESTA_IA_CONTEXTO: PropuestaIA = {
+  comidas: [
+    comida('Desayuno', [
+      delCatalogo('avena_copos', 90, 'Copos de avena'),
+      delCatalogo('leche_semidesnatada', 300, 'Leche semidesnatada'),
+      delCatalogo('queso_cottage', 150, 'Queso cottage'),
+      delCatalogo('platano', 120, 'Plátano'),
+    ]),
+    comida('Comida', [
+      delCatalogo('salmon', 200, 'Salmón'),
+      delCatalogo('arroz_integral_cocido', 300, 'Arroz integral'),
+      delCatalogo('tomate', 150, 'Tomate'),
+      delCatalogo('aove', 5, 'Aceite de oliva'),
+    ]),
+    comida('Cena', [
+      delCatalogo('pechuga_pollo', 220, 'Pechuga de pollo'),
+      delCatalogo('judia_verde', 250, 'Judía verde'),
+      delCatalogo('aove', 12, 'Aceite de oliva'),
+    ]),
+  ],
+  consejo: 'El salmón entra en la comida, que es donde mejor cuadra con tus calorías.',
+  preguntas: [
+    { texto: '¿Te va bien la avena por las mañanas?', opciones: ['Sí', 'No, prefiero pan'] },
+    {
+      texto: '¿Metemos alguna verdura más en la cena?',
+      opciones: ['No, así está bien', 'Sí, dime cuáles'],
+    },
+  ],
+}
+
+export type ClavePropuesta = 'desayuno_solo' | 'solo_contexto'
+
+/** La propuesta de cada fixture que la tiene. */
+export const PROPUESTAS_IA: Record<ClavePropuesta, PropuestaIA> = {
+  desayuno_solo: PROPUESTA_IA_PARCIAL,
+  solo_contexto: PROPUESTA_IA_CONTEXTO,
+}
+
+/**
+ * El `DiaCompuesto` de esos mismos fixtures pero con la propuesta de la IA puesta: los huecos son
+ * `propuesta_ia` con sus gramos ya cuadrados. Se calcula al importar y sale siempre igual.
+ */
+export const DIAS_CON_PROPUESTA: Record<ClavePropuesta, DiaCompuesto> = {
+  desayuno_solo: componerDia(
+    DESAYUNO_SOLO,
+    PLAN_1780.inputs,
+    PLAN_1780.resultado,
+    0,
+    PROPUESTA_IA_PARCIAL,
+  ),
+  solo_contexto: componerDia(
+    SOLO_CONTEXTO,
+    fixtureDieta('solo_contexto').inputs,
+    fixtureDieta('solo_contexto').resultado,
+    0,
+    PROPUESTA_IA_CONTEXTO,
+  ),
 }

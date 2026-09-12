@@ -758,6 +758,11 @@ export interface ComidaCompuesta {
   alimentos: AlimentoAjustado[]
   /** La toma montada por el generador (origen `propuesta`), con alternativas; null en los otros dos. */
   ejemplo: EjemploComida | null
+  /** El hábito `sin_hidratos` se aplicó a este hueco (§4.3.2b): su objetivo bajó a 10 g de hidrato y
+   *  quien lo monte —plantillas o IA— no puede ponerle ninguna fuente de hidrato. Ausente cuando no
+   *  aplica. Es lo que `huecosParaProponer` (§4bis.1) manda en la petición de la propuesta: el texto
+   *  de `aplicado` no sirve, porque §4.5 lo retira cuando lo montado rompe la promesa. */
+  sin_hidratos?: boolean
   totales: MacrosPropio
   /** % de las kcal del día que se lleva esta comida (0–100, 1 decimal). */
   pct_kcal: number

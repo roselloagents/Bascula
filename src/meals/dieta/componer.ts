@@ -23,6 +23,7 @@ import type {
   Macros,
   MacrosPropio,
   ModoComposicion,
+  PropuestaIA,
   Resultado,
 } from '../../engine/types'
 import { perfilDeResultado } from '../filtros'
@@ -35,16 +36,19 @@ import {
   AVISO_NO_CUADRA,
   AVISO_SIN_ACEITE,
   AVISO_SIN_VEGETALES,
+  CODIGO_CONSEJO_IA,
   aplicadoFavorito,
   aplicadoHabitoHueco,
   aplicadoMismaCadaDia,
   aplicadoSin,
   apuntadoComidaDictada,
+  apuntadoExcluidoEnPropuesta,
   apuntadoFrecuencia,
   apuntadoHorario,
   apuntadoNComidas,
   apuntadoNoCabe,
   apuntadoOtro,
+  apuntadoPropuestaNoConvence,
   apuntadoSinBase,
   avisoAlcohol,
   avisoFibraBaja,
@@ -69,7 +73,41 @@ export type Montador = (
   huecos: readonly Comida[],
   variante: number,
   sinHidratos: readonly boolean[],
+  cubiertos: readonly boolean[],
 ) => { comidas: EjemploComida[]; notas: string[] }
+
+/**
+ * Un hueco tal y como lo pide `POST /api/dieta/proponer` (§4bis.1). Sale de un `DiaCompuesto` ya
+ * calculado —con plantillas o con una propuesta anterior— porque es ahí donde está el objetivo de
+ * cada hueco después del reparto del resto y de los hábitos (§4.3.2).
+ */
+export interface HuecoIA {
+  nombre: string
+  hora: string | null
+  peri: boolean
+  objetivo: Macros
+  sin_hidratos: boolean
+}
+
+/**
+ * Los huecos que montamos nosotros (plantillas o IA), en el orden del día, listos para pedirle una
+ * propuesta al modelo (§4bis.1). Las comidas dictadas no salen: esas manda lo que contó la persona.
+ */
+export function huecosParaProponer(compuesto: DiaCompuesto): HuecoIA[] {
+  const huecos: HuecoIA[] = []
+  for (const c of compuesto.comidas) {
+    if (c.origen !== 'propuesta' && c.origen !== 'propuesta_ia') continue
+    if (c.objetivo === null) continue
+    huecos.push({
+      nombre: c.nombre,
+      hora: c.hora,
+      peri: c.peri,
+      objetivo: { ...c.objetivo },
+      sin_hidratos: c.sin_hidratos === true,
+    })
+  }
+  return huecos
+}
 
 /** Umbrales de los avisos de §4.4. */
 const UMBRAL_PROTEINA = 0.9
@@ -91,6 +129,22 @@ const HC_SIN_HIDRATOS = 10
 function sinHidratosDeVerdad(ejemplo: EjemploComida): boolean {
   return !ejemplo.alimentos.some((a) => alimentoPorId(a.id)?.grupo === 'carbohidrato')
 }
+/**
+ * La misma comprobación sobre una comida propuesta por la IA (§4bis.3). El grupo bueno es el del
+ * catálogo cuando el alimento existe en `foods.json` (ahí `grupo_aprox` lo impone el servidor) y
+ * el del modelo cuando no existe.
+ */
+function sinHidratosPropuesta(alimentos: readonly AlimentoPropio[]): boolean {
+  return !alimentos.some((a) => {
+    const catalogo = a.alimento_id ? alimentoPorId(a.alimento_id) : undefined
+    return (catalogo ? catalogo.grupo : a.grupo_aprox) === 'carbohidrato'
+  })
+}
+/**
+ * Cuánto se le tolera a un hueco propuesto después de cuadrarlo (§4bis.3): más de un 15 % de
+ * diferencia en kcal o en proteína y ese hueco se monta con nuestras plantillas.
+ */
+const TOLERANCIA_IA = 0.15
 /** Grasa mínima (g, o fracción de la del día) para que un alimento se nombre en DIETA_GRASA_ALTA. */
 const GRASA_RELEVANTE_G = 3
 const GRASA_RELEVANTE_PCT = 0.05
@@ -265,6 +319,7 @@ export function componerDiaCon(
   resultado: Resultado,
   variante: number,
   montar: Montador,
+  propuesta?: PropuestaIA,
 ): DiaCompuesto {
   const perfil = perfilDeResultado(resultado, inputs)
   const objetivo: Macros = {
@@ -328,47 +383,14 @@ export function componerDiaCon(
       variableDe.push(f.v)
       if (f.estado === 'pendiente') {
         pendientes.push({ comida: d.nombre, nombre: a.nombre })
-        lista.push({
-          ...a,
-          estado_ajuste: 'pendiente',
-          gramos_ajustados: 0,
-          delta_g: 0,
-          cambio: 'igual',
-          factor: 1,
-          en_limite: 'no',
-          aporte: { ...CERO },
-        })
+        lista.push(filaAjustada(a, 'pendiente', 0, null))
         continue
       }
-      const dictados = a.gramos ?? 0
       if (f.estado === 'fijo') {
-        lista.push({
-          ...a,
-          cantidad_unidades: unidadesFinales(a, dictados),
-          estado_ajuste: 'fijo',
-          gramos_ajustados: dictados,
-          delta_g: 0,
-          cambio: 'igual',
-          factor: 1,
-          en_limite: 'no',
-          aporte: aporteDe(a.macros_100g, dictados),
-        })
+        lista.push(filaAjustada(a, 'fijo', a.gramos ?? 0, null))
         continue
       }
-      const v = variables[f.v]
-      const finales = ajuste.gramos[f.v]
-      const delta = redondea1(finales - dictados)
-      lista.push({
-        ...a,
-        cantidad_unidades: unidadesFinales(a, finales),
-        estado_ajuste: 'variable',
-        gramos_ajustados: finales,
-        delta_g: delta,
-        cambio: delta > 0 ? 'sube' : delta < 0 ? 'baja' : 'igual',
-        factor: dictados > 0 ? finales / dictados : 1,
-        en_limite: enLimite(v, finales),
-        aporte: aporteDe(a.macros_100g, finales),
-      })
+      lista.push(filaAjustada(a, 'variable', ajuste.gramos[f.v], variables[f.v]))
     }
     ajustados.push(lista)
   }
@@ -445,13 +467,57 @@ export function componerDiaCon(
     peri: huecos[i].peri,
   }))
 
-  const montado = montar(comidasAMontar, variante, sinHidratos)
+  // ----- §4bis.3: los huecos que propone la IA, cuadrados uno a uno -----
+  // Se hace ANTES de montar para que el generador sepa qué huecos no va a enseñar nadie y no
+  // suelte sus notas ("la Cena se queda 80 kcal por encima…") sobre una comida que no se ve.
+  const deLaIa: (HuecoCuadrado | null)[] = aMontar.map(() => null)
+  if (propuesta !== undefined) {
+    const porNombre = new Map<string, ComidaPropia>()
+    for (const c of propuesta.comidas) {
+      const clave = normalizarNombre(c.nombre)
+      if (!porNombre.has(clave)) porNombre.set(clave, c)
+    }
+    for (let j = 0; j < aMontar.length; j++) {
+      // Por nombre y no por posición: §4bis.1 pide una comida por hueco y en el mismo orden, pero
+      // una propuesta con menos huecos de los pedidos no puede correr las demás de sitio.
+      const c = porNombre.get(normalizarNombre(comidasAMontar[j].nombre))
+      const objetivoJ: Macros = { ...objetivoHuecos[j] }
+      const cuadrado = c === undefined ? null : cuadrarHueco(c, objetivoJ, perfil.low_carb)
+      if (cuadrado !== null && convence(cuadrado, objetivoJ)) {
+        deLaIa[j] = cuadrado
+        // Un excluido colado en la propuesta no la tira abajo —los gramos ya cuadran—, pero se
+        // apunta: nadie debería encontrarse en su menú justo lo que dijo que no quería.
+        const dichos = new Set<string>()
+        for (const a of cuadrado.alimentos) {
+          const id = a.alimento_id
+          if (id === null || !perfil.excluidos.has(id) || dichos.has(id)) continue
+          dichos.add(id)
+          apuntado.push(apuntadoExcluidoEnPropuesta(nombreDeId(id), comidasAMontar[j].nombre))
+        }
+        continue
+      }
+      apuntado.push(apuntadoPropuestaNoConvence(comidasAMontar[j].nombre))
+    }
+  }
+
+  const montado = montar(
+    comidasAMontar,
+    variante,
+    sinHidratos,
+    deLaIa.map((c) => c !== null),
+  )
 
   // §4.5: lo prometido se comprueba contra lo montado. Si la toma sigue trayendo hidratos (banco
-  // sencillo, plantillas sin salida), la costumbre pasa de "aplicado" a "apuntado".
+  // sencillo, plantillas sin salida, propuesta de la IA con guarnición), la costumbre pasa de
+  // "aplicado" a "apuntado": nunca se promete lo que no se ha hecho.
   for (const p of porConfirmar) {
-    const ejemplo = montado.comidas[p.hueco]
-    if (ejemplo !== undefined && sinHidratosDeVerdad(ejemplo)) continue
+    const ia = deLaIa[p.hueco]
+    if (ia !== null) {
+      if (sinHidratosPropuesta(ia.alimentos)) continue
+    } else {
+      const ejemplo = montado.comidas[p.hueco]
+      if (ejemplo !== undefined && sinHidratosDeVerdad(ejemplo)) continue
+    }
     const i = aplicado.indexOf(p.aplicado)
     if (i >= 0) aplicado.splice(i, 1)
     apuntado.push(p.apuntado)
@@ -470,6 +536,28 @@ export function componerDiaCon(
       continue
     }
     const j = aMontar.indexOf(i)
+    const objetivoJ: Macros = {
+      kcal: objetivoHuecos[j].kcal,
+      prot: objetivoHuecos[j].prot,
+      carb: objetivoHuecos[j].carb,
+      fat: objetivoHuecos[j].fat,
+    }
+    const ia = deLaIa[j]
+    if (ia !== null) {
+      comidas.push({
+        nombre: huecos[i].nombre,
+        hora: huecos[i].hora,
+        peri: huecos[i].peri,
+        origen: 'propuesta_ia',
+        objetivo: objetivoJ,
+        alimentos: ia.alimentos,
+        ejemplo: null,
+        ...(sinHidratos[j] ? { sin_hidratos: true } : {}),
+        totales: ia.totales,
+        pct_kcal: 0,
+      })
+      continue
+    }
     const ejemplo = montado.comidas[j]
     if (!ejemplo) continue
     comidas.push({
@@ -477,14 +565,10 @@ export function componerDiaCon(
       hora: huecos[i].hora,
       peri: huecos[i].peri,
       origen: 'propuesta',
-      objetivo: {
-        kcal: objetivoHuecos[j].kcal,
-        prot: objetivoHuecos[j].prot,
-        carb: objetivoHuecos[j].carb,
-        fat: objetivoHuecos[j].fat,
-      },
+      objetivo: objetivoJ,
       alimentos: [],
       ejemplo,
+      ...(sinHidratos[j] ? { sin_hidratos: true } : {}),
       totales: totalesDeEjemplo(ejemplo),
       pct_kcal: 0,
     })
@@ -515,7 +599,36 @@ export function componerDiaCon(
     kcalDictadas: totalesDictados.kcal,
   })
 
+  // §4bis.3: el consejo del modelo va como aviso informativo, el primero de los informativos. No
+  // cuenta para el umbral de `DIETA_NO_CUADRA` —no señala nada que no cuadre— y por eso se inserta
+  // después de construir la lista, detrás del terminal si lo hubiera.
+  const consejo = propuesta?.consejo?.trim() ?? ''
+  if (consejo.length > 0) {
+    const terminal = avisos.length > 0 && avisos[0].codigo === 'DIETA_NO_CUADRA' ? 1 : 0
+    avisos.splice(terminal, 0, { codigo: CODIGO_CONSEJO_IA, texto: consejo })
+  }
+
+  // Sin propuesta, el día sale exactamente igual que antes de la decisión L: estos tres campos ni
+  // siquiera aparecen en el objeto.
+  const conIa = deLaIa.filter((c) => c !== null).length
+  const extrasIa =
+    propuesta === undefined
+      ? {}
+      : {
+          preguntas: propuesta.preguntas.map((p) => ({ ...p, opciones: [...p.opciones] })),
+          consejo_ia: propuesta.consejo,
+          origen_huecos:
+            aMontar.length === 0
+              ? null
+              : conIa === 0
+                ? ('plantillas' as const)
+                : conIa === aMontar.length
+                  ? ('ia' as const)
+                  : ('mixto' as const),
+        }
+
   return {
+    ...extrasIa,
     modo,
     comidas,
     totales,
@@ -552,6 +665,57 @@ function unidadesFinales(a: AlimentoPropio, gramos: number): number | null | und
   return Math.max(1, Math.round(gramos / u))
 }
 
+/**
+ * Una fila ya ajustada (§4.6). La usan igual los alimentos dictados y los que propone la IA: en
+ * los dos casos los gramos que se enseñan son los que ha puesto el solver, y `gramos` sigue
+ * guardando el punto de partida (lo dictado, o lo que el modelo propuso a ojo).
+ */
+function filaAjustada(
+  a: AlimentoPropio,
+  estado: EstadoAjuste,
+  gramos: number,
+  v: Variable | null,
+): AlimentoAjustado {
+  if (estado === 'pendiente') {
+    return {
+      ...a,
+      estado_ajuste: 'pendiente',
+      gramos_ajustados: 0,
+      delta_g: 0,
+      cambio: 'igual',
+      factor: 1,
+      en_limite: 'no',
+      aporte: { ...CERO },
+    }
+  }
+  if (estado === 'fijo' || v === null) {
+    return {
+      ...a,
+      cantidad_unidades: unidadesFinales(a, gramos),
+      estado_ajuste: 'fijo',
+      gramos_ajustados: gramos,
+      delta_g: 0,
+      cambio: 'igual',
+      factor: 1,
+      en_limite: 'no',
+      aporte: aporteDe(a.macros_100g, gramos),
+    }
+  }
+  const partida = a.gramos ?? 0
+  const delta = redondea1(gramos - partida)
+  return {
+    ...a,
+    cantidad_unidades: unidadesFinales(a, gramos),
+    estado_ajuste: 'variable',
+    gramos_ajustados: gramos,
+    delta_g: delta,
+    cambio: delta > 0 ? 'sube' : delta < 0 ? 'baja' : 'igual',
+    factor: partida > 0 ? gramos / partida : 1,
+    en_limite: enLimite(v, gramos),
+    aporte: aporteDe(a.macros_100g, gramos),
+  }
+}
+
 function enLimite(v: Variable, gramos: number): AlimentoAjustado['en_limite'] {
   const tolerancia = v.paso / 2
   if (gramos >= v.hiRed - tolerancia) return v.limiteArriba
@@ -571,6 +735,75 @@ function comidaPropia(d: Dictada, alimentos: AlimentoAjustado[]): ComidaCompuest
     totales: publicar(alimentos.reduce((t, a) => suma(t, a.aporte), { ...CERO })),
     pct_kcal: 0,
   }
+}
+
+/** Un hueco propuesto por la IA después de pasar por el solver (§4bis.3). */
+interface HuecoCuadrado {
+  alimentos: AlimentoAjustado[]
+  totales: MacrosPropio
+}
+
+/**
+ * Cuadra UN hueco propuesto por el modelo contra su objetivo (§4bis.3): el solver de §4.2 en modo
+ * `completa` pero con las piezas de esa sola comida —cajas de §4.2.2, redondeo de §4.2.6 y cierre
+ * de §4.2.7—, porque aquí no hay nada más en el día que pueda absorber la diferencia.
+ *
+ * Devuelve `null` si la comida no vale: sin alimentos, o con todos sin gramos utilizables. Un
+ * alimento propuesto sin gramos se descarta en vez de quedarse `pendiente`: la fila de una comida
+ * `propuesta_ia` no tiene "Cambiar" (§4bis.3), así que nadie podría completarlo nunca.
+ */
+function cuadrarHueco(
+  comida: ComidaPropia,
+  objetivo: Macros,
+  lowCarb: boolean,
+): HuecoCuadrado | null {
+  const alimentos = comida.alimentos.filter(
+    (a) => a.retirado !== true && estadoDe(a) !== 'pendiente',
+  )
+  if (alimentos.length === 0) return null
+  const piezas: Pieza[] = []
+  const variables: Variable[] = []
+  const fichas: { estado: EstadoAjuste; v: number }[] = []
+  for (const a of alimentos) {
+    const estado = estadoDe(a)
+    if (estado === 'fijo') {
+      piezas.push({ macros: a.macros_100g, gramos: a.gramos ?? 0, variable: null })
+      fichas.push({ estado, v: -1 })
+      continue
+    }
+    const v = variables.length
+    variables.push(cajaDe(a))
+    piezas.push({ macros: a.macros_100g, gramos: a.gramos ?? 0, variable: v })
+    fichas.push({ estado, v })
+  }
+  const ajuste = ajustar({
+    piezas,
+    variables,
+    objetivo,
+    modo: 'completa',
+    huecosAMontar: 0,
+    lowCarb,
+  })
+  const filas = alimentos.map((a, i) => {
+    const f = fichas[i]
+    return f.estado === 'fijo'
+      ? filaAjustada(a, 'fijo', a.gramos ?? 0, null)
+      : filaAjustada(a, 'variable', ajuste.gramos[f.v], variables[f.v])
+  })
+  return {
+    alimentos: filas,
+    totales: publicar(filas.reduce((t, a) => suma(t, a.aporte), { ...CERO })),
+  }
+}
+
+/** `true` si el hueco cuadrado se queda dentro del ±15 % en kcal y en proteína (§4bis.3). */
+function convence(cuadrado: HuecoCuadrado, objetivo: Macros): boolean {
+  for (const m of ['kcal', 'prot'] as const) {
+    const T = objetivo[m]
+    if (!(T > 0)) continue
+    if (Math.abs(cuadrado.totales[m] - T) > TOLERANCIA_IA * T) return false
+  }
+  return true
 }
 
 /** Totales de una toma montada. La fibra sale de `foods.json`; el alcohol de un menú es 0. */

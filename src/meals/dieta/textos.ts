@@ -162,3 +162,32 @@ export function apuntadoOtro(texto: string): string {
 export function apuntadoNoCabe(texto: string): string {
   return `«${texto}»: no lo aplicamos porque esa comida se quedaría demasiado pequeña; cuéntanos también otra comida y lo movemos`
 }
+
+// ---------- §4bis: huecos propuestos por la IA (decisión L) ----------
+
+/**
+ * Código del aviso informativo que lleva el consejo del modelo (§4bis.3). No está en
+ * `CODIGOS_AVISO` porque no es un aviso de §4.4: no señala nada que no cuadre y por eso tampoco
+ * cuenta para el umbral de `DIETA_NO_CUADRA`. Su texto es el `consejo` del modelo, literal.
+ */
+export const CODIGO_CONSEJO_IA = 'DIETA_CONSEJO_IA'
+
+/**
+ * Un hueco que la IA proponía y que no ha llegado a convencernos: venía vacío, no validaba o
+ * después de cuadrarlo se quedaba a más del 15 % de sus kcal o de su proteína (§4bis.3). Se monta
+ * con nuestras plantillas y se dice, porque el bloque enseña el distintivo "propuesta IA" en las
+ * demás y quien lea la pantalla tiene que entender por qué esta no lo lleva.
+ */
+export function apuntadoPropuestaNoConvence(comida: string): string {
+  return `Para ${comida} no nos ha convencido la propuesta y hemos usado la nuestra.`
+}
+
+/**
+ * La propuesta trae un alimento que la persona había excluido (paso 14 o un gusto del audio). No
+ * la tiramos por eso —los gramos ya están cuadrados y el resto de la comida vale—, pero se dice:
+ * lo contrario sería colarle en el menú justo lo que dijo que no quería. No usa el texto del menú
+ * propuesto ("no hemos podido evitar…"): aquí sí se podía evitar, lo ha elegido el modelo.
+ */
+export function apuntadoExcluidoEnPropuesta(nombre: string, comida: string): string {
+  return `La propuesta de ${comida} trae ${nombre}, que no querías: pide «Otra propuesta» si prefieres cambiarla.`
+}

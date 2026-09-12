@@ -15,6 +15,7 @@ import type {
   ListaCompra,
   Macros,
   Preferencia,
+  PropuestaIA,
   Resultado,
 } from '../engine/types'
 import type { PlantillaResuelta, Porcion } from './escalado'
@@ -1294,6 +1295,11 @@ export function generarListaCompra(ejemplos: Ejemplos, inputs: Inputs): ListaCom
  *
  * Devuelve también las notas del generador (dos platos, toma que no cierra, proteína lejos y el
  * respaldo de exclusiones), que §4.3.3 manda recoger en `DiaCompuesto.notas`.
+ *
+ * Con una propuesta de la IA (§4bis.3) la decisión es **hueco a hueco**: `cubiertos[i]` marca los
+ * que ya sirve el modelo. Esos se siguen montando —`construirDia` reparte plantillas y reservas
+ * mirando el día entero, así que saltárselos cambiaría los demás y el respaldo dejaría de ser el
+ * mismo menú de siempre— pero **sus notas no salen**: hablarían de una comida que nadie ve.
  */
 function montarHuecos(
   inputs: Inputs,
@@ -1301,6 +1307,7 @@ function montarHuecos(
   huecos: readonly Comida[],
   variante: number,
   sinHidratos: readonly boolean[] = [],
+  cubiertos: readonly boolean[] = [],
 ): { comidas: EjemploComida[]; notas: string[] } {
   if (huecos.length === 0) return { comidas: [], notas: [] }
   const perfil = perfilDeResultado(resultado, inputs)
@@ -1321,6 +1328,7 @@ function montarHuecos(
 
   const notas: string[] = []
   for (let i = 0; i < dia.comidas.length; i++) {
+    if (cubiertos[i] === true) continue
     const c = dia.comidas[i]
     if (c.platos > 1) notas.push(notaDosPlatos(c.ejemplo.comida, huecos[i].kcal, c.platos))
     if (c.porciones.length === 0) continue
@@ -1351,7 +1359,9 @@ function montarHuecos(
   }
   if (perfil.excluidos.size > 0) {
     const vistos = new Set<string>()
-    for (const c of dia.comidas) {
+    for (let i = 0; i < dia.comidas.length; i++) {
+      if (cubiertos[i] === true) continue
+      const c = dia.comidas[i]
       for (const a of c.ejemplo.alimentos) {
         const clave = `${a.id}|${c.ejemplo.comida}`
         if (!perfil.excluidos.has(a.id) || vistos.has(clave)) continue
@@ -1382,17 +1392,30 @@ export function generarComidas(
  * Compone el día con lo que la persona nos contó (SPEC-dieta-propia §4). Puro y determinista.
  * El algoritmo vive en `./dieta/componer`; aquí se le inyecta el generador de menús, que es lo
  * único que ese módulo no puede importar sin crear un ciclo.
+ *
+ * Con `propuesta` (decisión L, §4bis.3) los huecos los elige el modelo y el algoritmo les cuadra
+ * los gramos; los que no convencen caen al generador de plantillas, hueco a hueco. **Sin
+ * `propuesta` el día sale exactamente igual que antes**, bit a bit.
  */
 export function componerDia(
   interpretada: DietaInterpretada,
   inputs: Inputs,
   resultado: Resultado,
   variante = 0,
+  propuesta?: PropuestaIA,
 ): DiaCompuesto {
   const v = Math.max(0, Math.trunc(variante))
-  return componerDiaCon(interpretada, inputs, resultado, v, (huecos, variante2, sinHidratos) =>
-    montarHuecos(inputs, resultado, huecos, variante2, sinHidratos),
+  return componerDiaCon(
+    interpretada,
+    inputs,
+    resultado,
+    v,
+    (huecos, variante2, sinHidratos, cubiertos) =>
+      montarHuecos(inputs, resultado, huecos, variante2, sinHidratos, cubiertos),
+    propuesta,
   )
 }
 
+export type { HuecoIA } from './dieta/componer'
+export { huecosParaProponer } from './dieta/componer'
 export { compraDeDia } from './dieta/compra'
