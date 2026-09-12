@@ -70,6 +70,8 @@ interface ResultadosProps {
   /** En esta sesión hubo propuesta de IA y ahora no (§4bis.5). */
   sinIa?: boolean
   onResponderPregunta?: (pregunta: string, respuesta: string) => void
+  /** "Seguir así": las preguntas cerradas se guardan para que no vuelvan al recargar (§4bis.5). */
+  onCerrarPreguntas?: (textos: readonly string[]) => void
 }
 
 export function Resultados({
@@ -98,6 +100,7 @@ export function Resultados({
   errorIa = '',
   sinIa = false,
   onResponderPregunta,
+  onCerrarPreguntas,
 }: ResultadosProps) {
   // SPEC-ux §2.8: con avisos de condición médica, IMC 35/40 o 65 años o más,
   // el bloque de avisos sube por encima de los menús.
@@ -259,6 +262,7 @@ export function Resultados({
                 }
               : undefined
           }
+          onCerrarPreguntas={onCerrarPreguntas}
         />
       ) : (
         <BloqueMenus

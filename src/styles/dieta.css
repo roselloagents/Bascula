@@ -517,3 +517,23 @@
   justify-self: start;
   margin-top: var(--e-2);
 }
+
+/* El motivo de "Responder" con el campo vacío (§4bis.5). Vacío no ocupa nada: la región tiene
+   que existir de antes para que el anuncio se oiga cuando llegue. */
+.dieta-pregunta-aviso:not(:empty) {
+  margin-top: var(--e-4);
+  color: var(--aviso);
+  font-size: var(--t-sm);
+}
+
+.dieta-pregunta-aviso:empty {
+  margin: 0;
+}
+
+/* El aviso de la espera y el error, ahora también junto a las acciones (§4bis.4): separados del
+   botón para que no parezcan parte de él. */
+.acciones-menu .dieta-pidiendo,
+.acciones-menu .nota-recuadro {
+  margin-top: 0;
+  margin-bottom: var(--e-4);
+}

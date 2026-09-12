@@ -29,6 +29,8 @@ export const VARIANTE_MAX = 20
 export const RESPUESTAS_MAX = 4
 /** Tope de preguntas por propuesta (§4bis.1 y §4bis.5). */
 export const PREGUNTAS_MAX = 2
+/** Preguntas cerradas que se recuerdan: las suficientes para varias propuestas seguidas. */
+export const CERRADAS_MAX = 20
 
 /**
  * La última propuesta de la IA, guardada con la clave de los huecos con los que se pidió
@@ -42,6 +44,12 @@ export interface PropuestaGuardada {
   propuesta: PropuestaIA
   /** Lo que la persona ha contestado a las preguntas de vuelta, en orden (≤ 4). */
   respuestas: RespuestaIA[]
+  /**
+   * Preguntas que la persona cerró con "Seguir así" (§4bis.5). Se guardan por su texto para que
+   * no vuelvan al recargar: `preguntasCerradas` era estado de componente y la misma pregunta
+   * reaparecía palabra por palabra sin que el modelo hubiera tenido ocasión de cambiarla.
+   */
+  cerradas?: string[]
 }
 
 /** `bascula:dieta:v1` (§5.5). Las correcciones de §5.4 reescriben `interpretada`. */
@@ -171,6 +179,9 @@ function leerPropuesta(valor: unknown): PropuestaGuardada | null {
       preguntas: leerPreguntas(cruda.preguntas),
     },
     respuestas: leerRespuestas(valor.respuestas),
+    ...(cadenas(valor.cerradas).length > 0
+      ? { cerradas: cadenas(valor.cerradas).slice(0, CERRADAS_MAX) }
+      : {}),
   }
 }
 
@@ -224,14 +235,25 @@ export function borrarDieta(): void {
 
 // ---- Propuesta de la IA (§4bis.4) ----------------------------------------
 
-function redondeo1(valor: number): number {
-  const n = Math.round(valor * 10) / 10
+/**
+ * Cubos de la clave de huecos (§4bis.4). La clave NO es una huella exacta del objetivo: §4bis.3
+ * vuelve a cuadrar cada hueco con el solver contra el objetivo NUEVO, así que una propuesta
+ * pedida para 816 kcal sigue valiendo para 805. Con kcal a la unidad y macros a un decimal,
+ * corregir un solo gramo de una comida dictada tiraba la propuesta y pagaba otra llamada de
+ * ~20 s: exactamente la acción que la nota fija del bloque recomienda ("corrige lo que haga
+ * falta con «Cambiar»").
+ */
+export const CUBO_KCAL = 25
+export const CUBO_MACRO = 5
+
+function cubo(valor: number, ancho: number): number {
+  const n = Math.round(valor / ancho)
   return Number.isFinite(n) ? n : 0
 }
 
 /**
  * Clave de los huecos con los que se pidió una propuesta (§4bis.4): `JSON.stringify` de los
- * **nombres** y los **objetivos redondeados** (kcal enteras, macros con un decimal, como §4.3.2).
+ * **nombres** y los **objetivos en cubos anchos** (25 kcal y 5 g por macro).
  *
  * Va como array de arrays a propósito: así la clave no depende del orden en que estén escritas
  * las propiedades del objeto —`{ prot, kcal }` y `{ kcal, prot }` dan la misma— y solo cambia
@@ -242,10 +264,10 @@ export function claveHuecos(huecos: readonly HuecoPropuesta[]): string {
   return JSON.stringify(
     huecos.map((h) => [
       h.nombre,
-      Math.round(h.objetivo.kcal),
-      redondeo1(h.objetivo.prot),
-      redondeo1(h.objetivo.carb),
-      redondeo1(h.objetivo.fat),
+      cubo(h.objetivo.kcal, CUBO_KCAL),
+      cubo(h.objetivo.prot, CUBO_MACRO),
+      cubo(h.objetivo.carb, CUBO_MACRO),
+      cubo(h.objetivo.fat, CUBO_MACRO),
     ]),
   )
 }

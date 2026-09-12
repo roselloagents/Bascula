@@ -64,6 +64,15 @@ export const LINEA_SIN_IA = 'Menú montado con nuestras plantillas: la IA no est
 
 /** [SPEC] §4bis.3, el botón cambia de nombre cuando los huecos los propone el modelo. */
 export const BOTON_OTRA_PROPUESTA = 'Otra propuesta'
+/**
+ * [SPEC] §4bis.4, el MISMO botón mientras la propuesta viaja. La llamada tarda ~20 s y el único
+ * indicador vivía en la cabecera, a cuatro pantallas del dedo: quien pulsaba no veía cambiar nada
+ * y volvía a pulsar, lanzando (y pagando) una segunda llamada.
+ */
+export const BOTON_PIDIENDO = 'Pidiendo una propuesta…'
+/** [SPEC] §4bis.5, cuando llega una propuesta nueva con una respuesta a medias sin enviar. */
+export const AVISO_PREGUNTA_DESCARTADA =
+  'Ha llegado una propuesta nueva y la pregunta ha cambiado: lo que estabas escribiendo no se ha enviado.'
 /** [SPEC] §5.4, el mismo botón sin IA. */
 export const BOTON_OTRO_EJEMPLO = 'Ver otro ejemplo'
 
@@ -510,6 +519,8 @@ interface Props {
   sinIa?: boolean
   /** Responder a una pregunta del modelo: guarda, añade al texto contado y vuelve a pedir. */
   onResponderPregunta?: (pregunta: string, respuesta: string) => void
+  /** "Seguir así": las preguntas cerradas se guardan para que no vuelvan al recargar (§4bis.5). */
+  onCerrarPreguntas?: (textos: readonly string[]) => void
   /** Contador: cada vez que sube, el bloque hace scroll y mueve el foco a su h2 (§5.3). */
   foco?: number
   /** Solo para los tests: en producción se usa `window`. */
@@ -534,13 +545,17 @@ export function BloqueDietaPropia({
   errorIa = '',
   sinIa = false,
   onResponderPregunta,
+  onCerrarPreguntas,
   foco = 0,
   ventana,
 }: Props) {
   const [verAvisos, setVerAvisos] = useState(false)
   // "Seguir así" cierra la tarjeta de preguntas; una propuesta nueva trae preguntas nuevas y la
   // tarjeta vuelve, así que lo que se recuerda es QUÉ preguntas se descartaron, no un booleano.
-  const [preguntasCerradas, setPreguntasCerradas] = useState('')
+  // Esto es solo el eco inmediato: lo que sobrevive a una recarga lo guarda `App` (§4bis.5).
+  const [cerradasAhora, setCerradasAhora] = useState<string[]>([])
+  /** `true` mientras el cierre lo ha pedido la persona: el descarte silencioso no es ese caso. */
+  const cerradoPorMi = useRef(false)
   const [efimero, setEfimero] = useState<{ texto: string; deshacer: () => void } | null>(null)
   const [estado, setEstado] = useState('')
   const apertura = useAperturaDieta()
@@ -624,14 +639,28 @@ export function BloqueDietaPropia({
   const ocultos = avisos.length - visibles.length
   const huecosIa = compuesto.comidas.some((c) => c.origen === 'propuesta_ia')
   const hayHuecos = huecosIa || compuesto.comidas.some((c) => c.origen === 'propuesta')
-  const preguntas = compuesto.preguntas ?? []
+  // §4bis.5: una pregunta ya contestada o ya cerrada NO se vuelve a hacer. `respuestas` y
+  // `cerradas` viven en la dieta guardada, así que esto sobrevive a una recarga; sin el filtro,
+  // volver al plan repetía la misma pregunta palabra por palabra y sin ninguna llamada nueva.
+  const respondidas = dieta.propuesta?.respuestas ?? []
+  const cerradas = dieta.propuesta?.cerradas ?? []
+  const preguntas = (compuesto.preguntas ?? []).filter(
+    (p) =>
+      !respondidas.some((r) => r.pregunta === p.texto) &&
+      !cerradas.includes(p.texto) &&
+      !cerradasAhora.includes(p.texto),
+  )
+  const verPreguntas = preguntas.length > 0
   const clavePreguntas = preguntas.map((p) => p.texto).join('|')
-  const verPreguntas = preguntas.length > 0 && clavePreguntas !== preguntasCerradas
   const objetivo = compuesto.objetivo
   const t = compuesto.totales
 
   return (
-    <section className="seccion" aria-busy={pidiendoIa}>
+    // `aria-busy` va en la lista de comidas, que es lo que de verdad se está actualizando: en la
+    // `<section>` entera envolvía al `role="status"` que anuncia la espera, y con `aria-busy` los
+    // productos de apoyo pueden aplazar lo que cambia dentro hasta que vuelva a `false` — para
+    // entonces el párrafo ya no existe y quien usa lector de pantalla se quedaba sin la pista.
+    <section className="seccion">
       <NotasCondicion condiciones={inputs.condiciones} dietaPropia />
 
       <header className="seccion-cabecera">
@@ -664,12 +693,6 @@ export function BloqueDietaPropia({
             {PIDIENDO_PROPUESTA}
           </p>
         ) : null}
-        {/* §4bis.5: los errores de §5.3, sin perder la propuesta anterior ni las plantillas. */}
-        {errorIa !== '' ? (
-          <p className="nota nota-recuadro" role="alert">
-            {errorIa}
-          </p>
-        ) : null}
       </header>
 
       <ListaChips
@@ -686,13 +709,30 @@ export function BloqueDietaPropia({
       {/* §4bis.5: la tarjeta de pregunta va encima de las comidas. */}
       {verPreguntas && onResponderPregunta ? (
         <PreguntaIA
+          key={clavePreguntas}
           preguntas={preguntas}
           onResponder={onResponderPregunta}
-          onSeguir={() => setPreguntasCerradas(clavePreguntas)}
+          onSeguir={() => {
+            cerradoPorMi.current = true
+            const textos = preguntas.map((p) => p.texto)
+            setCerradasAhora((previas) => [...previas, ...textos])
+            onCerrarPreguntas?.(textos)
+            // La sección con el botón enfocado desaparece entera: sin esto el foco caía al body,
+            // al principio de un documento de ~13 000 px (WCAG 2.4.3).
+            titulo.current?.focus({ preventScroll: true })
+          }}
+          onDescartada={() => {
+            if (cerradoPorMi.current) {
+              cerradoPorMi.current = false
+              return
+            }
+            setEstado(AVISO_PREGUNTA_DESCARTADA)
+            titulo.current?.focus({ preventScroll: true })
+          }}
         />
       ) : null}
 
-      <ol className="lista-menu">
+      <ol className="lista-menu" aria-busy={pidiendoIa}>
         {compuesto.comidas.map((comida, i) => (
           <ComidaDelDia
             key={`${comida.nombre}-${i}`}
@@ -819,15 +859,30 @@ export function BloqueDietaPropia({
         />
       ) : (
         <div className="acciones-menu">
+          {/* §4bis.4: la espera se dice DONDE está el dedo, no solo en la cabecera del bloque. */}
+          {pidiendoIa ? (
+            <p className="dieta-pidiendo" role="status">
+              {PIDIENDO_PROPUESTA}
+            </p>
+          ) : null}
+          {/* §4bis.5: y el error también, sin perder la propuesta anterior ni las plantillas. */}
+          {errorIa !== '' ? (
+            <p className="nota nota-recuadro" role="alert">
+              {errorIa}
+            </p>
+          ) : null}
           {/* §4bis.3: con huecos de la IA el botón pide OTRA propuesta, que es una llamada. */}
           {hayHuecos && onOtroEjemplo ? (
             <button
               type="button"
               className="btn btn-secundario"
               aria-busy={pidiendoIa}
+              // Mientras viaja, el botón se apaga y lo dice: si no, la persona no ve cambiar nada
+              // donde ha pulsado, vuelve a pulsar y se lanza (y se cobra) una segunda llamada.
+              disabled={pidiendoIa}
               onClick={onOtroEjemplo}
             >
-              {huecosIa ? BOTON_OTRA_PROPUESTA : BOTON_OTRO_EJEMPLO}
+              {pidiendoIa ? BOTON_PIDIENDO : huecosIa ? BOTON_OTRA_PROPUESTA : BOTON_OTRO_EJEMPLO}
             </button>
           ) : null}
           <button

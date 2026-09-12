@@ -19,6 +19,7 @@ import {
   BloqueDietaPropia,
   BOTON_OTRA_PROPUESTA,
   BOTON_OTRO_EJEMPLO,
+  BOTON_PIDIENDO,
   LINEA_PROPUESTA_IA,
   LINEA_SIN_IA,
   PIDIENDO_PROPUESTA,
@@ -28,8 +29,9 @@ import {
   BOTON_SEGUIR,
   ETIQUETA_OTRA_RESPUESTA,
   TITULO_PREGUNTA_IA,
+  TITULO_PREGUNTAS_IA,
 } from '../PreguntaIA'
-import { ERROR_CUOTA } from '../../../dieta/api'
+import { ERROR_CUOTA, ERROR_PROPUESTA_VACIA } from '../../../dieta/api'
 
 const INPUTS = PLAN_1780.inputs
 const COMIDAS_PLAN = PLAN_1780.resultado.comidas.map((c) => c.nombre)
@@ -187,9 +189,58 @@ describe('tarjeta "Una pregunta antes de seguir" (§4bis.5)', () => {
     const html = pinta(CONTEXTO)
     expect(html).toContain('¿Te va bien la avena por las mañanas?')
     expect(html).toContain('¿Metemos alguna verdura más en la cena?')
-    expect(html.match(/Otra respuesta/g)?.length).toBe(2)
+    expect(html.match(/>Otra respuesta</g)?.length).toBe(2)
     // Un solo "Seguir así": cierra la tarjeta entera.
     expect(html.match(/Seguir así/g)?.length).toBe(1)
+    // Con dos preguntas el título no puede decir "Una pregunta" (§4bis.5).
+    expect(html).toContain(TITULO_PREGUNTAS_IA)
+    expect(html).not.toContain(TITULO_PREGUNTA_IA)
+  })
+
+  it('cada pregunta es un grupo con su nombre y sus controles se distinguen (WCAG 2.4.6)', () => {
+    const html = pinta(CONTEXTO)
+    expect(html.match(/role="group"/g)?.length).toBe(2)
+    expect(html).toContain('aria-label="Responder a «¿Te va bien la avena por las mañanas?»"')
+    expect(html).toContain(
+      'aria-label="Otra respuesta a «¿Metemos alguna verdura más en la cena?»"',
+    )
+  })
+
+  it('una pregunta ya contestada no se vuelve a hacer (§4bis.5)', () => {
+    const texto = CONTEXTO.preguntas?.[0]?.texto ?? ''
+    expect(texto).not.toBe('')
+    const html = pinta(CONTEXTO, {
+      dieta: {
+        ...DIETA,
+        propuesta: {
+          variante: 0,
+          huecos_clave: '',
+          propuesta: { comidas: [], consejo: null, preguntas: [] },
+          respuestas: [{ pregunta: texto, respuesta: 'Sí' }],
+        },
+      },
+    })
+    expect(html).not.toContain(texto)
+    // La otra sí sigue en pie, y ahora el título va en singular.
+    expect(html).toContain(TITULO_PREGUNTA_IA)
+  })
+
+  it('una pregunta cerrada con "Seguir así" tampoco vuelve al recargar (§4bis.5)', () => {
+    const textos = (CONTEXTO.preguntas ?? []).map((p) => p.texto)
+    const html = pinta(CONTEXTO, {
+      dieta: {
+        ...DIETA,
+        propuesta: {
+          variante: 0,
+          huecos_clave: '',
+          propuesta: { comidas: [], consejo: null, preguntas: [] },
+          respuestas: [],
+          cerradas: textos,
+        },
+      },
+    })
+    expect(html).not.toContain(TITULO_PREGUNTA_IA)
+    expect(html).not.toContain(TITULO_PREGUNTAS_IA)
   })
 
   it('sin preguntas no hay tarjeta', () => {
@@ -208,10 +259,23 @@ describe('tarjeta "Una pregunta antes de seguir" (§4bis.5)', () => {
 describe('estados de la propuesta (§4bis.4 y §4bis.5)', () => {
   it('mientras la propuesta viaja el bloque lo dice y entra en aria-busy', () => {
     const html = pinta(DIAS_COMPUESTOS.desayuno_solo, { pidiendoIa: true })
-    expect(html).toContain('aria-busy="true"')
+    // El `aria-busy` va en la lista de comidas, no en la sección que contiene el `role="status"`.
+    expect(html).toContain('<ol class="lista-menu" aria-busy="true">')
     expect(html).toContain(PIDIENDO_PROPUESTA)
     // Y mientras tanto se sigue viendo lo que había: las plantillas.
     expect(html).toContain('>propuesta<')
+  })
+
+  it('el aviso de la espera también sale junto a las acciones, no solo en la cabecera', () => {
+    const html = pinta(DIAS_COMPUESTOS.desayuno_solo, { pidiendoIa: true })
+    expect(html.split(PIDIENDO_PROPUESTA).length - 1).toBe(2)
+  })
+
+  it('mientras viaja, el botón se apaga y lo dice donde está el dedo (§4bis.4)', () => {
+    const html = pinta(PARCIAL, { pidiendoIa: true })
+    expect(html).toContain(BOTON_PIDIENDO)
+    expect(html).not.toContain(`>${BOTON_OTRA_PROPUESTA}<`)
+    expect(html).toContain('disabled')
   })
 
   it('sin IA, y solo si antes la hubo, se dice de dónde sale el menú', () => {
@@ -222,12 +286,21 @@ describe('estados de la propuesta (§4bis.4 y §4bis.5)', () => {
     expect(pinta(PARCIAL, { sinIa: true })).not.toContain(LINEA_SIN_IA)
   })
 
-  it('el error de §5.3 sale en un role="alert" y no se lleva por delante lo que había', () => {
+  it('el error sale en un role="alert" junto a las acciones y no se lleva lo que había', () => {
     const html = pinta(PARCIAL, { errorIa: ERROR_CUOTA })
     expect(html).toContain('role="alert"')
     expect(html).toContain(ERROR_CUOTA)
     expect(html).toContain('>propuesta IA<')
     expect(html).toContain('140 g')
+    // Una sola vez: estaba en la cabecera, a cuatro pantallas de donde se pulsa.
+    expect(html.split(ERROR_CUOTA).length - 1).toBe(1)
+    expect(html.indexOf(ERROR_CUOTA)).toBeGreaterThan(html.indexOf('Total:'))
+  })
+
+  it('el 422 de proponer NO culpa al dictado de la persona (§4bis.5)', () => {
+    const html = pinta(PARCIAL, { errorIa: ERROR_PROPUESTA_VACIA })
+    expect(html).toContain('La IA no ha sabido montar alguna comida')
+    expect(html).not.toContain('No hemos reconocido ninguna comida, gusto ni costumbre')
   })
 })
 

@@ -52,6 +52,7 @@ import {
   guardarDieta,
   guardarPropuesta,
   retirarGustos,
+  CERRADAS_MAX,
   RESPUESTAS_MAX,
   sumarGustos,
   VARIANTE_MAX,
@@ -63,7 +64,7 @@ import {
   capacidades,
   ErrorApi,
   esCancelado,
-  mensajeDeError,
+  mensajeDeErrorPropuesta,
   proponerHuecos,
   sinModelo,
   TEXTO_MAX,
@@ -330,7 +331,8 @@ export default function App() {
         aplicarDia(menus, inputs, resultado, conPropuesta, ejemplos, compuesto)
       } catch (fallo) {
         if (esCancelado(fallo)) return
-        setIaError(mensajeDeError(fallo))
+        // Los textos de §5.3 son los de LEER el dictado: aquí mienten (§4bis.5).
+        setIaError(mensajeDeErrorPropuesta(fallo))
         if (iaFueraDeJuego(fallo)) {
           iaFuera.current = Date.now()
           setSinIa(huboPropuesta.current)
@@ -589,7 +591,14 @@ export default function App() {
       { pregunta, respuesta },
     ].slice(-RESPUESTAS_MAX)
     const linea = `${pregunta}: ${respuesta}`
-    const junto = previa.texto === '' ? linea : `${previa.texto}\n${linea}`
+    // Se SUSTITUYE la línea de esa pregunta en vez de añadir otra: `respuestas` ya se deduplica, y
+    // sin esto el texto guardado —el que vuelve a "Editar lo que conté" y el que se reinterpreta—
+    // acababa con la misma pregunta contestada dos veces y con respuestas opuestas.
+    const sinEsa = previa.texto
+      .split('\n')
+      .filter((l) => !l.startsWith(`${pregunta}: `))
+      .join('\n')
+    const junto = sinEsa === '' ? linea : `${sinEsa}\n${linea}`
     // El texto guardado es el mismo que vuelve a "Editar lo que conté" y el que se reinterpreta:
     // si la línea no cabe en los 4 000 caracteres, no se añade (la respuesta viaja igual).
     const dieta: DietaGuardada = {
@@ -601,6 +610,25 @@ export default function App() {
     }
     guardarDieta(dieta)
     rehacer(fase.inputs, fase.resultado, dieta, variante, {}, true)
+  }
+
+  /**
+   * "Seguir así" (§4bis.5): la pregunta se cierra PARA SIEMPRE, no solo hasta recargar. Se guarda
+   * dentro de la propuesta y no se pide nada nuevo: cerrar una pregunta no cuesta una llamada.
+   */
+  const cerrarPreguntas = (textos: readonly string[]) => {
+    if (fase.nombre !== 'resultados' || fase.dieta === null) return
+    const previa = fase.dieta
+    if (previa.propuesta === undefined || textos.length === 0) return
+    const cerradas = [...new Set([...(previa.propuesta.cerradas ?? []), ...textos])].slice(
+      -CERRADAS_MAX,
+    )
+    const dieta: DietaGuardada = {
+      ...previa,
+      propuesta: { ...previa.propuesta, cerradas },
+    }
+    guardarDieta(dieta)
+    setFase({ ...fase, dieta })
   }
 
   /** "Ver mi menú con lo mío" y "Ver el menú propuesto": el conmutador de §5.2 y §5.4. */
@@ -741,6 +769,7 @@ export default function App() {
             errorIa={iaError}
             sinIa={sinIa}
             onResponderPregunta={responderPregunta}
+            onCerrarPreguntas={cerrarPreguntas}
           />
         ) : null}
 

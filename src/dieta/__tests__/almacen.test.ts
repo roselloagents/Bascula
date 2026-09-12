@@ -303,20 +303,23 @@ describe('claveHuecos (§4bis.4)', () => {
     expect(claveHuecos([otro])).toBe(claveHuecos([uno]))
   })
 
-  it('cambia con el nombre, con las kcal y con los macros', () => {
+  it('cambia con el nombre y con un objetivo de verdad distinto', () => {
     const base = claveHuecos([hueco('Comida', 620, 48)])
     expect(claveHuecos([hueco('Cena', 620, 48)])).not.toBe(base)
     expect(claveHuecos([hueco('Comida', 700, 48)])).not.toBe(base)
-    expect(claveHuecos([hueco('Comida', 620, 52)])).not.toBe(base)
+    expect(claveHuecos([hueco('Comida', 620, 60)])).not.toBe(base)
   })
 
-  it('redondea: kcal enteras y macros con un decimal', () => {
-    expect(claveHuecos([hueco('Comida', 620.4, 48.04)])).toBe(
-      claveHuecos([hueco('Comida', 620, 48)]),
-    )
-    expect(claveHuecos([hueco('Comida', 620, 48.06)])).not.toBe(
-      claveHuecos([hueco('Comida', 620, 48)]),
-    )
+  it('en cubos anchos: corregir un gramo NO tira la propuesta (§4bis.4)', () => {
+    const base = claveHuecos([hueco('Comida', 620, 48)])
+    // Lo que mueve una corrección de una fila dictada: unas pocas kcal y décimas de macro. Un
+    // salto justo en la frontera del cubo sigue cambiando la clave; lo que se gana es que pase
+    // 25 veces menos a menudo, no que no pase nunca.
+    expect(claveHuecos([hueco('Comida', 616, 47.6)])).toBe(base)
+    expect(claveHuecos([hueco('Comida', 620.4, 48.04)])).toBe(base)
+    // El solver vuelve a cuadrar cada hueco contra el objetivo nuevo, así que la propuesta sigue
+    // valiendo; lo que no vale es pagar una llamada de ~20 s por cada gramo corregido.
+    expect(claveHuecos([hueco('Comida', 620, 48.06)])).toBe(base)
   })
 
   it('el orden de los huecos sí cuenta: es otro reparto', () => {

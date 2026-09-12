@@ -174,6 +174,49 @@ export function mensajeDeError(error: unknown): string {
   }
 }
 
+// ---- Textos de error de la propuesta (§4bis.5) ---------------------------
+
+/**
+ * Los textos de §5.3 son los de LEER lo que la persona dictó, y en la propuesta dicen cosas
+ * falsas: "Sigue con el menú propuesto de aquí abajo" (no hay tal menú: el bloque compuesto lo
+ * sustituyó, §5.1), "No hemos reconocido ninguna comida, gusto ni costumbre" (culpa al dictado de
+ * un fallo del modelo) o "Algo ha fallado al leerlo" (no se estaba leyendo nada). Aquí no se ha
+ * perdido nada: en pantalla siguen la última propuesta válida o las plantillas.
+ */
+export const ERROR_PROPUESTA_NO_DISPONIBLE =
+  'No hemos podido pedirle una propuesta a la IA. Tu menú sigue montado con nuestras plantillas.'
+/** [SPEC] §4bis.5, 422 `PROPUESTA_VACIA`. */
+export const ERROR_PROPUESTA_VACIA =
+  'La IA no ha sabido montar alguna comida. Hemos usado nuestras plantillas; prueba con «Otra propuesta».'
+/** [SPEC] §4bis.5, 504. */
+export const ERROR_PROPUESTA_TIEMPO =
+  'La IA ha tardado demasiado en contestar. Tu menú sigue montado con nuestras plantillas; prueba otra vez.'
+/** [SPEC] §4bis.5, resto (500, 502, 401 que ya reintentó). */
+export const ERROR_PROPUESTA_GENERICO =
+  'Algo ha fallado al pedir la propuesta. Vuelve a intentarlo en un momento.'
+
+/** El mensaje del `role="alert"` del bloque cuando falla `POST /api/dieta/proponer` (§4bis.5). */
+export function mensajeDeErrorPropuesta(error: unknown): string {
+  if (esCancelado(error)) return ''
+  if (!(error instanceof ErrorApi)) return ERROR_PROPUESTA_GENERICO
+  if (error.codigo === CODIGO_TIEMPO) return ERROR_PROPUESTA_TIEMPO
+  if (error.codigo === CODIGO_RED) return ERROR_RED
+  switch (error.estado) {
+    case 0:
+      return ERROR_RED
+    case 422:
+      return ERROR_PROPUESTA_VACIA
+    case 429:
+      return ERROR_CUOTA
+    case 503:
+      return ERROR_PROPUESTA_NO_DISPONIBLE
+    case 504:
+      return ERROR_PROPUESTA_TIEMPO
+    default:
+      return ERROR_PROPUESTA_GENERICO
+  }
+}
+
 // ---- Utilidades internas -------------------------------------------------
 
 function esperar(ms: number): Promise<void> {
