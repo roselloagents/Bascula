@@ -609,36 +609,55 @@ export interface DatosPdf {
   /** Pesajes del seguimiento local (SPEC-ux §2.6c y §4.5b). `undefined` o vacío ⇒ el PDF no
    *  imprime el bloque de seguimiento. Nunca se envían a ningún servidor. */
   pesajes?: Pesaje[]
-  /** v1.3 (SPEC-dieta-propia §6.2): la dieta propia ajustada. Ausente ⇒ el PDF imprime el menú
-   *  propuesto como hasta la v1.2. Presente ⇒ la sección "Ejemplo de menú" pasa a ser
-   *  "Tus comidas, ajustadas a tus números" y la compra es la de esa dieta. */
-  dieta_propia?: DietaAjustada
+  /** v1.3 (SPEC-dieta-propia §6.2): el día compuesto con lo que la persona contó. Ausente ⇒ el PDF
+   *  imprime el menú propuesto como hasta la v1.2. Presente ⇒ la sección "Ejemplo de menú" pasa a ser
+   *  "Tu menú, con lo tuyo dentro" y la compra es la de ese día. */
+  dieta_propia?: DiaCompuesto
 }
 
-// ---------- v1.3: dieta propia dictada (docs/SPEC-dieta-propia.md) ----------
-// El motor NO lee nada de esta sección. `DietaInterpretada` la devuelve el servicio `api/` (Claude);
-// `DietaAjustada` la calcula `src/dieta/ajuste.ts` en el navegador, de forma pura y determinista.
+// ---------- v1.3: "Cuéntanos cómo comes" (docs/SPEC-dieta-propia.md) ----------
+// El motor NO lee nada de esta sección. `DietaInterpretada` la devuelve el servicio `api/` (Claude) y
+// la corrige el usuario en la pantalla; `DiaCompuesto` lo calcula `src/meals/dieta/componer.ts` en el
+// navegador, de forma pura y determinista (SPEC-dieta-propia §4): las comidas dictadas se conservan
+// (con los gramos ajustados solo si hace falta) y los huecos los monta el generador de menús.
 
-/** Un alimento tal y como lo ha entendido el modelo (SPEC-dieta-propia §3.4). */
+/** Estado del alimento, el mismo enum que `src/data/foods.ts` (SPEC-dieta-propia §3.3 regla 5). */
+export type EstadoAlimentoPropio = 'crudo' | 'cocido' | 'seco' | 'listo'
+/** Grupo aproximado que asigna el modelo; con `alimento_id` el servidor impone el `grupo` del catálogo. */
+export type GrupoAprox =
+  'proteina' | 'lacteo' | 'carbohidrato' | 'grasa' | 'verdura' | 'fruta' | 'bebida' | 'otro'
+
+/** Macros por 100 g de un alimento propio: los cuatro de siempre más fibra (g) y alcohol (g). */
+export interface MacrosPropio extends Macros {
+  fibra: number
+  alcohol: number
+}
+
+/** Un alimento tal y como lo ha entendido el modelo, más las correcciones del usuario (§3.4 y §5.4). */
 export interface AlimentoPropio {
   /** Fragmento del texto del que sale ("100 g de arroz basmati pesado en seco"). */
   texto: string
-  /** Nombre que se enseña ("Arroz basmati (seco)"). */
+  /** Nombre que se enseña ("Arroz basmati (crudo)"). */
   nombre: string
   /** `id` de foods.json si es el mismo alimento en el mismo estado; si no, null. */
   alimento_id: string | null
-  /** Gramos que dijo la persona (ya convertidos). null = no lo dijo. */
+  estado: EstadoAlimentoPropio
+  grupo_aprox: GrupoAprox
+  /** Gramos que dijo la persona (ya convertidos), o que corrigió en la pantalla. null = no lo dijo. */
   gramos: number | null
-  /** Solo si la persona habló en unidades ("5 huevos", "un scoop"). */
+  /** Solo si la persona habló en unidades o el alimento del catálogo es contable (el servidor la impone). */
   unidad?: { nombre: string; gramos: number }
   cantidad_unidades?: number | null
-  /** Por 100 g. Del catálogo si hay `alimento_id` (el servidor los impone); estimados si no. */
-  macros_100g: Macros
-  origen_macros: 'catalogo' | 'estimado'
-  /** false = el ajuste no lo toca (especias, verdura de hoja, bebidas sin kcal…). */
+  /** Por 100 g. Del catálogo si hay `alimento_id` (el servidor los impone); estimados si no; del envase
+   *  si el usuario los escribió en la pantalla. */
+  macros_100g: MacrosPropio
+  origen_macros: 'catalogo' | 'estimado' | 'envase'
+  /** false = el ajuste no lo toca (especias, bebidas alcohólicas o azucaradas, guarniciones…). */
   ajustable: boolean
   confianza: 'alta' | 'media' | 'baja'
   nota?: string
+  /** "Esto no lo como" (§5.4): el alimento se ignora por completo; se conserva para poder deshacer. */
+  retirado?: boolean
 }
 
 export interface ComidaPropia {
@@ -646,44 +665,102 @@ export interface ComidaPropia {
   alimentos: AlimentoPropio[]
 }
 
-/** Respuesta de `POST /api/dieta/interpretar` (SPEC-dieta-propia §2.3 y §3.4). */
-export interface DietaInterpretada {
-  comidas: ComidaPropia[]
-  no_entendido: { texto: string; sugerencia?: string }[]
-  notas: string[]
+/** Un gusto dictado (§3.3 regla 11): qué quiere ver y qué no, sin cantidades. */
+export interface GustoPropio {
+  texto: string
+  tipo: 'gusta' | 'no_gusta'
+  /** Ids del catálogo que son ese alimento o esa familia; vacío si no está en la base. */
+  alimento_ids: string[]
 }
 
-/** Un alimento después del ajuste de gramos (SPEC-dieta-propia §4.8). */
+/** Cómo quiere la persona sus tomas (§3.3 regla 12). Se aplica donde se puede y se apunta donde no (§4.5). */
+export type TipoHabito =
+  | 'sin_hidratos'
+  | 'ligera'
+  | 'abundante'
+  | 'misma_cada_dia'
+  | 'n_comidas'
+  | 'frecuencia_semanal'
+  | 'horario'
+  | 'otro'
+
+export interface HabitoPropio {
+  texto: string
+  tipo: TipoHabito
+  /** Nombre de la comida del plan a la que se refiere, ya normalizado por el servidor; null si no aplica. */
+  comida: string | null
+  /** `n_comidas` (2–6) o `frecuencia_semanal` (veces por semana); null en el resto. */
+  valor: number | null
+}
+
+/** Respuesta de `POST /api/dieta/interpretar` (SPEC-dieta-propia §2.3 y §3.4), ya post-validada. */
+export interface DietaInterpretada {
+  /** Solo las comidas descritas con alimentos: pueden ser todas, algunas o ninguna. */
+  comidas: ComidaPropia[]
+  gustos: GustoPropio[]
+  habitos: HabitoPropio[]
+  no_entendido: { texto: string; sugerencia?: string }[]
+  notas: string[]
+  /** El modelo vio alimentos que se cocinan o ensaladas sin ninguna grasa de adición (§3.3 regla 10). */
+  falta_aceite: boolean
+}
+
+/** Un alimento dictado después del ajuste de gramos (SPEC-dieta-propia §4.2 y §4.6). */
 export interface AlimentoAjustado extends AlimentoPropio {
-  estado: 'variable' | 'fijo' | 'pendiente'
+  estado_ajuste: 'variable' | 'fijo' | 'pendiente'
   /** Gramos finales. Igual a `gramos` en fijos; 0 en pendientes. */
   gramos_ajustados: number
   delta_g: number
   cambio: 'sube' | 'baja' | 'igual'
+  /** `gramos_ajustados / gramos`, el factor realmente aplicado (1 en fijos y pendientes). */
   factor: number
+  /** Si el gramaje final es el extremo de su caja, y quién lo pone: el factor o el tope de ración. */
+  en_limite: 'no' | 'factor' | 'racion'
   /** Aporte real con `gramos_ajustados`. */
-  aporte: Macros
+  aporte: MacrosPropio
 }
 
-export interface ComidaAjustada {
+/** `completa`: todos los huecos del plan vienen dictados; `parcial`: alguno se monta; `solo_contexto`: ninguno viene dictado. */
+export type ModoComposicion = 'completa' | 'parcial' | 'solo_contexto'
+/** `propia`: comida dictada por la persona; `propuesta`: hueco montado por el generador de menús. */
+export type OrigenComida = 'propia' | 'propuesta'
+
+export interface ComidaCompuesta {
   nombre: string
+  hora: string | null
+  peri: boolean
+  origen: OrigenComida
+  /** El hueco del plan (o el reparto del resto en un hueco montado); null en una comida extra propia. */
+  objetivo: Macros | null
+  /** Alimentos dictados y ajustados (origen `propia`); vacío en `propuesta`. */
   alimentos: AlimentoAjustado[]
-  totales: Macros
+  /** La toma montada por el generador (origen `propuesta`), con alternativas; null en `propia`. */
+  ejemplo: EjemploComida | null
+  totales: MacrosPropio
   /** % de las kcal del día que se lleva esta comida (0–100, 1 decimal). */
   pct_kcal: number
 }
 
-/** Salida de `ajustarDieta` (SPEC-dieta-propia §4.8). */
-export interface DietaAjustada {
-  comidas: ComidaAjustada[]
-  totales: Macros
+/** Salida de `componerDia` (SPEC-dieta-propia §4.6). */
+export interface DiaCompuesto {
+  modo: ModoComposicion
+  comidas: ComidaCompuesta[]
+  totales: MacrosPropio
   objetivo: Macros
   /** totales − objetivo, kcal entera y macros con 1 decimal. */
   desvio: Macros
+  /** En el orden de prioridad de §4.4; la pantalla enseña tres y pliega el resto, el PDF los imprime todos. */
   avisos: { codigo: string; texto: string }[]
+  /** "Lo que hemos tenido en cuenta" (§4.5): gustos y hábitos aplicados, en texto ya redactado. */
+  aplicado: string[]
+  /** "Apuntado, pero aún no lo aplicamos" (§4.5). */
+  apuntado: string[]
   pendientes: { comida: string; nombre: string }[]
   no_entendido: DietaInterpretada['no_entendido']
+  /** Notas del modelo y del generador de menús (huecos que no cuadran, dos platos, respaldo de exclusiones). */
   notas: string[]
-  /** Número de alimentos que el algoritmo ha podido mover. */
+  /** Número de alimentos dictados clasificados como `variable`. */
   n_variables: number
+  /** Hay pendientes: los gramos son provisionales (§4.4, `DIETA_PENDIENTES`). */
+  provisional: boolean
 }
