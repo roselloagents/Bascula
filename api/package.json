@@ -1,0 +1,21 @@
+{
+  "name": "bascula-api",
+  "private": true,
+  "version": "1.3.0",
+  "type": "module",
+  "description": "Servicio HTTP de Báscula que interpreta con Claude lo que la persona cuenta sobre cómo come.",
+  "scripts": {
+    "start": "node src/servidor.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.0"
+  }
+}

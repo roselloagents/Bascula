@@ -11,7 +11,10 @@
     "test": "vitest run",
     "typecheck": "tsc -b --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "api": "node --env-file-if-exists=api/.env api/src/servidor.ts",
+    "test:api": "npm --prefix api test",
+    "typecheck:api": "npm --prefix api run typecheck"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.9.0",
