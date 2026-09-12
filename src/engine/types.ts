@@ -722,8 +722,29 @@ export interface AlimentoAjustado extends AlimentoPropio {
 
 /** `completa`: todos los huecos del plan vienen dictados; `parcial`: alguno se monta; `solo_contexto`: ninguno viene dictado. */
 export type ModoComposicion = 'completa' | 'parcial' | 'solo_contexto'
-/** `propia`: comida dictada por la persona; `propuesta`: hueco montado por el generador de menús. */
-export type OrigenComida = 'propia' | 'propuesta'
+/** `propia`: comida dictada por la persona; `propuesta`: hueco montado por el generador de menús;
+ *  `propuesta_ia`: hueco propuesto por el modelo y cuadrado por el algoritmo (SPEC-dieta-propia §4bis). */
+export type OrigenComida = 'propia' | 'propuesta' | 'propuesta_ia'
+
+/** Una pregunta de vuelta del modelo con respuestas rápidas (§4bis.1). Máximo dos por propuesta. */
+export interface PreguntaIA {
+  texto: string
+  /** 2–3 opciones cortas (≤ 30 caracteres). */
+  opciones: string[]
+}
+
+/** Respuesta de `POST /api/dieta/proponer` (§4bis.1), ya post-validada: una comida por hueco pedido. */
+export interface PropuestaIA {
+  comidas: ComidaPropia[]
+  consejo: string | null
+  preguntas: PreguntaIA[]
+}
+
+/** Lo que la persona contestó a una pregunta del modelo (§4bis.5); viaja en las peticiones siguientes. */
+export interface RespuestaIA {
+  pregunta: string
+  respuesta: string
+}
 
 export interface ComidaCompuesta {
   nombre: string
@@ -732,9 +753,10 @@ export interface ComidaCompuesta {
   origen: OrigenComida
   /** El hueco del plan (o el reparto del resto en un hueco montado); null en una comida extra propia. */
   objetivo: Macros | null
-  /** Alimentos dictados y ajustados (origen `propia`); vacío en `propuesta`. */
+  /** Alimentos dictados y ajustados (origen `propia`) o propuestos por el modelo y cuadrados
+   *  (origen `propuesta_ia`); vacío en `propuesta`. */
   alimentos: AlimentoAjustado[]
-  /** La toma montada por el generador (origen `propuesta`), con alternativas; null en `propia`. */
+  /** La toma montada por el generador (origen `propuesta`), con alternativas; null en los otros dos. */
   ejemplo: EjemploComida | null
   totales: MacrosPropio
   /** % de las kcal del día que se lleva esta comida (0–100, 1 decimal). */
@@ -763,4 +785,12 @@ export interface DiaCompuesto {
   n_variables: number
   /** Hay pendientes: los gramos son provisionales (§4.4, `DIETA_PENDIENTES`). */
   provisional: boolean
+  // ---------- decisión L (§4bis): opcionales, ausentes cuando los huecos se montan con plantillas ----------
+  /** Preguntas de vuelta del modelo (§4bis.5). Ausente o vacío ⇒ no se pinta la tarjeta. */
+  preguntas?: PreguntaIA[]
+  /** Frase honesta del modelo sobre la propuesta ("solo pollo y arroz cuadra, pero…"); `DIETA_CONSEJO_IA`. */
+  consejo_ia?: string | null
+  /** De dónde salen los huecos montados: `ia` (todos del modelo), `plantillas` (todos del generador),
+   *  `mixto` (algún hueco de la IA no convenció y cayó a plantillas) o `null` sin huecos. */
+  origen_huecos?: 'ia' | 'plantillas' | 'mixto' | null
 }
